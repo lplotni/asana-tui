@@ -35,7 +35,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC.md`](../docs/SPEC.md). Featu
 - [ ] Manual: grep the fixtures for real names, emails, GIDs and workspace names. None remain.
 - [ ] Manual: update `docs/SPEC.md` assumptions with what was found (checkboxes ticked or the spec revised).
 
-**Dependencies:** None (needs the user's `ASANA_TOKEN` and `ASANA_WORKSPACE`)
+**Dependencies:** None (needs the user's token, e.g. `export ASANA_TOKEN="$(pass show asana/pat)"`, and `ASANA_WORKSPACE`)
 
 **Files likely touched:** `tests/fixtures/*.json`, `tests/fixtures/README.md`, `docs/SPEC.md`
 
@@ -47,16 +47,19 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC.md`](../docs/SPEC.md). Featu
 
 ### - [ ] T1: Cargo scaffold, env config, error and exit-code contract
 
-**Description:** Create the crate (`asn` binary, library in `src/lib.rs`) with a clap skeleton. Load `ASANA_TOKEN` and `ASANA_WORKSPACE` from the environment into a `Config` whose `Debug` output redacts the token. Define the error type and how errors map to exit codes (0 ok, 1 API/usage, 2 auth). Running `asn` with no subcommand prints "TUI not implemented yet" for now.
+**Description:** Create the crate (`asn` binary, library in `src/lib.rs`) with a clap skeleton. Load the token (from `ASANA_TOKEN`, or by running `ASANA_TOKEN_CMD` as described in the spec) and `ASANA_WORKSPACE` into a `Config` whose `Debug` output redacts the token. Define the error type and how errors map to exit codes (0 ok, 1 API/usage, 2 auth). Running `asn` with no subcommand prints "TUI not implemented yet" for now.
 
 **Acceptance criteria:**
 - [ ] If either var is missing, `asn inbox` exits with code 2 (token) or 1 (workspace) and the exact messages from the spec, before making any network call.
 - [ ] `format!("{:?}", config)` never contains the token value (unit test).
+- [ ] `ASANA_WORKSPACE=gid:1234567890123456` exits with code 1 and suggests `1234567890123456`, without making a request.
+- [ ] Token precedence: `ASANA_TOKEN` beats `ASANA_TOKEN_CMD`. `ASANA_TOKEN_CMD="printf 'tok\nextra'"` yields `tok`. A non-zero exit or empty output exits with code 2 and doesn't echo the command's stdout.
 - [ ] `asn --help` lists the subcommands from F7 (stubs are fine).
 
 **Verification:**
 - [ ] `cargo test` (config tests use an injected env map, not the process env)
 - [ ] Manual: `env -u ASANA_TOKEN cargo run -- inbox; echo $?` prints the message and `2`
+- [ ] Manual: `ASANA_TOKEN_CMD="pass show asana/pat" cargo run -- inbox` triggers the gpg prompt if needed and then works
 
 **Dependencies:** None (can start in parallel with T0)
 

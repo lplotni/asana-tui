@@ -14,7 +14,7 @@ How might we let terminal-native engineers process their Asana Inbox — read wh
 1. **Triage, not browse.** The home screen is an inbox you work through and leave. Every screen is optimized for "see → act → next".
 2. **Scriptable core, thin TUI.** Every action exists as a library function and a CLI subcommand with stable `--json` output *before* it gets a key binding. The TUI is one consumer of the core, never the only one.
 3. **Vim-native.** All navigation uses vim motions. Text is written in `$EDITOR`, not in a home-grown text box.
-4. **Credentials from the environment only.** Never read from or written to disk, never logged.
+4. **Credentials configured through the environment only.** Either the token itself or a command that prints it (for a password manager). Never written to disk, never logged.
 5. **Themeable from day one.** Rendering code never names a color. Every styled element uses a named theme role, so a new theme never requires a code change.
 
 ## Recommended Direction
@@ -46,13 +46,21 @@ Environment variables only. The only file `asn` ever reads is an optional theme 
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ASANA_TOKEN` | yes | Personal Access Token, sent as `Authorization: Bearer`. |
-| `ASANA_WORKSPACE` | yes | Workspace GID. No auto-detection. |
+| `ASANA_TOKEN` | one of these two | Personal Access Token, sent as `Authorization: Bearer`. |
+| `ASANA_TOKEN_CMD` | one of these two | A shell command that prints the token, e.g. `pass show asana/pat`, `op read op://Private/Asana/token`, or `security find-generic-password -s asana -w`. Used only when `ASANA_TOKEN` is unset. |
+| `ASANA_WORKSPACE` | yes | Workspace GID, digits only (e.g. `1234567890123456`, not `gid:1234567890123456`). No auto-detection. |
 | `EDITOR` / `VISUAL` | no | Editor for comments and descriptions. Falls back to `vi`. |
 | `ASN_THEME` | no | A built-in theme name (`terminal`, `dark`, `light`) or a path to a theme TOML file. Defaults to `terminal`. See F8. |
 | `NO_COLOR` | no | If set to any non-empty value, `asn` disables all colors and keeps only modifiers such as bold and reversed ([no-color.org](https://no-color.org)). This overrides `ASN_THEME`. |
 
-The token is never printed, logged, written to disk, or included in error messages. A missing token or a 401 response exits with: `ASANA_TOKEN is missing or invalid — create a PAT at https://app.asana.com/0/my-apps`. If `ASANA_WORKSPACE` is missing, `asn` exits before making any request: `ASANA_WORKSPACE is not set — find your workspace GID with: curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces`. A 403 or 404 on the workspace exits with a message naming `ASANA_WORKSPACE` as the likely cause.
+**Resolving the token:** `ASANA_TOKEN` wins if it is set and non-empty. Otherwise `ASANA_TOKEN_CMD` runs once at startup with `sh -c`, before the TUI takes over the terminal, so a gpg or 1Password prompt works normally:
+- Its stdin and stderr are inherited, and its stdout is captured.
+- The first line of stdout, trimmed, is the token.
+- If the command exits non-zero or prints nothing, `asn` exits with code 2: `ASANA_TOKEN_CMD failed (exit N)`. The command's own stderr has already appeared on the terminal, and its stdout is never echoed.
+
+There is no timeout, because the user may be typing a passphrase.
+
+The token is never printed, logged, written to disk, or included in error messages. If neither variable is set, or a 401 response comes back, `asn` exits with: `No valid Asana token — set ASANA_TOKEN or ASANA_TOKEN_CMD (create a PAT at https://app.asana.com/0/my-apps)`. If `ASANA_WORKSPACE` is missing, `asn` exits before making any request: `ASANA_WORKSPACE is not set — find your workspace GID with: curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces`. A value that isn't all digits is rejected before any request, and the message suggests the digits it contains: `ASANA_WORKSPACE must be a numeric GID, got "gid:1234567890123456" — did you mean 1234567890123456?`. A 403 or 404 on the workspace exits with a message naming `ASANA_WORKSPACE` as the likely cause.
 
 ## Architecture
 
