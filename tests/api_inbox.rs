@@ -149,7 +149,7 @@ async fn rate_limit_waits_for_retry_after_then_retries_once() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(PATH))
-        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "1"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "2"))
         .up_to_n_times(1)
         .mount(&server)
         .await;
@@ -161,7 +161,10 @@ async fn rate_limit_waits_for_retry_after_then_retries_once() {
         .unwrap();
 
     assert_eq!(n.len(), 4);
-    assert!(started.elapsed() >= Duration::from_secs(1));
+    assert!(
+        started.elapsed() >= Duration::from_secs(2),
+        "Retry-After was not honoured"
+    );
 }
 
 #[tokio::test]

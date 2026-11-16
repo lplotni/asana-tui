@@ -134,6 +134,8 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// Read state set locally but not yet confirmed by Asana, by GID.
+    pending_marks: HashMap<String, bool>,
     /// Task details by task GID (several notifications can share a task).
     pub details: HashMap<String, Detail>,
     pub focus: Focus,
@@ -197,7 +199,10 @@ impl App {
                 self.error = None;
                 self.next_offset = next;
                 self.visual_anchor = None;
-                self.replace_keeping_selection(|app| app.notifications = notifications);
+                self.replace_keeping_selection(|app| {
+                    app.notifications = notifications;
+                    app.apply_pending_marks();
+                });
                 let mut effects = self.reload_shown_detail();
                 effects.extend(self.load_more_if_needed());
                 effects
@@ -232,7 +237,7 @@ impl App {
                 self.loading_more = false;
                 self.next_offset = next;
                 self.notifications.extend(notifications);
-                self.replace_keeping_selection(|_| {});
+                self.replace_keeping_selection(App::apply_pending_marks);
                 self.load_more_if_needed()
             }
             Msg::MoreLoaded(Err(message)) => {
@@ -250,6 +255,9 @@ impl App {
                 }]
             }
             Msg::Marked { gids, read, result } => {
+                for gid in &gids {
+                    self.pending_marks.remove(gid);
+                }
                 let (failed, toast) = match result {
                     Ok(failed) if failed.is_empty() => return Vec::new(),
                     Ok(failed) => {
@@ -331,7 +339,9 @@ impl App {
                 self.replace_keeping_selection(|app| app.unread_only = !app.unread_only);
             }
             Cmd::Refresh => return self.refresh(),
-            Cmd::Quit => self.should_quit = true,
+            Cmd::Quit if self.visual_anchor.is_some() => self.visual_anchor = None,
+            Cmd::Quit if self.focus == Focus::Detail => self.focus = Focus::List,
+            Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
             _ => {}
         }
         self.load_more_if_needed()
@@ -369,19 +379,30 @@ impl App {
         }
     }
 
+    /// Opens the selected item: a loaded task by its permalink, otherwise by
+    /// Asana's URL pattern for its type. The notifications API returns no
+    /// links, so types without a known pattern can't be opened.
     fn open_in_browser(&mut self) -> Vec<Effect> {
-        match self.selected_detail() {
-            Some(Detail::Loaded(detail)) => vec![Effect::OpenUrl {
+        if let Some(Detail::Loaded(detail)) = self.selected_detail() {
+            return vec![Effect::OpenUrl {
                 url: detail.task.permalink_url.clone(),
-            }],
-            _ => {
+            }];
+        }
+        let Some(object) = self.selected().and_then(|n| n.work_objects.first()) else {
+            return Vec::new();
+        };
+        let url = match object.resource_type.as_str() {
+            "task" => format!("https://app.asana.com/0/0/{}", object.gid),
+            "project" => format!("https://app.asana.com/0/{}", object.gid),
+            other => {
                 self.toast = Some(Toast {
-                    text: "The task isn't loaded yet".into(),
+                    text: format!("asn can't open {other}s yet; open it from the web Inbox"),
                     is_error: false,
                 });
-                Vec::new()
+                return Vec::new();
             }
-        }
+        };
+        vec![Effect::OpenUrl { url }]
     }
 
     /// After a refresh: keep showing the selected task while reloading it,
@@ -418,12 +439,25 @@ impl App {
             return Vec::new();
         }
         self.set_read(&gids, read);
+        for gid in &gids {
+            self.pending_marks.insert(gid.clone(), read);
+        }
         self.rebuild_visible();
         // Rows marked read disappear in unread-only mode; land on what follows.
         self.move_to(*range.start());
         let mut effects = vec![Effect::MarkRead { gids, read }];
         effects.extend(self.load_more_if_needed());
         effects
+    }
+
+    /// Loads that were built before a mark reached Asana still carry the old
+    /// state; re-apply marks that are still in flight.
+    fn apply_pending_marks(&mut self) {
+        for n in &mut self.notifications {
+            if let Some(&read) = self.pending_marks.get(&n.gid) {
+                n.is_read = read;
+            }
+        }
     }
 
     fn set_read(&mut self, gids: &[String], read: bool) {
@@ -435,7 +469,8 @@ impl App {
     }
 
     fn refresh(&mut self) -> Vec<Effect> {
-        if self.loading {
+        // Never mix a fresh first page with an older page still loading.
+        if self.loading || self.loading_more {
             return Vec::new();
         }
         self.loading = true;
@@ -1203,14 +1238,6 @@ mod tests {
     }
 
     #[test]
-    fn o_before_the_task_is_loaded_explains_why_nothing_happens() {
-        let mut app = loaded(3, 10);
-
-        assert!(keys(&mut app, "o").is_empty());
-        assert!(app.toast.is_some());
-    }
-
-    #[test]
     fn refresh_reloads_the_shown_task_without_hiding_it_and_forgets_the_rest() {
         let mut app = loaded(3, 10);
         loaded_detail(&mut app, "t1");
@@ -1222,5 +1249,138 @@ mod tests {
         assert_eq!(effects, [Effect::LoadDetail { gid: "t0".into() }]);
         assert!(matches!(app.selected_detail(), Some(Detail::Loaded(_))));
         assert!(!app.details.contains_key("t1"));
+    }
+
+    // --- Review fixes --------------------------------------------------------
+
+    #[test]
+    fn q_in_the_detail_pane_goes_back_instead_of_quitting() {
+        let mut app = loaded(3, 10);
+        keys(&mut app, "l");
+
+        keys(&mut app, "q");
+
+        assert!(!app.should_quit);
+        assert_eq!(app.focus, Focus::List);
+    }
+
+    #[test]
+    fn q_in_visual_mode_leaves_visual_mode() {
+        let mut app = loaded(3, 10);
+        keys(&mut app, "Vj");
+
+        keys(&mut app, "q");
+
+        assert!(!app.should_quit);
+        assert_eq!(app.visual_anchor, None);
+    }
+
+    #[test]
+    fn ctrl_c_quits_from_anywhere() {
+        let mut app = loaded(3, 10);
+        keys(&mut app, "lV");
+
+        key(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn o_opens_a_project_notification_by_its_url() {
+        let (mut app, _) = App::new();
+        let mut notifications = inbox(1, |_| false);
+        notifications[0].work_objects[0].resource_type = "project".into();
+        notifications[0].work_objects[0].gid = "555".into();
+        app.update(Msg::InboxLoaded(Ok((notifications, None))));
+
+        assert_eq!(
+            keys(&mut app, "o"),
+            [Effect::OpenUrl {
+                url: "https://app.asana.com/0/555".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn o_opens_a_task_even_before_its_details_load() {
+        let mut app = loaded(3, 10);
+
+        assert_eq!(
+            keys(&mut app, "o"),
+            [Effect::OpenUrl {
+                url: "https://app.asana.com/0/0/t0".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn o_on_an_unknown_kind_of_item_explains_it_cannot_open_it() {
+        let (mut app, _) = App::new();
+        let mut notifications = inbox(1, |_| false);
+        notifications[0].work_objects[0].resource_type = "goal".into();
+        app.update(Msg::InboxLoaded(Ok((notifications, None))));
+
+        assert!(keys(&mut app, "o").is_empty());
+        assert!(app.toast.as_ref().unwrap().text.contains("goal"));
+    }
+
+    #[test]
+    fn a_refresh_that_started_before_a_mark_does_not_undo_it() {
+        let mut app = loaded(4, 10);
+        keys(&mut app, "f");
+        keys(&mut app, "R");
+        keys(&mut app, "je");
+        assert_eq!(visible_gids(&app), ["0", "2", "3"]);
+
+        // The refresh was built before markRead reached Asana: "1" is unread.
+        app.update(Msg::InboxLoaded(Ok((inbox(4, |_| false), None))));
+
+        assert_eq!(visible_gids(&app), ["0", "2", "3"]);
+        app.update(Msg::Marked {
+            gids: vec!["1".into()],
+            read: true,
+            result: Ok(vec![]),
+        });
+        app.update(Msg::InboxLoaded(Ok((inbox(4, |i| i == 1), None))));
+        assert_eq!(visible_gids(&app), ["0", "2", "3"]);
+    }
+
+    #[test]
+    fn no_refresh_starts_while_more_items_are_loading() {
+        let mut app = loaded_with(inbox(30, |_| false), Some("p2"), 10);
+        keys(&mut app, "25j");
+        assert!(app.loading_more);
+
+        assert!(keys(&mut app, "R").is_empty());
+        assert!(app.update(Msg::Tick).is_empty());
+    }
+
+    #[test]
+    fn marking_a_visual_range_lands_on_the_item_after_it() {
+        let mut app = loaded(6, 10);
+        keys(&mut app, "fjVj");
+
+        keys(&mut app, "e");
+
+        assert_eq!(visible_gids(&app), ["0", "3", "4", "5"]);
+        assert_eq!(selected_gid(&app), "3");
+    }
+
+    #[test]
+    fn a_shorter_reload_of_the_shown_task_keeps_the_scroll_in_range() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "lG");
+        assert!(app.detail_scroll > 0);
+        let mut short = task_detail();
+        short.comments.clear();
+        short.task.notes = String::new();
+
+        app.update(Msg::DetailLoaded {
+            gid: "t0".into(),
+            result: Ok(Box::new(short)),
+        });
+
+        assert_eq!(app.detail_scroll, 0);
     }
 }

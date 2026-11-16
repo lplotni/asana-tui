@@ -37,7 +37,7 @@ Everything comes from the environment. Nothing is written to disk.
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
 | `R` | Refresh (also every 60 s) |
-| `q` | Quit |
+| `q` / `Ctrl-c` | Back (from the task pane or visual mode), else quit / quit from anywhere |
 
 Every action is also a command for scripts:
 

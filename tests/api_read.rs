@@ -108,3 +108,21 @@ async fn no_gids_makes_no_request() {
     assert!(failed.is_empty());
     assert!(sent_bodies(&server).await.is_empty());
 }
+
+#[tokio::test]
+async fn an_unknown_workspace_names_asana_workspace() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/notifications/markRead"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
+            "errors": [{ "message": "workspace: Not a recognized ID: 1" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let err = core::mark_read(&client(&server), WORKSPACE, &gids(1), true)
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("ASANA_WORKSPACE"), "{err}");
+}

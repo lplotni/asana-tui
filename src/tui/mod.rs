@@ -161,17 +161,30 @@ fn spawn_refresh_timer(tx: UnboundedSender<Msg>) {
 
 /// Opens `url` with the system's default handler, without touching the TUI.
 fn open_in_browser(url: &str) {
+    if let Some(mut command) = browser_command(url) {
+        let _ = command.spawn();
+    }
+}
+
+/// The command that opens `url`: only `https://` links, and without the
+/// Asana token in the child's environment.
+fn browser_command(url: &str) -> Option<std::process::Command> {
+    if !url.starts_with("https://") {
+        return None;
+    }
     let opener = if cfg!(target_os = "macos") {
         "open"
     } else {
         "xdg-open"
     };
-    let _ = std::process::Command::new(opener)
+    let mut command = std::process::Command::new(opener);
+    command
         .arg(url)
+        .env_remove("ASANA_TOKEN")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+        .stderr(std::process::Stdio::null());
+    Some(command)
 }
 
 fn now() -> i64 {
@@ -192,6 +205,25 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
+
+    #[test]
+    fn the_browser_never_receives_the_asana_token() {
+        let command = browser_command("https://app.asana.com/0/0/1").unwrap();
+
+        let removed: Vec<_> = command
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(key, _)| key.to_owned())
+            .collect();
+        assert!(removed.iter().any(|k| k == "ASANA_TOKEN"), "{removed:?}");
+    }
+
+    #[test]
+    fn only_https_links_are_opened() {
+        assert!(browser_command("file:///etc/passwd").is_none());
+        assert!(browser_command("javascript:alert(1)").is_none());
+        assert!(browser_command("https://app.asana.com/0/0/1").is_some());
+    }
 
     #[tokio::test]
     async fn quitting_waits_for_a_write_that_is_still_in_flight() {

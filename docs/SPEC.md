@@ -60,7 +60,7 @@ Environment variables only. The only file `asn` ever reads is an optional theme 
 
 There is no timeout, because the user may be typing a passphrase.
 
-The token is never printed, logged, written to disk, or included in error messages. If neither variable is set, or a 401 response comes back, `asn` exits with: `No valid Asana token — set ASANA_TOKEN or ASANA_TOKEN_CMD (create a PAT at https://app.asana.com/0/my-apps)`. If `ASANA_WORKSPACE` is missing, `asn` exits before making any request: `ASANA_WORKSPACE is not set — find your workspace GID with: curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces`. A value that isn't all digits is rejected before any request, and the message suggests the digits it contains: `ASANA_WORKSPACE must be a numeric GID, got "gid:1234567890123456" — did you mean 1234567890123456?`. A 403 or 404 on the workspace exits with a message naming `ASANA_WORKSPACE` as the likely cause.
+The token is never printed, logged, written to disk, or included in error messages. Requests time out (10 s to connect, 30 s in total), so a stalled connection can't freeze refreshes. Text from Asana printed by the CLI has control characters and bidi overrides neutralized, so comments can't inject terminal escape sequences. If neither variable is set, or a 401 response comes back, `asn` exits with: `No valid Asana token — set ASANA_TOKEN or ASANA_TOKEN_CMD (create a PAT at https://app.asana.com/0/my-apps)`. If `ASANA_WORKSPACE` is missing, `asn` exits before making any request: `ASANA_WORKSPACE is not set — find your workspace GID with: curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces`. A value that isn't all digits is rejected before any request, and the message suggests the digits it contains: `ASANA_WORKSPACE must be a numeric GID, got "gid:1234567890123456" — did you mean 1234567890123456?`. A 403 or 404 on the workspace exits with a message naming `ASANA_WORKSPACE` as the likely cause.
 
 ## Architecture
 
@@ -98,7 +98,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - **Quitting never drops a change:** after the terminal is restored, `asn` waits up to 5 s for read/unread requests still in flight. If any are still unfinished, it prints a warning to check with `asn inbox`.
 - **Archive semantics:** the API has no archive, so `e` only marks the item read, and the item stays in the list, shown as read, the same as it does in the web Inbox. The `?` overlay states this next to the `e` key.
 - **Filter:** by default the list shows every notification the API returns, read and unread, newest first, to match the web Inbox. `f` toggles an unread-only view, where items marked read leave the list.
-- Notifications whose work object is not a task (project, goal, etc.) show compact info only (name, type, `o` opens it in the browser). No actions are available on them in the MVP.
+- Notifications whose work object is not a task (project, goal, etc.) show compact info only (name, type; `o` opens projects in the browser — the API returns no links, so `asn` uses Asana's URL pattern for projects and says so for other types). No actions are available on them in the MVP.
 
 ### F2. Task detail
 
@@ -114,7 +114,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - System activity (moves, date changes, …) is counted ("N updates not shown") rather than listed, like the web's collapsed activity.
 - Details load after the cursor rests on a task for 250 ms, and are cached per task. A refresh reloads the shown task in place and forgets the rest.
 - `l`/`Enter` focus the pane, and `h`/`Esc` return to the list. While the pane is focused, `j`/`k`/`gg`/`G`/`Ctrl-d`/`Ctrl-u` scroll it.
-- `o` opens `permalink_url` in the browser (the escape hatch for anything the MVP doesn't cover, e.g. subtasks and attachments).
+- `o` opens `permalink_url` in the browser (the escape hatch for anything the MVP doesn't cover, e.g. subtasks and attachments). Before the details load it opens `https://app.asana.com/0/0/{gid}`. Only `https://` links are opened, and the browser process doesn't inherit `ASANA_TOKEN`.
 - `asn task <gid> [--json]` prints the same content (or `{task, comments, activity_count}` as JSON).
 
 ### F3. Add comment
@@ -159,7 +159,8 @@ Vim is the primary keymap. Asana web Inbox shortcuts are aliases that are always
 | `f` | toggle unread only / all | asn |
 | `R` | refresh | asn |
 | `:` | command line (`:q`, `:refresh`, `:read-all`, `:unread`) | vim |
-| `q` | quit from the root view, otherwise back | vim |
+| `q` | leave visual mode or the detail pane; quit from the Inbox list | vim |
+| `Ctrl-c` | quit from anywhere | asn |
 | `?` | help overlay, with an Asana column showing which keys are web aliases | — |
 
 - **`Tab` prefix:** `Tab` starts a two-key sequence, and the status bar shows `Tab-` while it waits. `Esc` or any key that isn't bound after `Tab` cancels the sequence. There's no timeout. `Tab` is free because pane focus uses `h`/`l`.

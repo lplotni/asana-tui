@@ -1,5 +1,6 @@
 //! `asn task` output: the detail pane's content without styles, or JSON.
 
+use super::terminal_safe;
 use crate::core::TaskDetail;
 use crate::tui::detail;
 use crate::tui::theme::Theme;
@@ -11,7 +12,7 @@ pub fn render_text(detail: &TaskDetail, now: i64) -> String {
     let theme = Theme::no_color();
     detail::lines(detail, &theme, TEXT_WIDTH, now)
         .iter()
-        .map(|line| detail::plain(line) + "\n")
+        .map(|line| terminal_safe(&detail::plain(line)) + "\n")
         .collect()
 }
 
@@ -67,5 +68,17 @@ mod tests {
         assert_eq!(json["task"]["name"], d.task.name);
         assert_eq!(json["comments"].as_array().unwrap().len(), d.comments.len());
         assert_eq!(json["activity_count"], d.activity_count);
+    }
+
+    #[test]
+    fn untrusted_comments_cannot_inject_escapes() {
+        let mut d = detail();
+        d.comments[0].text = Some("hello \u{1b}]52;c;aGk=\u{7}\u{1b}[2J".into());
+        d.task.name = "\u{1b}[31mred\u{1b}[0m".into();
+
+        let text = render_text(&d, 1_794_834_000);
+
+        assert!(!text.contains('\u{1b}'), "{text:?}");
+        assert!(!text.chars().any(|c| c.is_control() && c != '\n'));
     }
 }

@@ -56,7 +56,9 @@ pub enum Cmd {
     ToggleFilter,
     Refresh,
     CommandLine,
+    /// Back out of visual mode or the detail pane, else quit.
     Quit,
+    ForceQuit,
     Help,
     // Input context.
     Submit,
@@ -216,9 +218,15 @@ pub const BINDINGS: &[Binding] = &[
         &[Char('q')],
         Cmd::Quit,
         Vim,
-        "quit (back outside the Inbox)",
+        "back; quit from the Inbox list",
     ),
-    bind(Normal, &[Ctrl('c')], Cmd::Quit, Asn, "quit"),
+    bind(
+        Normal,
+        &[Ctrl('c')],
+        Cmd::ForceQuit,
+        Asn,
+        "quit from anywhere",
+    ),
     bind(Normal, &[Char('?')], Cmd::Help, Asn, "help"),
     bind(Input, &[Enter], Cmd::Submit, Asn, "confirm"),
     bind(Input, &[Esc], Cmd::Cancel, Asn, "cancel"),

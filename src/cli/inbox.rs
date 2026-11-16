@@ -1,5 +1,6 @@
 //! `asn inbox` output.
 
+use super::terminal_safe;
 use crate::api::notifications::Notification;
 
 /// One tab-separated line per notification:
@@ -11,10 +12,16 @@ pub fn render_text(notifications: &[Notification]) -> String {
             let marker = if n.is_read { " " } else { "●" };
             let actor = n.created_by.as_ref().map_or("Asana", |a| a.name.as_str());
             let object = n.work_objects.first().map_or("-", |o| o.name.as_str());
-            format!(
-                "{}\t{marker}\t{}\t{actor}\t{}\t{object}\n",
-                n.gid, n.created_at, n.story_resource_subtype
-            )
+            let fields = [
+                n.gid.as_str(),
+                marker,
+                n.created_at.as_str(),
+                actor,
+                n.story_resource_subtype.as_str(),
+                object,
+            ];
+            let safe: Vec<String> = fields.iter().map(|f| terminal_safe(f)).collect();
+            safe.join("\t") + "\n"
         })
         .collect()
 }
@@ -68,5 +75,18 @@ mod tests {
         let text = render_text(&edge_cases());
 
         assert!(text.lines().nth(3).unwrap().ends_with("\tcomment_added\t-"));
+    }
+
+    #[test]
+    fn untrusted_names_cannot_inject_escapes_or_break_the_columns() {
+        let mut notifications = edge_cases();
+        notifications[2].created_by.as_mut().unwrap().name = "Eve\u{1b}]0;pwned\u{7}".into();
+        notifications[2].work_objects[0].name = "two\tcolumns\nand a line".into();
+
+        let text = render_text(&notifications);
+
+        assert!(!text.contains('\u{1b}'));
+        assert_eq!(text.lines().count(), 4);
+        assert!(text.lines().all(|l| l.split('\t').count() == 6), "{text:?}");
     }
 }

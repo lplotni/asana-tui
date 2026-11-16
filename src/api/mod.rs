@@ -13,6 +13,11 @@ use crate::config::Token;
 
 pub const ASANA_API_URL: &str = "https://app.asana.com/api/1.0";
 
+/// How long to wait for a connection to Asana.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a whole request may take.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Used when a 429 response carries no usable `Retry-After` header.
 const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(1);
 
@@ -69,8 +74,24 @@ pub struct Client {
 
 impl Client {
     pub fn new(token: &Token, base_url: impl Into<String>) -> Self {
+        Self::with_timeouts(token, base_url, CONNECT_TIMEOUT, REQUEST_TIMEOUT)
+    }
+
+    /// A client whose requests give up after the given times, so a stalled
+    /// connection (sleep, network change) can't hang a refresh forever.
+    fn with_timeouts(
+        token: &Token,
+        base_url: impl Into<String>,
+        connect: Duration,
+        request: Duration,
+    ) -> Self {
+        let http = reqwest::Client::builder()
+            .connect_timeout(connect)
+            .timeout(request)
+            .build()
+            .expect("static client configuration is valid");
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.into(),
             token: token.expose().to_owned(),
         }
@@ -161,4 +182,33 @@ fn network(err: reqwest::Error) -> ApiError {
         "request failed"
     };
     ApiError::Network(kind.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn a_stalled_request_times_out_instead_of_hanging() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(5)))
+            .mount(&server)
+            .await;
+        let client = Client::with_timeouts(
+            &Token::new("t"),
+            server.uri(),
+            Duration::from_secs(1),
+            Duration::from_millis(200),
+        );
+
+        let result: Result<serde_json::Value, ApiError> = client.get("/slow", &[]).await;
+
+        assert!(
+            matches!(&result, Err(ApiError::Network(kind)) if kind == "timed out"),
+            "{result:?}"
+        );
+    }
 }
