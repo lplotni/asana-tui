@@ -101,4 +101,5 @@ T0 API spike + fixtures
 ## Open Questions
 
 - **Should a mutation mark the notification read?** (spec Q3): the default is no, and it can be decided while dogfooding.
-- **Publishing:** the repo is `github.com/lplotni/<repo>` (decided). Still open: the crates.io package name, and whether to release via GitHub Releases only or also a Homebrew tap. This is needed by T15.
+- ~~Publishing~~ **Decided:** repo `github.com/lplotni/asana-tui`; v0.1 ships as GitHub Releases (macOS arm64/x86_64, Linux) plus a Homebrew formula in the same repo (`brew tap lplotni/asn https://github.com/lplotni/asana-tui && brew install lplotni/asn/asn`). No crates.io.
+- ~~Rich descriptions~~ **Decided (T11):** edit plain text; a description with formatting asks for confirmation before it's replaced.
