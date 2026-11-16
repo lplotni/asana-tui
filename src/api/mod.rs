@@ -120,6 +120,16 @@ impl Client {
             .await
     }
 
+    /// PUT `body` as JSON to `path` and decode the JSON response.
+    pub(crate) async fn put<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T, ApiError> {
+        let url = format!("{}{path}", self.base_url);
+        self.send(|| self.http.put(&url).json(body)).await
+    }
+
     /// Sends the request built by `request` with auth. A 429 is retried once
     /// after `Retry-After`; a second 429 is `RateLimited`.
     async fn send<T: DeserializeOwned>(

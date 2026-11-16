@@ -1,7 +1,7 @@
 //! The TUI state machine: `update(msg)` changes state and returns effects for
 //! the event loop to run. No I/O happens here.
 
-use ratatui::crossterm::event::KeyEvent;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use super::detail;
 use super::format;
@@ -52,6 +52,15 @@ pub enum Msg {
         task_gid: String,
         local_gid: String,
         result: Result<Box<TaskStory>, String>,
+    },
+    /// The editor closed: the new description, or `None` if cancelled.
+    DescriptionWritten {
+        task_gid: String,
+        text: Option<String>,
+    },
+    NotesSaved {
+        task_gid: String,
+        result: Result<(), SaveFailure>,
     },
     /// Typing in the project picker paused long enough to search.
     SearchDue {
@@ -114,6 +123,18 @@ pub enum Effect {
         local_gid: String,
         text: String,
     },
+    /// Hand the terminal to `$EDITOR` with the description, then send
+    /// [`Msg::DescriptionWritten`].
+    EditDescription {
+        task_gid: String,
+        initial: String,
+    },
+    /// Save the description unless the task changed since `expected_modified_at`.
+    SaveNotes {
+        task_gid: String,
+        text: String,
+        expected_modified_at: Option<String>,
+    },
     /// Send [`Msg::SearchDue`] for `seq` after [`picker::SEARCH_DEBOUNCE`].
     ScheduleSearch {
         seq: u64,
@@ -161,6 +182,21 @@ pub struct Sizes {
     pub detail_rows: usize,
 }
 
+/// Why a description wasn't saved, and where the user's text was kept.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveFailure {
+    pub message: String,
+    pub kept_at: Option<String>,
+}
+
+/// A yes/no question in the status bar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Confirm {
+    pub question: String,
+    task_gid: String,
+    initial: String,
+}
+
 /// The `/` filter: the list shows only notifications matching `query`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Search {
@@ -199,6 +235,10 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// A pending yes/no question (e.g. before removing formatting).
+    pub confirm: Option<Confirm>,
+    /// Descriptions being saved: the text to restore if saving fails.
+    previous_notes: HashMap<String, String>,
     /// The `?` help overlay is open.
     pub help: bool,
     /// The `/` filter, when active.
@@ -263,6 +303,21 @@ impl App {
                 // Any key closes the help and does nothing else.
                 self.help = false;
                 Vec::new()
+            }
+            Msg::Key(event) if self.confirm.is_some() => {
+                let confirm = self.confirm.take().expect("checked above");
+                if matches!(event.code, KeyCode::Char('y' | 'Y')) {
+                    vec![Effect::EditDescription {
+                        task_gid: confirm.task_gid,
+                        initial: confirm.initial,
+                    }]
+                } else {
+                    self.toast = Some(Toast {
+                        text: "Description not edited".into(),
+                        is_error: false,
+                    });
+                    Vec::new()
+                }
             }
             Msg::Key(event) => {
                 self.toast = None;
@@ -389,6 +444,41 @@ impl App {
                         )));
                     }
                 }
+                Vec::new()
+            }
+            Msg::DescriptionWritten {
+                task_gid,
+                text: Some(text),
+            } => self.show_and_save_description(task_gid, text),
+            Msg::DescriptionWritten { text: None, .. } => Vec::new(),
+            Msg::NotesSaved {
+                task_gid,
+                result: Ok(()),
+            } => {
+                self.previous_notes.remove(&task_gid);
+                self.toast = Some(Toast {
+                    text: "Description saved".into(),
+                    is_error: false,
+                });
+                // Reload for Asana's html_notes and modified_at.
+                vec![Effect::LoadDetail { gid: task_gid }]
+            }
+            Msg::NotesSaved {
+                task_gid,
+                result: Err(failure),
+            } => {
+                if let Some(old) = self.previous_notes.remove(&task_gid)
+                    && let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid)
+                {
+                    detail.task.notes = old;
+                }
+                let kept = failure
+                    .kept_at
+                    .map_or_else(String::new, |path| format!(". Your text is in {path}"));
+                self.toast = Some(Toast::error(format!(
+                    "Description not saved: {}{kept}",
+                    failure.message
+                )));
                 Vec::new()
             }
             Msg::SearchDue { seq } => match &mut self.picker {
@@ -560,6 +650,7 @@ impl App {
             Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
             Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::Comment => return self.start_comment(),
+            Cmd::EditDescription => return self.start_description(),
             Cmd::AddToProject => return self.open_picker(),
             Cmd::MarkRead => return self.mark(Some(true)),
             Cmd::MarkUnread => return self.mark(Some(false)),
@@ -819,6 +910,63 @@ impl App {
                 }]
             }
         }
+    }
+
+    /// Opens the editor with the selected task's description. A description
+    /// with formatting asks first, since saving plain text removes it.
+    fn start_description(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast {
+                text: "Only tasks have descriptions".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let Some(Detail::Loaded(detail)) = self.details.get(&task_gid) else {
+            self.toast = Some(Toast {
+                text: "Wait for the task to load".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let initial = detail.task.notes.clone();
+        if detail
+            .task
+            .html_notes
+            .as_deref()
+            .is_some_and(crate::core::has_formatting)
+        {
+            self.confirm = Some(Confirm {
+                question: "This will remove formatting. Continue? (y/N)".into(),
+                task_gid,
+                initial,
+            });
+            return Vec::new();
+        }
+        vec![Effect::EditDescription { task_gid, initial }]
+    }
+
+    /// Shows the new description right away and saves it, remembering the old
+    /// one in case saving fails. Unchanged text isn't saved.
+    fn show_and_save_description(&mut self, task_gid: String, text: String) -> Vec<Effect> {
+        let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) else {
+            return Vec::new();
+        };
+        if text.trim_end() == detail.task.notes.trim_end() {
+            self.toast = Some(Toast {
+                text: "No changes".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        }
+        let old = std::mem::replace(&mut detail.task.notes, text.clone());
+        let expected_modified_at = detail.task.modified_at.clone();
+        self.previous_notes.insert(task_gid.clone(), old);
+        vec![Effect::SaveNotes {
+            task_gid,
+            text,
+            expected_modified_at,
+        }]
     }
 
     /// Opens the editor for a comment on the selected task, with any draft

@@ -52,6 +52,22 @@ pub fn edit(editor: &str, initial: &str) -> io::Result<Option<String>> {
     outcome
 }
 
+/// Keeps `text` that couldn't be saved in a private file and returns its
+/// path, so nothing the user wrote is lost.
+pub fn save_recovery(name: &str, text: &str) -> io::Result<PathBuf> {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let path = std::env::temp_dir().join(format!("asn-{name}-{nanos}.md"));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)?;
+    file.write_all(text.as_bytes())?;
+    Ok(path)
+}
+
 /// A new, private temp file path.
 fn temp_path() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
@@ -176,5 +192,16 @@ mod tests {
                 .get_envs()
                 .any(|(k, v)| k == "ASANA_TOKEN" && v.is_none())
         );
+    }
+
+    #[test]
+    fn recovery_files_keep_the_text_privately() {
+        let path = save_recovery("description-123", "my long text").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "my long text");
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert!(path.to_string_lossy().contains("asn-description-123"));
+        std::fs::remove_file(path).unwrap();
     }
 }

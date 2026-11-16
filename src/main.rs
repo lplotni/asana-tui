@@ -196,23 +196,12 @@ async fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, err.exit_code()),
         },
-        other => {
-            let what = match other {
-                Some(Command::Desc { .. }) => "`asn desc`",
-                None
-                | Some(
-                    Command::Inbox { .. }
-                    | Command::Read { .. }
-                    | Command::Task { .. }
-                    | Command::Comment { .. }
-                    | Command::Project { .. },
-                ) => {
-                    unreachable!()
-                }
-            };
-            eprintln!("{what} is not implemented yet");
-            ExitCode::FAILURE
-        }
+        Some(Command::Desc {
+            gid,
+            file,
+            stdin,
+            force,
+        }) => edit_description(&client, &gid, file, stdin.is_some(), force).await,
     }
 }
 
@@ -225,4 +214,58 @@ fn unix_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)
+}
+
+/// `asn desc`: replace a task's description with plain text from a file,
+/// stdin or `$EDITOR`. Refuses formatted descriptions without `--force`, and
+/// never overwrites a task that changed meanwhile.
+async fn edit_description(
+    client: &Client,
+    gid: &str,
+    file: Option<std::path::PathBuf>,
+    from_stdin: bool,
+    force: bool,
+) -> ExitCode {
+    let task = match client.task(gid).await {
+        Ok(task) => task,
+        Err(err) => return fail(&err, err.exit_code()),
+    };
+    if !force && task.html_notes.as_deref().is_some_and(core::has_formatting) {
+        eprintln!(
+            "This description has formatting (links, lists, …) that a plain-text save removes; use --force to replace it anyway"
+        );
+        return ExitCode::FAILURE;
+    }
+    let text = if let Some(path) = file {
+        std::fs::read_to_string(&path).ok()
+    } else if from_stdin {
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+            .ok()
+            .map(|_| text)
+    } else {
+        let editor = asn::editor::editor_command(|key| std::env::var(key).ok());
+        asn::editor::edit(&editor, &task.notes).ok().flatten()
+    };
+    let Some(text) = text else {
+        eprintln!("No description given; nothing saved");
+        return ExitCode::FAILURE;
+    };
+    if text.trim_end() == task.notes.trim_end() {
+        eprintln!("No changes");
+        return ExitCode::SUCCESS;
+    }
+    match core::set_notes(client, gid, &text, task.modified_at.as_deref()).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            match asn::editor::save_recovery(&format!("description-{gid}"), &text) {
+                Ok(path) => eprintln!("{err}; your text is in {}", path.display()),
+                Err(_) => eprintln!("{err}"),
+            }
+            match err {
+                core::SaveNotesError::Api(api) => ExitCode::from(api.exit_code() as u8),
+                core::SaveNotesError::Conflict => ExitCode::FAILURE,
+            }
+        }
+    }
 }

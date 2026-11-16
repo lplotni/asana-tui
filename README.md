@@ -4,7 +4,7 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
-> Early development (v0.1). The Inbox, read state, task details, commenting and adding to projects work; description editing is next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
+> Early development (v0.1). All v0.1 features work: Inbox, read state, task details, comments, description editing and adding to projects. Releases are next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
 
 ## Install
 
@@ -34,6 +34,7 @@ Everything comes from the environment. Nothing is written to disk.
 | `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
 | `o` | Open the task in the browser |
 | `c` (or `Tab c`) | Comment on the task in your `$EDITOR` (`:cq` or an empty file cancels) |
+| `Tab e` | Edit the description in `$EDITOR` as plain text (asks first if it has formatting, which plain text removes) |
 | `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
 | `V` | Select a range, then `e` `u` `x` |
@@ -53,6 +54,7 @@ asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
 asn task <task-gid>                     # a task with its description and comments (--json too)
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
+asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
 ```
 
 `asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.
@@ -65,6 +67,7 @@ These come from Asana's [Notifications API](https://forum.asana.com/t/new-notifi
 - **Archived items may still show.** The API has no archived flag, so items you archived on the web may still appear in `asn`.
 - **No grouping.** The web Inbox can bundle several notifications about one task into one card; `asn` lists them one by one.
 - **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R` or every 60 s).
+- **Descriptions are edited as plain text.** Saving replaces Asana's formatting (links, lists, bold, mentions); `asn` asks first when a description has any. Edit formatted descriptions on the web.
 - **Mentions look like comments.** The API doesn't mark @mentions separately.
 
 ## Develop

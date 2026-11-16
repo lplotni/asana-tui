@@ -97,6 +97,29 @@ impl Client {
         Ok(response.data)
     }
 
+    /// When the task was last modified (for conflict checks).
+    pub async fn modified_at(&self, gid: &str) -> Result<Option<String>, ApiError> {
+        #[derive(Deserialize)]
+        struct Response {
+            data: Modified,
+        }
+        #[derive(Deserialize)]
+        struct Modified {
+            #[serde(default)]
+            modified_at: Option<String>,
+        }
+        let query = [("opt_fields", "modified_at".to_owned())];
+        let response: Response = self.get(&format!("/tasks/{gid}"), &query).await?;
+        Ok(response.data.modified_at)
+    }
+
+    /// Replaces the description with plain text (Asana derives `html_notes`).
+    pub async fn set_notes(&self, gid: &str, notes: &str) -> Result<(), ApiError> {
+        let body = serde_json::json!({ "data": { "notes": notes } });
+        let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &body).await?;
+        Ok(())
+    }
+
     /// Adds a comment; returns the created story.
     pub async fn add_comment(&self, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
         #[derive(Deserialize)]

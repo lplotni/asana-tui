@@ -134,3 +134,91 @@ async fn comment_posts_the_text_and_returns_the_new_story() {
     assert!(story.is_comment());
     assert_eq!(story.gid, created["gid"]);
 }
+
+// --- Description edits (T11) ----------------------------------------------
+
+#[tokio::test]
+async fn set_notes_writes_the_text_when_the_task_is_unchanged() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(query_param("opt_fields", "modified_at"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({ "data": { "gid": TASK, "modified_at": "2026-11-16T10:00:00.000Z" } }),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(wiremock::matchers::body_json(
+            json!({ "data": { "notes": "New text" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    core::set_notes(
+        &client(&server),
+        TASK,
+        "New text",
+        Some("2026-11-16T10:00:00.000Z"),
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn set_notes_refuses_when_the_task_changed_meanwhile() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            json!({ "data": { "gid": TASK, "modified_at": "2026-11-16T11:30:00.000Z" } }),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let err = core::set_notes(
+        &client(&server),
+        TASK,
+        "New text",
+        Some("2026-11-16T10:00:00.000Z"),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, core::SaveNotesError::Conflict), "{err:?}");
+}
+
+#[test]
+fn rich_text_is_detected_from_html_notes() {
+    let plain = fixture("task_plain.json")["data"]["html_notes"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let rich = fixture("task_rich.json")["data"]["html_notes"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    assert!(!core::has_formatting(&plain));
+    assert!(core::has_formatting(&rich));
+    assert!(core::has_formatting(
+        "<body>see <a href=\"https://x\">this</a></body>"
+    ));
+    assert!(core::has_formatting("<body><ul><li>one</li></ul></body>"));
+    assert!(core::has_formatting("<body><strong>bold</strong></body>"));
+    assert!(core::has_formatting(
+        "<body>hi <a data-asana-gid=\"1\" data-asana-type=\"user\">@Ada</a></body>"
+    ));
+    assert!(!core::has_formatting(
+        "<body>Line one\nLine two &amp; more</body>"
+    ));
+    assert!(!core::has_formatting(""));
+}

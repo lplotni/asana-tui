@@ -295,7 +295,7 @@ Add `core::comment(task, text)` and `asn comment <gid> [-m TEXT | -]`, which tak
 
 **Estimated scope:** M
 
-### - [ ] T11: Edit description with rich-text and concurrency guards
+### - [x] T11: Edit description with rich-text and concurrency guards
 
 **Description:** Add `core::set_notes(task, text, expected_modified_at)`. It re-fetches `modified_at`. If that changed, it returns a `Conflict` error and keeps the user's text. Otherwise it sends `PUT notes`. Add a function that decides whether `html_notes` contains more than plain paragraphs.
 
@@ -304,13 +304,13 @@ In the TUI, `Tab e` opens the editor with the current `notes` and does nothing i
 Add `asn desc <gid> [--file PATH | -] [--force]`. Without `--force`, it refuses rich-text tasks.
 
 **Acceptance criteria:**
-- [ ] The rich-text detector is true for links, lists, bold and mentions, and false for plain paragraphs (table test using T0 fixtures).
-- [ ] On a conflict, no `PUT` is sent and the edited text survives on disk (wiremock).
-- [ ] Unchanged text sends no request.
+- [x] The rich-text detector is true for links, lists, bold and mentions, and false for plain paragraphs (table test using T0 fixtures).
+- [x] On a conflict, no `PUT` is sent and the edited text survives on disk (wiremock).
+- [x] Unchanged text sends no request.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: editing a plain task works. A formatted task asks for confirmation. Editing the task in the web app while vim is open triggers the conflict path.
+- [x] `cargo test`
+- [ ] (Verified without saving in Rex: a formatted task asks and `n` cancels; a plain task opens vi with its current text and `:cq` cancels. Saving a real description and the conflict path are for the user.) Manual: editing a plain task works. A formatted task asks for confirmation. Editing the task in the web app while vim is open triggers the conflict path.
 
 **Dependencies:** T10
 

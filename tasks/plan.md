@@ -68,7 +68,7 @@ T0 API spike + fixtures
 ### Phase 3: Act on tasks
 - [x] T9: Task detail (`asn task` and the detail pane)
 - [x] T10: `$EDITOR` round-trip and add comment
-- [ ] T11: Edit description with rich-text and concurrency guards
+- [x] T11: Edit description with rich-text and concurrency guards
 - [x] T12: Add to project (fuzzy project picker, then section picker)
 
 ### Checkpoint C: feature complete

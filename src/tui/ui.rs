@@ -379,6 +379,20 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    if let Some(confirm) = &app.confirm {
+        let line = Line::from(vec![
+            Span::styled(" CONFIRM ", theme.style(Role::StatusbarMode)),
+            Span::styled(
+                format!(" {}", confirm.question),
+                theme.style(Role::ToastError),
+            ),
+        ]);
+        frame.render_widget(
+            Paragraph::new(line).style(theme.style(Role::Statusbar)),
+            area,
+        );
+        return;
+    }
     // While typing a `:` command or `/` query, the bar is the input line.
     let input = match (&app.command, &app.search) {
         (Some(command), _) => Some((" COMMAND ", format!(":{command}"))),
@@ -878,5 +892,26 @@ mod tests {
 
         assert_eq!(app.cursor, 2);
         assert_eq!(app.focus, crate::tui::app::Focus::Detail);
+    }
+
+    #[test]
+    fn the_formatting_question_is_asked_in_the_status_bar() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Tab,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+        press(&mut app, "e");
+
+        let terminal = draw(&app, &terminal_theme());
+
+        let status: String = (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 23)].symbol().to_owned())
+            .collect();
+        assert!(
+            status.starts_with(" CONFIRM  This will remove formatting. Continue? (y/N)"),
+            "{status}"
+        );
     }
 }

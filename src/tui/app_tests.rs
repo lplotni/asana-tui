@@ -1188,3 +1188,156 @@ fn question_mark_opens_the_help_and_the_next_key_only_closes_it() {
     assert!(!app.help);
     assert_eq!(app.cursor, 0, "the closing key did nothing else");
 }
+
+// --- Description (T11) -------------------------------------------------------
+
+fn with_notes(app: &mut App, notes: &str, html: &str) {
+    let mut detail = task_detail();
+    detail.task.notes = notes.into();
+    detail.task.html_notes = Some(html.into());
+    detail.task.modified_at = Some("2026-11-16T10:00:00.000Z".into());
+    app.update(Msg::DetailDue { gid: "t0".into() });
+    app.update(Msg::DetailLoaded {
+        gid: "t0".into(),
+        result: Ok(Box::new(detail)),
+    });
+}
+
+fn tab_e(app: &mut App) -> Vec<Effect> {
+    key(app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(app, "e")
+}
+
+fn notes_of(app: &App) -> String {
+    match app.selected_detail() {
+        Some(Detail::Loaded(d)) => d.task.notes.clone(),
+        _ => panic!("not loaded"),
+    }
+}
+
+#[test]
+fn tab_e_opens_the_editor_with_the_plain_description() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+
+    assert_eq!(
+        tab_e(&mut app),
+        [Effect::EditDescription {
+            task_gid: "t0".into(),
+            initial: "Old text".into()
+        }]
+    );
+}
+
+#[test]
+fn tab_e_waits_for_the_task_to_load() {
+    let mut app = loaded(3, 10);
+
+    assert!(tab_e(&mut app).is_empty());
+    assert!(app.toast.is_some());
+}
+
+#[test]
+fn a_formatted_description_asks_before_editing() {
+    let mut app = loaded(3, 10);
+    with_notes(
+        &mut app,
+        "Old text",
+        "<body><strong>Old</strong> text</body>",
+    );
+
+    assert!(tab_e(&mut app).is_empty());
+    assert!(app.confirm.is_some());
+
+    assert!(keys(&mut app, "n").is_empty());
+    assert!(app.confirm.is_none());
+
+    tab_e(&mut app);
+    assert_eq!(
+        keys(&mut app, "y"),
+        [Effect::EditDescription {
+            task_gid: "t0".into(),
+            initial: "Old text".into()
+        }]
+    );
+}
+
+#[test]
+fn an_unchanged_description_is_not_saved() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+
+    let effects = app.update(Msg::DescriptionWritten {
+        task_gid: "t0".into(),
+        text: Some("Old text\n".into()),
+    });
+
+    assert!(effects.is_empty());
+    assert_eq!(app.toast.as_ref().unwrap().text, "No changes");
+}
+
+#[test]
+fn a_changed_description_shows_at_once_and_is_saved_with_a_conflict_check() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+
+    let effects = app.update(Msg::DescriptionWritten {
+        task_gid: "t0".into(),
+        text: Some("New text\n".into()),
+    });
+
+    assert_eq!(
+        effects,
+        [Effect::SaveNotes {
+            task_gid: "t0".into(),
+            text: "New text\n".into(),
+            expected_modified_at: Some("2026-11-16T10:00:00.000Z".into()),
+        }]
+    );
+    assert_eq!(notes_of(&app), "New text\n");
+}
+
+#[test]
+fn a_saved_description_reloads_the_task() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    app.update(Msg::DescriptionWritten {
+        task_gid: "t0".into(),
+        text: Some("New text\n".into()),
+    });
+
+    let effects = app.update(Msg::NotesSaved {
+        task_gid: "t0".into(),
+        result: Ok(()),
+    });
+
+    assert_eq!(effects, [Effect::LoadDetail { gid: "t0".into() }]);
+    assert!(!app.toast.as_ref().unwrap().is_error);
+}
+
+#[test]
+fn a_failed_save_restores_the_old_text_and_says_where_the_new_one_is() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    app.update(Msg::DescriptionWritten {
+        task_gid: "t0".into(),
+        text: Some("New text\n".into()),
+    });
+
+    app.update(Msg::NotesSaved {
+        task_gid: "t0".into(),
+        result: Err(SaveFailure {
+            message: "the task was changed on the web while you were editing".into(),
+            kept_at: Some("/tmp/asn-description-t0-1.md".into()),
+        }),
+    });
+
+    assert_eq!(notes_of(&app), "Old text");
+    let toast = app.toast.as_ref().unwrap();
+    assert!(toast.is_error);
+    assert!(
+        toast.text.contains("/tmp/asn-description-t0-1.md"),
+        "{}",
+        toast.text
+    );
+}

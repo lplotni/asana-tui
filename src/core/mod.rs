@@ -100,6 +100,46 @@ pub async fn add_to_project(
     client.add_project(task_gid, project_gid, section_gid).await
 }
 
+/// Why a description couldn't be saved.
+#[derive(Debug, thiserror::Error)]
+pub enum SaveNotesError {
+    #[error("the task was changed on the web while you were editing")]
+    Conflict,
+    #[error(transparent)]
+    Api(#[from] ApiError),
+}
+
+/// Whether Asana's `html_notes` has anything beyond plain paragraphs (links,
+/// lists, bold, mentions, …) that saving plain `notes` would remove.
+pub fn has_formatting(html_notes: &str) -> bool {
+    html_notes.split('<').skip(1).any(|tag| {
+        let name: String = tag
+            .trim_start_matches('/')
+            .chars()
+            .take_while(char::is_ascii_alphanumeric)
+            .collect();
+        !name.is_empty() && name != "body"
+    })
+}
+
+/// Replaces the task's description with plain `text`, unless the task was
+/// modified after `expected_modified_at` (then nothing is written).
+pub async fn set_notes(
+    client: &Client,
+    task_gid: &str,
+    text: &str,
+    expected_modified_at: Option<&str>,
+) -> Result<(), SaveNotesError> {
+    if let Some(expected) = expected_modified_at {
+        let current = client.modified_at(task_gid).await?;
+        if current.as_deref() != Some(expected) {
+            return Err(SaveNotesError::Conflict);
+        }
+    }
+    client.set_notes(task_gid, text).await?;
+    Ok(())
+}
+
 async fn all_stories(client: &Client, gid: &str) -> Result<Vec<TaskStory>, ApiError> {
     let mut stories = Vec::new();
     let mut offset: Option<String> = None;
