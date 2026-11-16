@@ -50,6 +50,16 @@ asn task <task-gid>                     # a task with its description and commen
 
 `asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.
 
+## Known limitations
+
+These come from Asana's [Notifications API](https://forum.asana.com/t/new-notifications-api/1159934), not from `asn`:
+
+- **No archive.** The API can only mark notifications read or unread. `e` marks an item read, and it stays in the list, unlike `E` in the web Inbox, which removes it. Archive in the web app if you want an item gone.
+- **Archived items may still show.** The API has no archived flag, so items you archived on the web may still appear in `asn`.
+- **No grouping.** The web Inbox can bundle several notifications about one task into one card; `asn` lists them one by one.
+- **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R` or every 60 s).
+- **Mentions look like comments.** The API doesn't mark @mentions separately.
+
 ## Develop
 
 ```sh
