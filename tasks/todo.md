@@ -318,7 +318,7 @@ Add `asn desc <gid> [--file PATH | -] [--force]`. Without `--force`, it refuses 
 
 **Estimated scope:** M
 
-### - [ ] T12: Add to project (fuzzy project picker, then section picker)
+### - [x] T12: Add to project (fuzzy project picker, then section picker)
 
 **Description:** Add `core::search_projects(query)` (typeahead), `core::sections(project)` and `core::add_to_project(task, project, section)`.
 
@@ -332,13 +332,13 @@ Add a reusable picker overlay:
 Add `asn project add <task> <project> [--section GID]`.
 
 **Acceptance criteria:**
-- [ ] A task with no projects gets its first project. A task with projects keeps them and gains one (wiremock asserts `addProject` was used, never a replace).
-- [ ] Typing `web` quickly sends one typeahead request. A late response for `we` doesn't replace the results for `web`.
-- [ ] Projects the task is already in never appear in the picker.
+- [x] A task with no projects gets its first project. A task with projects keeps them and gains one (wiremock asserts `addProject` was used, never a replace).
+- [x] Typing `web` quickly sends one typeahead request. A late response for `we` doesn't replace the results for `web`.
+- [x] Projects the task is already in never appear in the picker.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: adding a real task to a second project and section shows correctly in the web app
+- [x] `cargo test`
+- [ ] Manual: adding a real task to a second project and section shows correctly in the web app (**not done: it would change a real task; for the user**. Verified read-only in Rex: real typeahead results, section step with "No section" first, Esc closes without adding.)
 
 **Dependencies:** T9 (can run in parallel with T10/T11)
 

@@ -69,7 +69,7 @@ T0 API spike + fixtures
 - [x] T9: Task detail (`asn task` and the detail pane)
 - [x] T10: `$EDITOR` round-trip and add comment
 - [ ] T11: Edit description with rich-text and concurrency guards
-- [ ] T12: Add to project (fuzzy project picker, then section picker)
+- [x] T12: Add to project (fuzzy project picker, then section picker)
 
 ### Checkpoint C: feature complete
 - [ ] The full spec flow works: Inbox, open, comment, edit description, add to project, mark read

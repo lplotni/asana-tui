@@ -1,7 +1,7 @@
 //! Operations shared by the CLI and the TUI.
 
 use crate::api::notifications::{MARK_BATCH, Notification};
-use crate::api::tasks::{Task, TaskStory};
+use crate::api::tasks::{Named, Task, TaskStory};
 use crate::api::{ApiError, Client};
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
@@ -73,6 +73,31 @@ pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiEr
 /// Adds a comment to a task and returns it as Asana stored it.
 pub async fn comment(client: &Client, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
     client.add_comment(task_gid, text).await
+}
+
+/// Projects matching `query` (Asana's typeahead; works on every plan).
+pub async fn search_projects(
+    client: &Client,
+    workspace: &str,
+    query: &str,
+) -> Result<Vec<Named>, ApiError> {
+    client.typeahead_projects(workspace, query).await
+}
+
+/// The sections of a project, in board order.
+pub async fn sections(client: &Client, project_gid: &str) -> Result<Vec<Named>, ApiError> {
+    client.sections(project_gid).await
+}
+
+/// Adds the task to a project (and optionally a section), keeping the
+/// projects it's already in.
+pub async fn add_to_project(
+    client: &Client,
+    task_gid: &str,
+    project_gid: &str,
+    section_gid: Option<&str>,
+) -> Result<(), ApiError> {
+    client.add_project(task_gid, project_gid, section_gid).await
 }
 
 async fn all_stories(client: &Client, gid: &str) -> Result<Vec<TaskStory>, ApiError> {

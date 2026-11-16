@@ -185,16 +185,27 @@ async fn main() -> ExitCode {
                 Err(err) => fail(&err, err.exit_code()),
             }
         }
+        Some(Command::Project {
+            command:
+                ProjectCommand::Add {
+                    task,
+                    project,
+                    section,
+                },
+        }) => match core::add_to_project(&client, &task, &project, section.as_deref()).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => fail(&err, err.exit_code()),
+        },
         other => {
             let what = match other {
                 Some(Command::Desc { .. }) => "`asn desc`",
-                Some(Command::Project { .. }) => "`asn project`",
                 None
                 | Some(
                     Command::Inbox { .. }
                     | Command::Read { .. }
                     | Command::Task { .. }
-                    | Command::Comment { .. },
+                    | Command::Comment { .. }
+                    | Command::Project { .. },
                 ) => {
                     unreachable!()
                 }

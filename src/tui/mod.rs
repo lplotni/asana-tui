@@ -5,6 +5,7 @@ pub mod app;
 pub mod detail;
 pub mod format;
 pub mod keys;
+pub mod picker;
 pub mod theme;
 pub mod tint;
 pub mod ui;
@@ -175,7 +176,10 @@ fn run_effects(
 ) {
     for effect in effects {
         let (client, workspace, tx) = (client.clone(), workspace.clone(), tx.clone());
-        let is_write = matches!(effect, Effect::MarkRead { .. } | Effect::PostComment { .. });
+        let is_write = matches!(
+            effect,
+            Effect::MarkRead { .. } | Effect::PostComment { .. } | Effect::AddToProject { .. }
+        );
         let task = async move {
             let msg = match effect {
                 Effect::LoadInbox { target } => Msg::InboxLoaded(
@@ -220,6 +224,41 @@ fn run_effects(
                 }
                 // Needs the terminal; handled by the event loop.
                 Effect::EditComment { .. } => return,
+                Effect::ScheduleSearch { seq } => {
+                    tokio::time::sleep(picker::SEARCH_DEBOUNCE).await;
+                    Msg::SearchDue { seq }
+                }
+                Effect::SearchProjects { query, seq } => Msg::ProjectsFound {
+                    seq,
+                    result: core::search_projects(&client, &workspace, &query)
+                        .await
+                        .map_err(|e| e.to_string()),
+                },
+                Effect::LoadSections { project_gid } => {
+                    let result = core::sections(&client, &project_gid)
+                        .await
+                        .map_err(|e| e.to_string());
+                    Msg::SectionsLoaded {
+                        project_gid,
+                        result,
+                    }
+                }
+                Effect::AddToProject {
+                    task_gid,
+                    project,
+                    section,
+                } => {
+                    let section_gid = section.as_ref().map(|s| s.gid.as_str());
+                    let result =
+                        core::add_to_project(&client, &task_gid, &project.gid, section_gid)
+                            .await
+                            .map_err(|e| e.to_string());
+                    Msg::AddedToProject {
+                        task_gid,
+                        project_gid: project.gid,
+                        result,
+                    }
+                }
                 Effect::MarkRead { gids, read } => {
                     let result = core::mark_read(&client, &workspace, &gids, read)
                         .await

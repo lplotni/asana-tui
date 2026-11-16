@@ -4,12 +4,13 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
+    Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
 use super::app::{App, Detail, Focus, Sizes};
 use super::detail;
 use super::format::{describe, relative_time};
+use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
 
@@ -55,6 +56,64 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
     render_list(frame, list, app, theme, now);
     render_detail(frame, detail, app, theme, now);
     render_status(frame, status, app, theme);
+    if let Some(picker) = &app.picker {
+        render_picker(frame, detail, picker, theme);
+    }
+}
+
+/// The project/section picker, drawn over the task pane.
+fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) {
+    let width = over.width.saturating_sub(4).min(56);
+    let height = over.height.saturating_sub(2).min(14);
+    let area = Rect::new(over.x + (over.width - width) / 2, over.y + 2, width, height);
+    let title = match &picker.stage {
+        Stage::Project => " Add to project ".to_owned(),
+        Stage::Section { project } => format!(" Section in {} ", project.name),
+    };
+    let block = Block::new()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Thick)
+        .border_style(theme.style(Role::BorderFocused))
+        .title(Span::styled(title, theme.style(Role::Title)))
+        .title_bottom(Span::styled(
+            " Ctrl-n/Ctrl-p move · Enter choose · Esc cancel ",
+            theme.style(Role::Keyhint),
+        ))
+        .padding(Padding::horizontal(1));
+
+    let mut lines = Vec::new();
+    if picker.stage == Stage::Project {
+        lines.push(Line::from(vec![
+            Span::styled("> ", theme.style(Role::PickerMatch)),
+            Span::styled(picker.query.clone(), theme.style(Role::Text)),
+            Span::styled("▏", theme.style(Role::PickerMatch)),
+        ]));
+        lines.push(Line::default());
+    }
+    if picker.loading && picker.items.is_empty() {
+        lines.push(Line::styled("Searching…", theme.style(Role::TextMuted)));
+    } else if picker.items.is_empty() {
+        lines.push(Line::styled(
+            "No matching projects",
+            theme.style(Role::TextMuted),
+        ));
+    }
+    for (index, item) in picker.items.iter().enumerate() {
+        let style = if index == picker.selected {
+            theme.style(Role::Selection)
+        } else {
+            theme.style(Role::Text)
+        };
+        let marker = if index == picker.selected { "▌" } else { " " };
+        lines.push(Line::styled(format!("{marker}{}", item.name), style));
+    }
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .style(theme.style(Role::Text)),
+        area,
+    );
 }
 
 fn render_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -228,7 +287,9 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    let mode = if app.visual_anchor.is_some() {
+    let mode = if app.picker.is_some() {
+        " PICKER "
+    } else if app.visual_anchor.is_some() {
         " VISUAL "
     } else {
         " NORMAL "
@@ -526,5 +587,52 @@ mod tests {
         let buffer = terminal.backend().buffer();
         assert_eq!(buffer[(0, 1)].symbol(), "┌", "list is no longer focused");
         assert_eq!(buffer[(45, 1)].symbol(), "┏", "detail is focused");
+    }
+
+    fn open_picker(app: &mut App) {
+        with_detail(app);
+        press(app, "p");
+        press(app, "web");
+        let seq = app.picker.as_ref().unwrap().search_seq;
+        app.update(Msg::ProjectsFound {
+            seq,
+            result: Ok(vec![
+                crate::api::tasks::Named {
+                    gid: "1".into(),
+                    name: "Webshop".into(),
+                },
+                crate::api::tasks::Named {
+                    gid: "2".into(),
+                    name: "Web analytics".into(),
+                },
+            ]),
+        });
+    }
+
+    #[test]
+    fn project_picker() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        open_picker(&mut app);
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn section_picker() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        open_picker(&mut app);
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+        app.update(Msg::SectionsLoaded {
+            project_gid: "1".into(),
+            result: Ok(vec![crate::api::tasks::Named {
+                gid: "3".into(),
+                name: "In progress".into(),
+            }]),
+        });
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
     }
 }

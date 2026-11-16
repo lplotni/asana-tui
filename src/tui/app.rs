@@ -6,12 +6,13 @@ use ratatui::crossterm::event::KeyEvent;
 use super::detail;
 use super::format;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
+use super::picker::{self, Picker};
 use super::theme::Theme;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use crate::api::notifications::Notification;
-use crate::api::tasks::{Named, TaskStory};
+use crate::api::tasks::{Membership, Named, TaskStory};
 use crate::core::TaskDetail;
 
 /// Notifications fetched on start and the minimum fetched on refresh.
@@ -51,6 +52,23 @@ pub enum Msg {
         task_gid: String,
         local_gid: String,
         result: Result<Box<TaskStory>, String>,
+    },
+    /// Typing in the project picker paused long enough to search.
+    SearchDue {
+        seq: u64,
+    },
+    ProjectsFound {
+        seq: u64,
+        result: Result<Vec<Named>, String>,
+    },
+    SectionsLoaded {
+        project_gid: String,
+        result: Result<Vec<Named>, String>,
+    },
+    AddedToProject {
+        task_gid: String,
+        project_gid: String,
+        result: Result<(), String>,
     },
     /// Result of marking `gids` read (or unread): the GIDs Asana couldn't update.
     Marked {
@@ -95,6 +113,22 @@ pub enum Effect {
         task_gid: String,
         local_gid: String,
         text: String,
+    },
+    /// Send [`Msg::SearchDue`] for `seq` after [`picker::SEARCH_DEBOUNCE`].
+    ScheduleSearch {
+        seq: u64,
+    },
+    SearchProjects {
+        query: String,
+        seq: u64,
+    },
+    LoadSections {
+        project_gid: String,
+    },
+    AddToProject {
+        task_gid: String,
+        project: Named,
+        section: Option<Named>,
     },
 }
 
@@ -157,6 +191,8 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// The "add to project" picker, when open.
+    pub picker: Option<Picker>,
     /// Comment text whose post failed, by task, offered again on `c`.
     drafts: HashMap<String, String>,
     /// Numbers comments shown before Asana confirms them.
@@ -211,6 +247,10 @@ impl App {
         match msg {
             Msg::Key(event) => {
                 self.toast = None;
+                if self.picker.is_some() {
+                    let outcome = self.keys.feed(Context::Input, event);
+                    return self.picker_key(outcome);
+                }
                 match self.keys.feed(Context::Normal, event) {
                     Outcome::Action(action) => self.run(action),
                     Outcome::Insert(_) | Outcome::Pending | Outcome::Ignored => Vec::new(),
@@ -323,6 +363,74 @@ impl App {
                 }
                 Vec::new()
             }
+            Msg::SearchDue { seq } => match &mut self.picker {
+                Some(p) if p.stage == picker::Stage::Project && p.search_seq == seq => {
+                    p.loading = true;
+                    vec![Effect::SearchProjects {
+                        query: p.query.clone(),
+                        seq,
+                    }]
+                }
+                _ => Vec::new(),
+            },
+            Msg::ProjectsFound { seq, result } => {
+                match (&mut self.picker, result) {
+                    (Some(p), Ok(projects)) => {
+                        p.accept_projects(seq, projects);
+                    }
+                    (Some(p), Err(message)) if p.search_seq == seq => {
+                        p.loading = false;
+                        self.toast =
+                            Some(Toast::error(format!("Project search failed: {message}")));
+                    }
+                    _ => {}
+                }
+                Vec::new()
+            }
+            Msg::SectionsLoaded {
+                project_gid,
+                result,
+            } => {
+                if let Some(p) = &mut self.picker {
+                    match result {
+                        Ok(sections) => {
+                            p.accept_sections(&project_gid, sections);
+                        }
+                        Err(message) => {
+                            // Adding without a section still works.
+                            p.accept_sections(&project_gid, Vec::new());
+                            self.toast =
+                                Some(Toast::error(format!("Couldn't load sections: {message}")));
+                        }
+                    }
+                }
+                Vec::new()
+            }
+            Msg::AddedToProject {
+                task_gid,
+                project_gid,
+                result,
+            } => {
+                let memberships = match self.details.get_mut(&task_gid) {
+                    Some(Detail::Loaded(detail)) => Some(&mut detail.task.memberships),
+                    _ => None,
+                };
+                match result {
+                    Ok(()) => {
+                        self.toast = Some(Toast {
+                            text: "Added to project".into(),
+                            is_error: false,
+                        });
+                    }
+                    Err(message) => {
+                        if let Some(memberships) = memberships {
+                            memberships.retain(|m| m.project.gid != project_gid);
+                        }
+                        self.toast = Some(Toast::error(format!("Not added to project: {message}")));
+                    }
+                }
+                Vec::new()
+            }
             Msg::Marked { gids, read, result } => {
                 for gid in &gids {
                     self.pending_marks.remove(gid);
@@ -401,6 +509,7 @@ impl App {
             Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
             Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::Comment => return self.start_comment(),
+            Cmd::AddToProject => return self.open_picker(),
             Cmd::MarkRead => return self.mark(Some(true)),
             Cmd::MarkUnread => return self.mark(Some(false)),
             Cmd::ToggleRead => return self.mark(None),
@@ -446,6 +555,110 @@ impl App {
                     .saturating_sub(self.sizes.detail_rows)
             }
             _ => 0,
+        }
+    }
+
+    /// Opens the project picker for the selected task, hiding the projects
+    /// it's already in.
+    fn open_picker(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast {
+                text: "Only tasks can be added to projects".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let exclude = match self.selected_detail() {
+            Some(Detail::Loaded(detail)) => detail
+                .task
+                .memberships
+                .iter()
+                .map(|m| m.project.gid.clone())
+                .collect(),
+            _ => Vec::new(),
+        };
+        let mut picker = Picker::new(task_gid, exclude);
+        let seq = picker.set_query(String::new());
+        self.picker = Some(picker);
+        vec![Effect::ScheduleSearch { seq }]
+    }
+
+    /// A key while the picker is open: typing edits the query, control keys
+    /// move, choose or close.
+    fn picker_key(&mut self, outcome: Outcome) -> Vec<Effect> {
+        let Some(picker) = &mut self.picker else {
+            return Vec::new();
+        };
+        let schedule = |picker: &mut Picker, query: String| {
+            let seq = picker.set_query(query);
+            vec![Effect::ScheduleSearch { seq }]
+        };
+        match outcome {
+            Outcome::Insert(c) if picker.stage == picker::Stage::Project => {
+                let query = format!("{}{c}", picker.query);
+                schedule(picker, query)
+            }
+            Outcome::Action(Action { cmd, .. }) => match cmd {
+                Cmd::DeleteChar if picker.stage == picker::Stage::Project => {
+                    let mut query = picker.query.clone();
+                    query.pop();
+                    schedule(picker, query)
+                }
+                Cmd::Next => {
+                    picker.move_by(1);
+                    Vec::new()
+                }
+                Cmd::Prev => {
+                    picker.move_by(-1);
+                    Vec::new()
+                }
+                Cmd::Cancel => {
+                    self.picker = None;
+                    Vec::new()
+                }
+                Cmd::Submit => self.picker_submit(),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    fn picker_submit(&mut self) -> Vec<Effect> {
+        let Some(picker) = &mut self.picker else {
+            return Vec::new();
+        };
+        let Some(item) = picker.current().cloned() else {
+            return Vec::new();
+        };
+        match picker.stage.clone() {
+            picker::Stage::Project => {
+                let project = Named {
+                    gid: item.gid.unwrap_or_default(),
+                    name: item.name,
+                };
+                let project_gid = project.gid.clone();
+                picker.choose_project(project);
+                vec![Effect::LoadSections { project_gid }]
+            }
+            picker::Stage::Section { project } => {
+                let task_gid = picker.task_gid.clone();
+                let section = item.gid.map(|gid| Named {
+                    gid,
+                    name: item.name,
+                });
+                self.picker = None;
+                if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
+                    detail.task.memberships.push(Membership {
+                        project: project.clone(),
+                        section: section.clone(),
+                    });
+                }
+                vec![Effect::AddToProject {
+                    task_gid,
+                    project,
+                    section,
+                }]
+            }
         }
     }
 

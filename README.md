@@ -4,7 +4,7 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
-> Early development (v0.1). The Inbox, read state, task details and commenting work; description editing and adding to projects are next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
+> Early development (v0.1). The Inbox, read state, task details, commenting and adding to projects work; description editing is next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
 
 ## Install
 
@@ -34,6 +34,7 @@ Everything comes from the environment. Nothing is written to disk.
 | `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
 | `o` | Open the task in the browser |
 | `c` (or `Tab c`) | Comment on the task in your `$EDITOR` (`:cq` or an empty file cancels) |
+| `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
@@ -48,6 +49,7 @@ asn inbox --json | jq '.[0]'            # Asana's own JSON
 asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
 asn task <task-gid>                     # a task with its description and comments (--json too)
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
+asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
 ```
 
 `asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.

@@ -12,7 +12,7 @@ tags.name,custom_fields.name,custom_fields.display_value,parent.name,num_subtask
 /// Story fields: enough to show comments and count the rest.
 pub const STORY_FIELDS: &str = "type,resource_subtype,text,created_at,created_by.name";
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Named {
     pub gid: String,
     pub name: String,

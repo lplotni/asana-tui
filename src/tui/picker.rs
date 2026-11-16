@@ -1,0 +1,407 @@
+//! The "add to project" picker: search projects as you type, then choose a
+//! section. Pure state; the [`App`](super::app::App) turns its decisions into
+//! effects.
+
+use crate::api::tasks::Named;
+
+/// How long typing must pause before the project search runs.
+pub const SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// One row of the picker. A `None` gid is the "No section" choice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Item {
+    pub gid: Option<String>,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Stage {
+    Project,
+    Section { project: Named },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Picker {
+    pub task_gid: String,
+    pub stage: Stage,
+    pub query: String,
+    pub items: Vec<Item>,
+    pub selected: usize,
+    pub loading: bool,
+    /// Increases with every query change; only the latest search counts.
+    pub search_seq: u64,
+    /// Projects the task is already in; never offered.
+    exclude: Vec<String>,
+}
+
+impl Picker {
+    pub fn new(task_gid: String, exclude: Vec<String>) -> Picker {
+        Picker {
+            task_gid,
+            stage: Stage::Project,
+            query: String::new(),
+            items: Vec::new(),
+            selected: 0,
+            loading: true,
+            search_seq: 0,
+            exclude,
+        }
+    }
+
+    /// Changes the query; returns the new search number to schedule.
+    pub fn set_query(&mut self, query: String) -> u64 {
+        self.query = query;
+        self.search_seq += 1;
+        self.search_seq
+    }
+
+    /// Takes the results of search `seq`, unless a newer one was started.
+    pub fn accept_projects(&mut self, seq: u64, projects: Vec<Named>) -> bool {
+        if self.stage != Stage::Project || seq != self.search_seq {
+            return false;
+        }
+        self.items = projects
+            .into_iter()
+            .filter(|p| !self.exclude.contains(&p.gid))
+            .map(|p| Item {
+                gid: Some(p.gid),
+                name: p.name,
+            })
+            .collect();
+        self.selected = 0;
+        self.loading = false;
+        true
+    }
+
+    /// Moves to choosing a section of `project`.
+    pub fn choose_project(&mut self, project: Named) {
+        self.stage = Stage::Section { project };
+        self.items.clear();
+        self.selected = 0;
+        self.loading = true;
+    }
+
+    /// Takes the sections of `project_gid`, offering "No section" first.
+    pub fn accept_sections(&mut self, project_gid: &str, sections: Vec<Named>) -> bool {
+        match &self.stage {
+            Stage::Section { project } if project.gid == project_gid => {}
+            _ => return false,
+        }
+        self.items = std::iter::once(Item {
+            gid: None,
+            name: "No section".into(),
+        })
+        .chain(sections.into_iter().map(|s| Item {
+            gid: Some(s.gid),
+            name: s.name,
+        }))
+        .collect();
+        self.selected = 0;
+        self.loading = false;
+        true
+    }
+
+    pub fn move_by(&mut self, delta: isize) {
+        let last = self.items.len().saturating_sub(1);
+        self.selected = self.selected.saturating_add_signed(delta).min(last);
+    }
+
+    pub fn current(&self) -> Option<&Item> {
+        self.items.get(self.selected)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::{App, Effect, Msg, Sizes};
+    use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn named(gid: &str, name: &str) -> Named {
+        Named {
+            gid: gid.into(),
+            name: name.into(),
+        }
+    }
+
+    /// An app with one unread notification about task "t0", whose details
+    /// say it's already in project "p-in".
+    fn app() -> App {
+        let text = std::fs::read_to_string("tests/fixtures/notifications_page.json").unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let mut n: crate::api::notifications::Notification =
+            serde_json::from_value(value["data"][0].clone()).unwrap();
+        n.work_objects[0].gid = "t0".into();
+        let task_text = std::fs::read_to_string("tests/fixtures/task_full.json").unwrap();
+        let mut task: crate::api::tasks::Task = serde_json::from_value(
+            serde_json::from_str::<serde_json::Value>(&task_text).unwrap()["data"].clone(),
+        )
+        .unwrap();
+        task.memberships = vec![crate::api::tasks::Membership {
+            project: named("p-in", "Already"),
+            section: None,
+        }];
+
+        let (mut app, _) = App::new();
+        app.update(Msg::Resize(Sizes {
+            list_rows: 10,
+            detail_width: 60,
+            detail_rows: 20,
+        }));
+        app.update(Msg::InboxLoaded(Ok((vec![n], None))));
+        app.update(Msg::DetailDue { gid: "t0".into() });
+        app.update(Msg::DetailLoaded {
+            gid: "t0".into(),
+            result: Ok(Box::new(crate::core::TaskDetail {
+                task,
+                comments: vec![],
+                activity_count: 0,
+            })),
+        });
+        app
+    }
+
+    fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) -> Vec<Effect> {
+        app.update(Msg::Key(KeyEvent::new(code, modifiers)))
+    }
+
+    fn typed(app: &mut App, text: &str) -> Vec<Effect> {
+        text.chars()
+            .flat_map(|c| press(app, KeyCode::Char(c), KeyModifiers::NONE))
+            .collect()
+    }
+
+    fn found(app: &mut App, seq: u64, projects: Vec<Named>) {
+        app.update(Msg::ProjectsFound {
+            seq,
+            result: Ok(projects),
+        });
+    }
+
+    #[test]
+    fn p_opens_the_picker_and_schedules_a_search_for_recent_projects() {
+        let mut app = app();
+
+        let effects = typed(&mut app, "p");
+
+        assert!(app.picker.is_some());
+        assert_eq!(effects, [Effect::ScheduleSearch { seq: 1 }]);
+    }
+
+    #[test]
+    fn typing_quickly_searches_once_for_the_final_query() {
+        let mut app = app();
+        typed(&mut app, "p");
+
+        let scheduled = typed(&mut app, "web");
+        let searches: Vec<Effect> = (1..=4)
+            .flat_map(|seq| app.update(Msg::SearchDue { seq }))
+            .collect();
+
+        assert_eq!(scheduled.len(), 3, "one schedule per keystroke");
+        assert_eq!(
+            searches,
+            [Effect::SearchProjects {
+                query: "web".into(),
+                seq: 4
+            }]
+        );
+        assert!(app.picker.as_ref().unwrap().loading);
+    }
+
+    #[test]
+    fn letters_are_typed_into_the_query_not_used_as_commands() {
+        let mut app = app();
+        typed(&mut app, "p");
+
+        typed(&mut app, "jkq");
+
+        assert_eq!(app.picker.as_ref().unwrap().query, "jkq");
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn a_late_response_for_an_older_query_is_ignored() {
+        let mut app = app();
+        typed(&mut app, "pwe");
+        typed(&mut app, "b");
+        found(&mut app, 4, vec![named("1", "Webshop")]);
+
+        found(&mut app, 3, vec![named("2", "Wedding planning")]);
+
+        let names: Vec<_> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.name.clone())
+            .collect();
+        assert_eq!(names, ["Webshop"]);
+    }
+
+    #[test]
+    fn projects_the_task_is_already_in_are_never_offered() {
+        let mut app = app();
+        typed(&mut app, "p");
+
+        found(
+            &mut app,
+            1,
+            vec![named("p-in", "Already"), named("p-new", "New")],
+        );
+
+        let gids: Vec<_> = app
+            .picker
+            .as_ref()
+            .unwrap()
+            .items
+            .iter()
+            .map(|i| i.gid.clone())
+            .collect();
+        assert_eq!(gids, [Some("p-new".to_string())]);
+    }
+
+    #[test]
+    fn ctrl_n_ctrl_p_and_arrows_move_the_selection() {
+        let mut app = app();
+        typed(&mut app, "p");
+        found(
+            &mut app,
+            1,
+            vec![named("1", "A"), named("2", "B"), named("3", "C")],
+        );
+
+        press(&mut app, KeyCode::Char('n'), KeyModifiers::CONTROL);
+        press(&mut app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(app.picker.as_ref().unwrap().selected, 2);
+        press(&mut app, KeyCode::Down, KeyModifiers::NONE);
+        assert_eq!(app.picker.as_ref().unwrap().selected, 2, "stops at the end");
+        press(&mut app, KeyCode::Char('p'), KeyModifiers::CONTROL);
+        press(&mut app, KeyCode::Up, KeyModifiers::NONE);
+        assert_eq!(app.picker.as_ref().unwrap().selected, 0);
+    }
+
+    #[test]
+    fn enter_on_a_project_loads_its_sections() {
+        let mut app = app();
+        typed(&mut app, "p");
+        found(&mut app, 1, vec![named("42", "Webshop")]);
+
+        let effects = press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        assert_eq!(
+            effects,
+            [Effect::LoadSections {
+                project_gid: "42".into()
+            }]
+        );
+        assert_eq!(
+            app.picker.as_ref().unwrap().stage,
+            Stage::Section {
+                project: named("42", "Webshop")
+            }
+        );
+    }
+
+    #[test]
+    fn sections_are_offered_after_no_section() {
+        let mut app = app();
+        typed(&mut app, "p");
+        found(&mut app, 1, vec![named("42", "Webshop")]);
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        app.update(Msg::SectionsLoaded {
+            project_gid: "42".into(),
+            result: Ok(vec![named("43", "To do")]),
+        });
+
+        let items = &app.picker.as_ref().unwrap().items;
+        assert_eq!(
+            items[0],
+            Item {
+                gid: None,
+                name: "No section".into()
+            }
+        );
+        assert_eq!(items[1].gid.as_deref(), Some("43"));
+    }
+
+    #[test]
+    fn choosing_a_section_adds_the_task_and_shows_the_project_at_once() {
+        let mut app = app();
+        typed(&mut app, "p");
+        found(&mut app, 1, vec![named("42", "Webshop")]);
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        app.update(Msg::SectionsLoaded {
+            project_gid: "42".into(),
+            result: Ok(vec![named("43", "To do")]),
+        });
+        press(&mut app, KeyCode::Down, KeyModifiers::NONE);
+
+        let effects = press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        assert_eq!(
+            effects,
+            [Effect::AddToProject {
+                task_gid: "t0".into(),
+                project: named("42", "Webshop"),
+                section: Some(named("43", "To do")),
+            }]
+        );
+        assert!(app.picker.is_none());
+        let memberships = match app.selected_detail() {
+            Some(crate::tui::app::Detail::Loaded(d)) => d.task.memberships.clone(),
+            _ => panic!("detail missing"),
+        };
+        assert_eq!(memberships.len(), 2);
+        assert_eq!(memberships[1].project.gid, "42");
+    }
+
+    #[test]
+    fn a_failed_add_removes_the_project_again_and_says_so() {
+        let mut app = app();
+        typed(&mut app, "p");
+        found(&mut app, 1, vec![named("42", "Webshop")]);
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        app.update(Msg::SectionsLoaded {
+            project_gid: "42".into(),
+            result: Ok(vec![]),
+        });
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        app.update(Msg::AddedToProject {
+            task_gid: "t0".into(),
+            project_gid: "42".into(),
+            result: Err("Forbidden".into()),
+        });
+
+        let memberships = match app.selected_detail() {
+            Some(crate::tui::app::Detail::Loaded(d)) => d.task.memberships.clone(),
+            _ => panic!("detail missing"),
+        };
+        assert_eq!(memberships.len(), 1);
+        assert!(app.toast.as_ref().unwrap().is_error);
+    }
+
+    #[test]
+    fn esc_closes_the_picker() {
+        let mut app = app();
+        typed(&mut app, "p");
+
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+
+        assert!(app.picker.is_none());
+    }
+
+    #[test]
+    fn backspace_edits_the_query_and_searches_again() {
+        let mut app = app();
+        typed(&mut app, "pab");
+
+        let effects = press(&mut app, KeyCode::Backspace, KeyModifiers::NONE);
+
+        assert_eq!(app.picker.as_ref().unwrap().query, "a");
+        assert_eq!(effects, [Effect::ScheduleSearch { seq: 4 }]);
+    }
+}

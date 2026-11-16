@@ -1,6 +1,7 @@
 //! Asana REST API client: auth, pagination, rate limits, error mapping.
 
 pub mod notifications;
+pub mod projects;
 pub mod tasks;
 
 use std::time::Duration;
