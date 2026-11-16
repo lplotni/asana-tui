@@ -167,17 +167,17 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 **Estimated scope:** S
 
-### - [ ] T6: Keymap table and key parser
+### - [x] T6: Keymap table and key parser
 
 **Description:** Implement `keys.rs` with a single static table of `(sequence, Action, Origin, help text)` covering all of F6. Add a parser state machine that turns crossterm `KeyEvent`s into `Action`s. It handles count prefixes (`5j`, `12G`), multi-key sequences (`gg`, `Ctrl-w h`, and `Tab c/p/i`), and a pending state (shown as `Tab-` or `5` in the status bar). `Esc` cancels a pending sequence, and an unbound key in a pending state cancels without acting. The parser is context-aware: the same key can mean different things in the list, in the picker, and in a confirm prompt.
 
 **Acceptance criteria:**
-- [ ] `5j`, `gg`, `12G`, `Ctrl-w l`, `Tab c`, `Tab` then `Esc`, and `Tab` then `z` all produce the right Action, or none.
-- [ ] A test asserts that no two table entries share a sequence in the same context.
-- [ ] Each F6 row is in the table with its origin (`vim`, `asana`, `asn`), so the help overlay can be generated from it later.
+- [x] `5j`, `gg`, `12G`, `Ctrl-w l`, `Tab c`, `Tab` then `Esc`, and `Tab` then `z` all produce the right Action, or none.
+- [x] A test asserts that no two table entries share a sequence in the same context.
+- [x] Each F6 row is in the table with its origin (`vim`, `asana`, `asn`), so the help overlay can be generated from it later.
 
 **Verification:**
-- [ ] `cargo test` (pure unit tests, no terminal)
+- [x] `cargo test` (pure unit tests, no terminal)
 
 **Dependencies:** T1
 
@@ -324,7 +324,7 @@ Add `asn desc <gid> [--file PATH | -] [--force]`. Without `--force`, it refuses 
 
 Add a reusable picker overlay:
 - a query input with a 200 ms debounce
-- `j`/`k` and `Ctrl-n`/`Ctrl-p` to move, `Enter` to select, `Esc` to cancel
+- typing edits the query, `Ctrl-n`/`Ctrl-p` or arrows move, `Enter` selects, `Esc` cancels
 - results that arrive out of order are ignored
 
 `p` and `Tab p` open the project picker, which hides projects the task is already in. A section picker follows, with "no section" as the default. On success, the detail pane shows the new project.

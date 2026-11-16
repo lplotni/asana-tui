@@ -117,7 +117,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 
 ### F5. Add to project
 
-- `p` opens a fuzzy picker (typeahead endpoint, queried as you type with a 200 ms debounce). In the picker, `Ctrl-n`/`Ctrl-p` or `j`/`k` move, `Enter` selects, and `Esc` cancels.
+- `p` opens a fuzzy picker (typeahead endpoint, queried as you type with a 200 ms debounce). In the picker, typing (including `j`/`k`) edits the query, `Ctrl-n`/`Ctrl-p` or the arrow keys move, `Enter` selects, and `Esc` cancels. This is the fzf convention, since a query field can't also use `j`/`k` for movement.
 - After a project is chosen, a second picker offers its sections (`GET /projects/{gid}/sections`), with "no section" as the default.
 - Adds the task to the chosen project. If the task has no project, this gives it its first one. If it already has projects, this adds another and keeps the existing ones. Projects the task already belongs to are hidden in the picker. Removing a task from a project, or moving it between projects, is out of scope.
 

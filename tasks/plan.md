@@ -55,7 +55,7 @@ T0 API spike + fixtures
 ### Phase 2: TUI foundation
 - [x] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
 - [x] T5: Terminal color query and tints
-- [ ] T6: Keymap table and key parser
+- [x] T6: Keymap table and key parser
 - [ ] T7: TUI Inbox list with navigation
 - [ ] T8: TUI read actions, visual mode, filter, polling, pagination
 
