@@ -1000,3 +1000,177 @@ fn commenting_works_before_the_details_have_loaded() {
         }]
     );
 }
+
+// --- Search (`/`) and command line (`:`) -----------------------------------
+
+/// Notifications "0".."4" about tasks named apple, banana, cherry, apricot, date.
+fn fruit_inbox() -> App {
+    let mut notifications = inbox(5, |_| false);
+    for (n, name) in notifications
+        .iter_mut()
+        .zip(["apple", "banana", "cherry", "apricot", "date"])
+    {
+        n.work_objects[0].name = name.into();
+    }
+    loaded_with(notifications, None, 10)
+}
+
+fn enter(app: &mut App) -> Vec<Effect> {
+    key(app, KeyCode::Enter, KeyModifiers::NONE)
+}
+
+fn esc(app: &mut App) -> Vec<Effect> {
+    key(app, KeyCode::Esc, KeyModifiers::NONE)
+}
+
+#[test]
+fn slash_filters_the_list_as_you_type() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, "/ap");
+
+    assert_eq!(visible_gids(&app), ["0", "3"]);
+    assert_eq!(app.search.as_ref().unwrap().query, "ap");
+}
+
+#[test]
+fn search_matches_actor_and_action_too_ignoring_case() {
+    let mut app = fruit_inbox();
+    let actor = app.notifications[0]
+        .created_by
+        .as_ref()
+        .unwrap()
+        .name
+        .to_uppercase();
+
+    keys(&mut app, &format!("/{actor}"));
+
+    assert_eq!(visible_gids(&app).len(), 5);
+}
+
+#[test]
+fn letters_typed_in_search_are_not_commands() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, "/qe");
+
+    assert!(!app.should_quit);
+    assert!(app.notifications.iter().all(|n| !n.is_read));
+}
+
+#[test]
+fn enter_keeps_the_filter_and_esc_then_clears_it_on_the_same_item() {
+    let mut app = fruit_inbox();
+    keys(&mut app, "/ap");
+    enter(&mut app);
+    keys(&mut app, "j");
+    assert_eq!(selected_gid(&app), "3");
+    assert!(!app.search.as_ref().unwrap().editing);
+
+    esc(&mut app);
+
+    assert_eq!(app.search, None);
+    assert_eq!(visible_gids(&app).len(), 5);
+    assert_eq!(selected_gid(&app), "3");
+}
+
+#[test]
+fn esc_while_typing_cancels_the_search() {
+    let mut app = fruit_inbox();
+    keys(&mut app, "/ch");
+
+    esc(&mut app);
+
+    assert_eq!(app.search, None);
+    assert_eq!(visible_gids(&app).len(), 5);
+}
+
+#[test]
+fn n_and_capital_n_move_between_matches_and_wrap_around() {
+    let mut app = fruit_inbox();
+    keys(&mut app, "/ap");
+    enter(&mut app);
+    assert_eq!(visible_gids(&app), ["0", "3"]);
+
+    keys(&mut app, "n");
+    assert_eq!(selected_gid(&app), "3");
+    keys(&mut app, "n");
+    assert_eq!(selected_gid(&app), "0", "wraps to the first match");
+    keys(&mut app, "N");
+    assert_eq!(selected_gid(&app), "3", "wraps back to the last");
+}
+
+#[test]
+fn colon_q_quits() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, ":q");
+    enter(&mut app);
+
+    assert!(app.should_quit);
+}
+
+#[test]
+fn colon_refresh_reloads() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, ":refresh");
+
+    assert_eq!(
+        enter(&mut app),
+        [Effect::LoadInbox {
+            target: INITIAL_LOAD
+        }]
+    );
+}
+
+#[test]
+fn colon_read_all_marks_every_loaded_unread_item_in_one_batch() {
+    let mut app = loaded_with(inbox(4, |i| i == 2), None, 10);
+
+    keys(&mut app, ":read-all");
+    let effects = enter(&mut app);
+
+    assert_eq!(
+        effects,
+        [Effect::MarkRead {
+            gids: vec!["0".into(), "1".into(), "3".into()],
+            read: true
+        }]
+    );
+    assert!(app.toast.as_ref().unwrap().text.contains('3'));
+}
+
+#[test]
+fn colon_unread_toggles_the_unread_only_filter() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, ":unread");
+    enter(&mut app);
+
+    assert!(app.unread_only);
+}
+
+#[test]
+fn an_unknown_command_says_so_and_changes_nothing() {
+    let mut app = fruit_inbox();
+
+    keys(&mut app, ":foo");
+    let effects = enter(&mut app);
+
+    assert!(effects.is_empty());
+    assert_eq!(app.toast.as_ref().unwrap().text, "Unknown command: foo");
+    assert!(app.toast.as_ref().unwrap().is_error);
+    assert_eq!(app.command, None);
+}
+
+#[test]
+fn esc_closes_the_command_line_without_running_it() {
+    let mut app = fruit_inbox();
+    keys(&mut app, ":q");
+
+    esc(&mut app);
+
+    assert!(!app.should_quit);
+    assert_eq!(app.command, None);
+}

@@ -161,6 +161,14 @@ pub struct Sizes {
     pub detail_rows: usize,
 }
 
+/// The `/` filter: the list shows only notifications matching `query`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Search {
+    pub query: String,
+    /// Still typing (keys go to the query) rather than browsing the matches.
+    pub editing: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Toast {
     pub text: String,
@@ -191,6 +199,10 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// The `/` filter, when active.
+    pub search: Option<Search>,
+    /// The `:` command line being typed, when open.
+    pub command: Option<String>,
     /// The "add to project" picker, when open.
     pub picker: Option<Picker>,
     /// Comment text whose post failed, by task, offered again on `c`.
@@ -250,6 +262,15 @@ impl App {
                 if self.picker.is_some() {
                     let outcome = self.keys.feed(Context::Input, event);
                     return self.picker_key(outcome);
+                }
+                if self.command.is_some() {
+                    let outcome = self.keys.feed(Context::Input, event);
+                    return self.command_key(outcome);
+                }
+                if self.search.as_ref().is_some_and(|s| s.editing) {
+                    let outcome = self.keys.feed(Context::Input, event);
+                    self.search_key(outcome);
+                    return self.load_more_if_needed();
                 }
                 match self.keys.feed(Context::Normal, event) {
                     Outcome::Action(action) => self.run(action),
@@ -505,6 +526,24 @@ impl App {
                 };
             }
             Cmd::Back if self.visual_anchor.is_some() => self.visual_anchor = None,
+            Cmd::Back if self.search.is_some() && self.focus == Focus::List => {
+                self.replace_keeping_selection(|app| app.search = None);
+            }
+            Cmd::Search => {
+                self.focus = Focus::List;
+                self.search = Some(Search {
+                    query: String::new(),
+                    editing: true,
+                });
+            }
+            Cmd::NextMatch | Cmd::PrevMatch
+                if self.search.is_some() && !self.visible.is_empty() =>
+            {
+                let len = self.visible.len();
+                let step = if cmd == Cmd::NextMatch { 1 } else { len - 1 };
+                self.move_to((self.cursor + step) % len);
+            }
+            Cmd::CommandLine => self.command = Some(String::new()),
             Cmd::Back | Cmd::FocusLeft => self.focus = Focus::List,
             Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
             Cmd::OpenInBrowser => return self.open_in_browser(),
@@ -555,6 +594,114 @@ impl App {
                     .saturating_sub(self.sizes.detail_rows)
             }
             _ => 0,
+        }
+    }
+
+    /// A key while typing a `/` query: the list filters as the query changes.
+    fn search_key(&mut self, outcome: Outcome) {
+        let Some(search) = &self.search else {
+            return;
+        };
+        let mut query = search.query.clone();
+        match outcome {
+            Outcome::Insert(c) => query.push(c),
+            Outcome::Action(Action {
+                cmd: Cmd::DeleteChar,
+                ..
+            }) => {
+                query.pop();
+            }
+            Outcome::Action(Action {
+                cmd: Cmd::Submit, ..
+            }) => {
+                if query.is_empty() {
+                    self.replace_keeping_selection(|app| app.search = None);
+                } else if let Some(search) = &mut self.search {
+                    search.editing = false;
+                }
+                return;
+            }
+            Outcome::Action(Action {
+                cmd: Cmd::Cancel, ..
+            }) => {
+                self.replace_keeping_selection(|app| app.search = None);
+                return;
+            }
+            _ => return,
+        }
+        self.replace_keeping_selection(|app| {
+            app.search = Some(Search {
+                query,
+                editing: true,
+            });
+        });
+    }
+
+    /// A key while typing a `:` command.
+    fn command_key(&mut self, outcome: Outcome) -> Vec<Effect> {
+        let Some(command) = &mut self.command else {
+            return Vec::new();
+        };
+        match outcome {
+            Outcome::Insert(c) => command.push(c),
+            Outcome::Action(Action {
+                cmd: Cmd::DeleteChar,
+                ..
+            }) => {
+                command.pop();
+            }
+            Outcome::Action(Action {
+                cmd: Cmd::Cancel, ..
+            }) => self.command = None,
+            Outcome::Action(Action {
+                cmd: Cmd::Submit, ..
+            }) => {
+                let command = self.command.take().unwrap_or_default();
+                return self.run_command(command.trim());
+            }
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    /// `:q`, `:refresh`, `:read-all` and `:unread`.
+    fn run_command(&mut self, command: &str) -> Vec<Effect> {
+        match command {
+            "" => Vec::new(),
+            "q" | "quit" => {
+                self.should_quit = true;
+                Vec::new()
+            }
+            "refresh" => self.refresh(),
+            "unread" => {
+                self.visual_anchor = None;
+                self.replace_keeping_selection(|app| app.unread_only = !app.unread_only);
+                Vec::new()
+            }
+            "read-all" => {
+                let gids: Vec<String> = self
+                    .notifications
+                    .iter()
+                    .filter(|n| !n.is_read)
+                    .map(|n| n.gid.clone())
+                    .collect();
+                if gids.is_empty() {
+                    return Vec::new();
+                }
+                self.replace_keeping_selection(|app| app.set_read(&gids, true));
+                for gid in &gids {
+                    self.pending_marks.insert(gid.clone(), true);
+                }
+                self.toast = Some(Toast {
+                    text: format!("Marking {} notification(s) read", gids.len()),
+                    is_error: false,
+                });
+                vec![Effect::MarkRead { gids, read: true }]
+            }
+            other => {
+                self.toast = Some(Toast::error(format!("Unknown command: {other}")));
+                Vec::new()
+            }
         }
     }
 
@@ -828,8 +975,14 @@ impl App {
 
     fn rebuild_visible(&mut self) {
         let unread_only = self.unread_only;
+        let query = self.search.as_ref().map(|s| s.query.to_lowercase());
         self.visible = (0..self.notifications.len())
             .filter(|&i| !unread_only || !self.notifications[i].is_read)
+            .filter(|&i| {
+                query
+                    .as_deref()
+                    .is_none_or(|q| matches_search(&self.notifications[i], q))
+            })
             .collect();
     }
 
@@ -843,6 +996,15 @@ impl App {
             self.scroll = self.cursor + 1 - rows;
         }
     }
+}
+
+/// Whether `n` matches the lowercase `query`: its actor, action or item name.
+fn matches_search(n: &Notification, query: &str) -> bool {
+    let actor = n.created_by.as_ref().map_or("Asana", |a| a.name.as_str());
+    let object = n.work_objects.first().map_or("", |o| o.name.as_str());
+    [actor, &format::describe(&n.story_resource_subtype), object]
+        .iter()
+        .any(|field| field.to_lowercase().contains(query))
 }
 
 impl Toast {

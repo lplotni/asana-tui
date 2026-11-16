@@ -77,7 +77,7 @@ T0 API spike + fixtures
 - [ ] **Human review before Phase 4**
 
 ### Phase 4: Finish and ship
-- [ ] T13: `/` search and the `:` command line
+- [x] T13: `/` search and the `:` command line
 - [ ] T14: `?` help overlay and the narrow (<100 cols) layout
 - [ ] T15: CI, release binaries, README
 

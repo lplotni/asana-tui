@@ -355,19 +355,19 @@ Add `asn project add <task> <project> [--section GID]`.
 
 ## Phase 4: Finish and ship
 
-### - [ ] T13: `/` search and the `:` command line
+### - [x] T13: `/` search and the `:` command line
 
 **Description:** `/` opens a query in the status bar that filters the focused list as you type (case-insensitive substring on actor, action and task name). `Enter` keeps the filter, `n`/`N` jump between matches, and `Esc` clears it.
 
 `:` opens a command line with `:q`, `:refresh`, `:read-all` (marks all loaded unread items read, through batching) and `:unread`. An unknown command shows an error toast.
 
 **Acceptance criteria:**
-- [ ] Filter, `n`/`N` wraparound and `Esc` restore work as described (state-machine tests).
-- [ ] `:read-all` uses batched `markRead` and shows how many items succeeded and failed.
-- [ ] `:foo` shows `Unknown command: foo` and changes nothing.
+- [x] Filter, `n`/`N` wraparound and `Esc` restore work as described (state-machine tests).
+- [x] `:read-all` uses batched `markRead` and shows how many items succeeded and failed.
+- [x] `:foo` shows `Unknown command: foo` and changes nothing.
 
 **Verification:**
-- [ ] `cargo test`
+- [x] `cargo test`
 
 **Dependencies:** T8
 

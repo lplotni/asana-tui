@@ -132,6 +132,9 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         "all"
     };
     let mut right = format!("[f] {filter} ");
+    if let Some(search) = app.search.as_ref().filter(|s| !s.editing) {
+        right.insert_str(0, &format!("/{}  (Esc clears)  ", search.query));
+    }
     if app.loading_more {
         right.insert_str(0, "loading more…  ");
     }
@@ -287,6 +290,24 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    // While typing a `:` command or `/` query, the bar is the input line.
+    let input = match (&app.command, &app.search) {
+        (Some(command), _) => Some((" COMMAND ", format!(":{command}"))),
+        (None, Some(search)) if search.editing => Some((" SEARCH ", format!("/{}", search.query))),
+        _ => None,
+    };
+    if let Some((mode, text)) = input {
+        let line = Line::from(vec![
+            Span::styled(mode, theme.style(Role::StatusbarMode)),
+            Span::raw(format!(" {text}")),
+            Span::styled("▏", theme.style(Role::PickerMatch)),
+        ]);
+        frame.render_widget(
+            Paragraph::new(line).style(theme.style(Role::Statusbar)),
+            area,
+        );
+        return;
+    }
     let mode = if app.picker.is_some() {
         " PICKER "
     } else if app.visual_anchor.is_some() {
@@ -634,5 +655,43 @@ mod tests {
         });
 
         insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn typing_a_search() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "/bravo");
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn a_kept_search_shows_in_the_header() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "/bravo");
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+
+        let terminal = draw(&app, &terminal_theme());
+
+        let header: String = (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol().to_owned())
+            .collect();
+        assert!(header.contains("/bravo"), "{header}");
+    }
+
+    #[test]
+    fn typing_a_command() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, ":read-all");
+
+        let terminal = draw(&app, &terminal_theme());
+
+        let status: String = (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 23)].symbol().to_owned())
+            .collect();
+        assert!(status.starts_with(" COMMAND  :read-all▏"), "{status}");
     }
 }
