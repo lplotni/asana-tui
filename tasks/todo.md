@@ -395,6 +395,8 @@ Add `asn project add <task> <project> [--section GID]`.
 
 ### - [ ] T15: CI, release binaries, README
 
+> **Status:** workflows, formula generator and README are written and checked locally (YAML parses, formula is valid Ruby, packaging produces a working binary). Waiting on: a LICENSE choice, creating `github.com/lplotni/asana-tui`, pushing, and tagging `v0.1.0`. Then verify CI and the release.
+
 **Description:**
 - GitHub Actions CI runs fmt, clippy and test on macOS and Linux.
 - A tag-triggered release workflow builds `asn` for macOS (arm64 and x86_64) and Linux (x86_64 and arm64) and attaches the binaries to a GitHub Release.
