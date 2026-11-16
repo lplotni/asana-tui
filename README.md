@@ -21,6 +21,8 @@ Or download a binary for macOS (Apple Silicon, Intel) or Linux (x86_64, ARM) fro
 cargo install --git https://github.com/lplotni/asana-tui
 ```
 
+The release binaries aren't code-signed, so macOS blocks one downloaded in a browser. Allow it with `xattr -d com.apple.quarantine ./asn` (Homebrew and `cargo install` don't need this).
+
 ## Configure
 
 Everything comes from the environment. Nothing is written to disk.

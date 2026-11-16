@@ -79,7 +79,7 @@ T0 API spike + fixtures
 ### Phase 4: Finish and ship
 - [x] T13: `/` search and the `:` command line
 - [x] T14: `?` help overlay and the narrow (<100 cols) layout
-- [ ] T15: CI, release binaries, README
+- [x] T15: CI, release binaries, README
 
 ### Checkpoint D: v0.1 released
 - [ ] Every acceptance criterion in the spec is met

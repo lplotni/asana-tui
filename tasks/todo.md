@@ -393,9 +393,9 @@ Add `asn project add <task> <project> [--section GID]`.
 
 **Estimated scope:** S
 
-### - [ ] T15: CI, release binaries, README
+### - [x] T15: CI, release binaries, README
 
-> **Status:** workflows, formula generator and README are written and checked locally (YAML parses, formula is valid Ruby, packaging produces a working binary). Waiting on: a LICENSE choice, creating `github.com/lplotni/asana-tui`, pushing, and tagging `v0.1.0`. Then verify CI and the release.
+> **Status (2026-11-16):** public at github.com/lplotni/asana-tui (MIT). CI green on macOS and Linux. v0.1.0 released with 4 binaries and checksums; the formula job failed once (missing `Formula/`), fixed, and the v0.1.0 formula was committed from the published checksums. Homebrew fetched and verified the formula; installing was blocked only by this Mac's outdated Xcode (a local Homebrew check). The released arm64 binary was downloaded, checksum-verified and run.
 
 **Description:**
 - GitHub Actions CI runs fmt, clippy and test on macOS and Linux.
@@ -404,7 +404,7 @@ Add `asn project add <task> <project> [--section GID]`.
 - Check that the crates.io name is free.
 
 **Acceptance criteria:**
-- [ ] CI is green on a PR. Pushing a `v*` tag produces a release with 4 binaries.
+- [x] CI is green (on main). Pushing a `v*` tag produces a release with 4 binaries.
 - [ ] Following only the README on a clean machine gets a teammate from zero to their Inbox.
 
 **Verification:**
@@ -417,5 +417,5 @@ Add `asn project add <task> <project> [--section GID]`.
 **Estimated scope:** M
 
 ## Checkpoint D: v0.1 released
-- [ ] All spec acceptance criteria are met. `v0.1.0` is tagged and binaries are attached.
+- [ ] All spec acceptance criteria are met. (`v0.1.0` is tagged and binaries are attached.)
 - [ ] 3 teammates are dogfooding (the spec's success metric).
