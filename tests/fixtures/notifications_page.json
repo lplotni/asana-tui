@@ -1,0 +1,245 @@
+{
+  "data": [
+    {
+      "gid": "1200000000000001",
+      "created_at": "2026-11-16T12:43:23.527Z",
+      "created_by": {
+        "gid": "1200000000000002",
+        "name": "Ada Lovelace",
+        "resource_type": "user"
+      },
+      "is_read": false,
+      "story": {
+        "gid": "1200000000000003",
+        "html_text": "<b><a href=\"https://example.com/link\">Cloud november</a></b>Willow mike uniform",
+        "text": "River amber maple sierra stone"
+      },
+      "story_resource_subtype": "marked_complete",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000005",
+          "name": "Bravo papa foxtrot stone stone kilo ember",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000006",
+      "created_at": "2026-11-16T12:43:22.493Z",
+      "created_by": {
+        "gid": "1200000000000002",
+        "name": "Ada Lovelace",
+        "resource_type": "user"
+      },
+      "is_read": false,
+      "story": {
+        "gid": "1200000000000007",
+        "html_text": "<body>Zulu willow romeo hotel amber xray ember bravo amber ember hotel quebec golf willow yankee bravo tango zulu willow kilo hotel hotel<a href=\"https://example.com/link\" data-asana-gid=\"1200000000000010\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Yankee victor</a> <a href=\"https://example.com/link\" data-asana-gid=\"1200000000000012\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Kilo mike</a></body>",
+        "text": "Oscar juliet whiskey foxtrot alpha river charlie lima romeo cedar golf victor river tango bravo alpha quebec november zulu yankee india victor india romeo"
+      },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000005",
+          "name": "Bravo papa foxtrot stone stone kilo ember",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000013",
+      "created_at": "2026-11-16T12:29:00.201Z",
+      "created_by": {
+        "gid": "1200000000000014",
+        "name": "Alan Turing",
+        "resource_type": "user"
+      },
+      "is_read": false,
+      "story": {
+        "gid": "1200000000000015",
+        "html_text": "<b><a href=\"https://example.com/link\">Hotel juliet</a></b>Romeo cedar juliet ember<a href=\"https://example.com/link\">Lima tango</a>",
+        "text": "Golf november delta papa papa tango willow mike"
+      },
+      "story_resource_subtype": "added_to_project",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000018",
+          "name": "Delta ember charlie",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000019",
+      "created_at": "2026-11-16T12:05:38.386Z",
+      "created_by": {
+        "gid": "1200000000000014",
+        "name": "Alan Turing",
+        "resource_type": "user"
+      },
+      "is_read": false,
+      "story": {
+        "gid": "1200000000000020"
+      },
+      "story_resource_subtype": "story_reaction_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000021",
+          "name": "Charlie river ember ember delta xray",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000022",
+      "created_at": "2026-11-16T12:01:59.154Z",
+      "created_by": {
+        "gid": "1200000000000002",
+        "name": "Ada Lovelace",
+        "resource_type": "user"
+      },
+      "is_read": false,
+      "story": {
+        "gid": "1200000000000023",
+        "html_text": "<body>Amber cloud<a href=\"https://example.com/link\" data-asana-gid=\"1200000000000010\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Yankee victor</a>Cloud zulu charlie bravo india sierra ember stone victor river stone foxtrot amber zulu zulu yankee romeo willow foxtrot romeo cedar tango</body>",
+        "text": "Willow victor romeo\nCedar cedar xray india sierra alpha hotel bravo yankee stone delta tango charlie papa alpha cedar mike november hotel maple alpha india"
+      },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000024",
+          "name": "Sierra hotel foxtrot juliet quebec xray victor mike charlie echo echo",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000025",
+      "created_at": "2026-11-12T15:59:50.728Z",
+      "created_by": {
+        "gid": "1200000000000026",
+        "name": "Grace Hopper",
+        "resource_type": "user"
+      },
+      "is_read": true,
+      "story": {
+        "gid": "1200000000000027",
+        "html_text": "<body>Golf echo delta echo stone echo victor cedar yankee river cedar romeo zulu alpha papa</body>",
+        "text": "Golf echo delta echo stone echo victor cedar yankee river cedar romeo zulu alpha papa"
+      },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000028",
+          "name": "River uniform cedar xray",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000029",
+      "created_at": "2026-11-09T14:49:56.229Z",
+      "created_by": {
+        "gid": "1200000000000014",
+        "name": "Alan Turing",
+        "resource_type": "user"
+      },
+      "is_read": true,
+      "story": {
+        "gid": "1200000000000030",
+        "html_text": "<body>Quebec kilo hotel uniform tango river whiskey bravo whiskey xray zulu amber oscar yankee echo zulu amber mike bravo xray zulu yankee papa stone mike victor</body>",
+        "text": "Quebec kilo hotel uniform tango river whiskey bravo whiskey xray zulu amber oscar yankee echo zulu amber mike bravo xray zulu yankee papa stone mike victor"
+      },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000031",
+          "name": "Quebec quebec mike mike cloud kilo sierra alpha",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000032",
+      "created_at": "2026-11-09T14:48:18.558Z",
+      "created_by": {
+        "gid": "1200000000000014",
+        "name": "Alan Turing",
+        "resource_type": "user"
+      },
+      "is_read": true,
+      "story": {
+        "gid": "1200000000000033"
+      },
+      "story_resource_subtype": "story_reaction_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000031",
+          "name": "Quebec quebec mike mike cloud kilo sierra alpha",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000034",
+      "created_at": "2026-11-09T07:29:41.315Z",
+      "created_by": {
+        "gid": "1200000000000035",
+        "name": "Edsger Dijkstra",
+        "resource_type": "user"
+      },
+      "is_read": true,
+      "story": {
+        "gid": "1200000000000036",
+        "html_text": "<body>Bravo<a href=\"https://example.com/link\" data-asana-gid=\"1200000000000010\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Yankee victor</a>Kilo zulu november willow cloud hotel cedar uniform mike river</body>",
+        "text": "November xray foxtrot lima ember willow uniform maple papa whiskey tango"
+      },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000037",
+          "name": "Tango bravo amber oscar cedar cloud",
+          "resource_type": "task"
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000038",
+      "created_at": "2026-10-26T09:30:04.353Z",
+      "created_by": {
+        "gid": "1200000000000039",
+        "name": "Barbara Liskov",
+        "resource_type": "user"
+      },
+      "is_read": true,
+      "story": {
+        "gid": "1200000000000040",
+        "html_text": "<b><a href=\"https://example.com/link\">India sierra river</a></b>Golf amber victor",
+        "text": "Alpha november charlie maple stone cloud"
+      },
+      "story_resource_subtype": "assigned",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        {
+          "gid": "1200000000000042",
+          "name": "Whiskey papa tango oscar maple ember golf mike bravo delta quebec romeo kilo quebec cedar mike",
+          "resource_type": "task"
+        }
+      ]
+    }
+  ],
+  "next_page": {
+    "offset": "eyJmYWtlIjoib2Zmc2V0In0.fake-offset",
+    "path": "/users/me/notifications?workspace=1200000000000008&opt_fields=story_resource_subtype%2Cis_read%2Ccreated_at%2Cpriority_classification%2Cwork_objects.name%2Cwork_objects.resource_type%2Cstory.text%2Cstory.html_text%2Cstory.resource_subtype%2Ccreated_by.name%2Ccreated_by.resource_type&limit=100&offset=eyJmYWtlIjoib2Zmc2V0In0.fake-offset",
+    "uri": "https://app.asana.com/api/1.0/users/me/notifications?workspace=1200000000000008&opt_fields=story_resource_subtype%2Cis_read%2Ccreated_at%2Cpriority_classification%2Cwork_objects.name%2Cwork_objects.resource_type%2Cstory.text%2Cstory.html_text%2Cstory.resource_subtype%2Ccreated_by.name%2Ccreated_by.resource_type&limit=100&offset=eyJmYWtlIjoib2Zmc2V0In0.fake-offset"
+  }
+}

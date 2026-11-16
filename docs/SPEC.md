@@ -29,7 +29,7 @@ The same operations are available as `asn <subcommand>` for scripting (`asn inbo
 
 | Need | Endpoint | Notes |
 |---|---|---|
-| Inbox | `GET /users/me/notifications?workspace=…&limit=…&offset=…&opt_fields=…` | Newest first, cursor via `next_page.offset`. Polling only; no webhooks or events. |
+| Inbox | `GET /users/me/notifications?workspace=…&limit=…&offset=…&opt_fields=…` | Newest first, cursor via `next_page.offset`. Pages can be short or even empty, and only `next_page == null` ends the list. Offsets expire after 15 min. Polling only; no webhooks or events. |
 | Mark read / unread | `POST /users/me/notifications/markRead` / `markUnread` | 1–50 GIDs per call; check `data.failed_gids`. Syncs with the web Inbox. |
 | Task detail | `GET /tasks/{gid}?opt_fields=name,notes,html_notes,assignee.name,due_on,completed,projects.name,memberships.section.name,permalink_url` | |
 | Comments | `GET /tasks/{gid}/stories` (filter `type == comment` client-side) | |
@@ -93,7 +93,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 
 - Two-pane layout: the Inbox list on the left, a detail pane for the selected item on the right. Below 100 columns, the panes stack and `Enter` switches between them.
 - Each row shows an unread dot, relative time, actor (`created_by.name` or "Asana"), what happened (`story_resource_subtype`, humanized), and the work object's name.
-- Pagination loads the next page when the cursor reaches the last 10 rows.
+- Pagination loads the next page when the cursor reaches the last 10 rows. It keeps following `next_page` until it is `null`, even when a page is short or empty. If loading more fails because the offset has expired (offsets are valid for 15 minutes), it reloads from the first page and keeps the cursor on the same GID.
 - **Read state:** `e` marks the selection read (the Asana web "archive" key), `u` marks it unread (the Asana web "move to Inbox" key), and `x` toggles. Opening an item does not mark it read. Marking read is an explicit decision, just like archiving mail. In visual mode, `V` followed by `e`, `u` or `x` acts on a range, batched in groups of up to 50 GIDs.
 - **Archive semantics:** the API has no archive, so `e` only marks the item read. With the default unread-only filter, the item then leaves the list, which feels like archiving. In the web Inbox it stays visible, shown as read. The `?` overlay states this next to the `e` key.
 - **Filter:** `f` toggles between unread only and all items (unread only by default).
@@ -218,9 +218,9 @@ asn project add <task-gid> <project-gid> [--section GID]
 
 ## Key Assumptions to Validate
 
-- [ ] **The Notifications API is accessible with a PAT on our plan.** Test: `curl` `GET /users/me/notifications` with a team member's PAT on day 1. If it's blocked, the core feature is dead, so this check comes before any Rust code.
-- [ ] **Almost all Inbox items reference tasks.** Test: dump 200 notifications from 3 teammates and count `work_objects[].resource_type`. If non-tasks are above ~20%, revisit F1's "compact info only" rule.
-- [ ] **Plain-text descriptions are acceptable.** Test: in the same dump, fetch tasks and count how many `html_notes` contain formatting. If most do, the guard fires constantly and F4 needs HTML↔Markdown conversion (a substantial addition to scope).
+- [x] **The Notifications API is accessible with a PAT on our plan.** Confirmed in T0 (HTTP 200). Test: `curl` `GET /users/me/notifications` with a team member's PAT on day 1. If it's blocked, the core feature is dead, so this check comes before any Rust code.
+- [ ] **Almost all Inbox items reference tasks.** T0: 10 of 10 were tasks, but that was one user with only 10 notifications. Re-check with teammates while dogfooding. Test: dump 200 notifications from 3 teammates and count `work_objects[].resource_type`. If non-tasks are above ~20%, revisit F1's "compact info only" rule.
+- [ ] **Plain-text descriptions are acceptable.** T0: **4 of 8** tasks had formatting (links, lists, headings), so the guard would fire for about half of all edits. **Decide before T11** whether that is acceptable or whether F4 needs HTML↔Markdown conversion. Test: in the same dump, fetch tasks and count how many `html_notes` contain formatting. If most do, the guard fires constantly and F4 needs HTML↔Markdown conversion (a substantial addition to scope).
 - [ ] **`$EDITOR` round-trips feel fast enough for comments.** Test: dogfood for a week. If short replies feel heavy, add a single-line inline prompt (`C`) in v0.2.
 - [ ] **Explicit mark-read is what people want.** Test: dogfood. The alternative is to auto-mark on open.
 - [x] **Archive is `E` in the web app** (confirmed by the user). `e` is therefore the mark-read alias, and editing the description moved to `Tab e`.

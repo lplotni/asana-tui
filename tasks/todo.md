@@ -13,27 +13,27 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC.md`](../docs/SPEC.md). Featu
 
 ## Phase 0: De-risk
 
-### - [ ] T0: Validate Notifications API access and capture fixtures
+### - [x] T0: Validate Notifications API access and capture fixtures
 
 **Description:** Before writing any Rust, prove that the core assumption holds and collect real data to build against. Run `curl` with a team member's PAT against the Notifications, task and stories endpoints. Then anonymize the responses into fixtures. The same session covers the three cheap spec checks: the terminal color query in Rex, the Asana web keys, and how often descriptions contain rich text.
 
 **Acceptance criteria:**
-- [ ] `GET /users/me/notifications?workspace=$ASANA_WORKSPACE` returns 200 with a PAT. If not, stop and escalate.
-- [ ] `tests/fixtures/` contains anonymized JSON for:
+- [x] `GET /users/me/notifications?workspace=$ASANA_WORKSPACE` returns 200 with a PAT. If not, stop and escalate.
+- [x] `tests/fixtures/` contains anonymized JSON for:
   - a notifications page with `next_page` and one without
   - a `markRead` response, including one with `failed_gids`
   - a task with plain `html_notes` and a task with rich `html_notes`
   - a stories list
   - a typeahead result
   - sections
-- [ ] `tests/fixtures/README.md` records:
+- [x] `tests/fixtures/README.md` records (the Rex OSC reply and the `U` key are still open; they need the user):
   - `work_objects` resource-type counts and rich-description counts from about 200 notifications
   - the Rex OSC 11 reply
   - whether `U` (move to Inbox) works in the web Inbox
 
 **Verification:**
-- [ ] Manual: grep the fixtures for real names, emails, GIDs and workspace names. None remain.
-- [ ] Manual: update `docs/SPEC.md` assumptions with what was found (checkboxes ticked or the spec revised).
+- [x] Manual: grep the fixtures for real names, emails, GIDs and workspace names. None remain.
+- [x] Manual: update `docs/SPEC.md` assumptions with what was found (checkboxes ticked or the spec revised).
 
 **Dependencies:** None (needs the user's token, e.g. `export ASANA_TOKEN="$(pass show asana/pat)"`, and `ASANA_WORKSPACE`)
 

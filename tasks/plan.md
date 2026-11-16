@@ -40,7 +40,7 @@ T0 API spike + fixtures
 ## Task List
 
 ### Phase 0: De-risk (no Rust)
-- [ ] T0: Validate Notifications API access and capture fixtures
+- [x] T0: Validate Notifications API access and capture fixtures
 
 ### Phase 1: Scriptable core
 - [x] T1: Cargo scaffold, env config, error and exit-code contract

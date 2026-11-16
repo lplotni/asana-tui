@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "gid": "1300000000000001",
+      "created_at": "2026-11-16T08:00:00.000Z",
+      "created_by": null,
+      "is_read": false,
+      "story": null,
+      "story_resource_subtype": "overdue_tasks_reminder",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        { "gid": "1300000000000101", "name": "Synthetic overdue task", "resource_type": "task" }
+      ]
+    },
+    {
+      "gid": "1300000000000002",
+      "created_at": "2026-11-15T08:00:00.000Z",
+      "created_by": { "gid": "1300000000000201", "name": "Synthetic Rule", "resource_type": "app" },
+      "is_read": true,
+      "story": { "gid": "1300000000000301", "text": "Moved by a rule", "html_text": "<body>Moved by a rule</body>" },
+      "story_resource_subtype": "some_future_subtype",
+      "priority_classification": "some_future_priority",
+      "work_objects": [
+        { "gid": "1300000000000102", "name": "Synthetic project", "resource_type": "project" }
+      ]
+    },
+    {
+      "gid": "1300000000000003",
+      "created_at": "2026-11-14T08:00:00.000Z",
+      "created_by": { "gid": "1300000000000202", "name": "Grace Hopper", "resource_type": "user" },
+      "is_read": false,
+      "story": { "gid": "1300000000000302", "text": "Two objects", "html_text": "<body>Two objects</body>" },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": [
+        { "gid": "1300000000000103", "name": "Synthetic goal", "resource_type": "goal" },
+        { "gid": "1300000000000104", "name": "Synthetic task", "resource_type": "task" }
+      ]
+    },
+    {
+      "gid": "1300000000000004",
+      "created_at": "2026-11-13T08:00:00.000Z",
+      "created_by": { "gid": "1300000000000203", "name": "Alan Turing", "resource_type": "user" },
+      "is_read": false,
+      "story": { "gid": "1300000000000303", "text": "No objects", "html_text": "<body>No objects</body>" },
+      "story_resource_subtype": "comment_added",
+      "priority_classification": "unclassified",
+      "work_objects": []
+    }
+  ],
+  "next_page": null
+}
