@@ -70,6 +70,11 @@ pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiEr
     })
 }
 
+/// Adds a comment to a task and returns it as Asana stored it.
+pub async fn comment(client: &Client, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
+    client.add_comment(task_gid, text).await
+}
+
 async fn all_stories(client: &Client, gid: &str) -> Result<Vec<TaskStory>, ApiError> {
     let mut stories = Vec::new();
     let mut offset: Option<String> = None;

@@ -4,12 +4,14 @@
 use ratatui::crossterm::event::KeyEvent;
 
 use super::detail;
+use super::format;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::theme::Theme;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use crate::api::notifications::Notification;
+use crate::api::tasks::{Named, TaskStory};
 use crate::core::TaskDetail;
 
 /// Notifications fetched on start and the minimum fetched on refresh.
@@ -39,6 +41,16 @@ pub enum Msg {
     DetailLoaded {
         gid: String,
         result: Result<Box<TaskDetail>, String>,
+    },
+    /// The editor closed: the comment text, or `None` if cancelled.
+    CommentWritten {
+        task_gid: String,
+        text: Option<String>,
+    },
+    CommentPosted {
+        task_gid: String,
+        local_gid: String,
+        result: Result<Box<TaskStory>, String>,
     },
     /// Result of marking `gids` read (or unread): the GIDs Asana couldn't update.
     Marked {
@@ -72,6 +84,17 @@ pub enum Effect {
     },
     OpenUrl {
         url: String,
+    },
+    /// Hand the terminal to `$EDITOR`, starting with `initial`, then send
+    /// [`Msg::CommentWritten`].
+    EditComment {
+        task_gid: String,
+        initial: String,
+    },
+    PostComment {
+        task_gid: String,
+        local_gid: String,
+        text: String,
     },
 }
 
@@ -134,6 +157,13 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// Comment text whose post failed, by task, offered again on `c`.
+    drafts: HashMap<String, String>,
+    /// Numbers comments shown before Asana confirms them.
+    next_local_id: u64,
+    /// Text of comments being posted, by local GID (kept as a draft if the
+    /// post fails).
+    posting: HashMap<String, String>,
     /// Read state set locally but not yet confirmed by Asana, by GID.
     pending_marks: HashMap<String, bool>,
     /// Task details by task GID (several notifications can share a task).
@@ -254,6 +284,45 @@ impl App {
                     target: self.notifications.len().max(INITIAL_LOAD),
                 }]
             }
+            Msg::CommentWritten {
+                task_gid,
+                text: Some(text),
+            } => self.show_and_post_comment(task_gid, text),
+            Msg::CommentWritten { text: None, .. } => Vec::new(),
+            Msg::CommentPosted {
+                task_gid,
+                local_gid,
+                result,
+            } => {
+                let text = self.posting.remove(&local_gid).unwrap_or_default();
+                let comments = match self.details.get_mut(&task_gid) {
+                    Some(Detail::Loaded(detail)) => Some(&mut detail.comments),
+                    _ => None,
+                };
+                match result {
+                    Ok(story) => {
+                        if let Some(comments) = comments
+                            && let Some(local) = comments.iter_mut().find(|c| c.gid == local_gid)
+                        {
+                            *local = *story;
+                        }
+                        self.toast = Some(Toast {
+                            text: "Comment posted".into(),
+                            is_error: false,
+                        });
+                    }
+                    Err(message) => {
+                        if let Some(comments) = comments {
+                            comments.retain(|c| c.gid != local_gid);
+                        }
+                        self.drafts.insert(task_gid, text);
+                        self.toast = Some(Toast::error(format!(
+                            "Comment not posted: {message} (c reopens your text)"
+                        )));
+                    }
+                }
+                Vec::new()
+            }
             Msg::Marked { gids, read, result } => {
                 for gid in &gids {
                     self.pending_marks.remove(gid);
@@ -331,6 +400,7 @@ impl App {
             Cmd::Back | Cmd::FocusLeft => self.focus = Focus::List,
             Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
             Cmd::OpenInBrowser => return self.open_in_browser(),
+            Cmd::Comment => return self.start_comment(),
             Cmd::MarkRead => return self.mark(Some(true)),
             Cmd::MarkUnread => return self.mark(Some(false)),
             Cmd::ToggleRead => return self.mark(None),
@@ -377,6 +447,45 @@ impl App {
             }
             _ => 0,
         }
+    }
+
+    /// Opens the editor for a comment on the selected task, with any draft
+    /// left by a failed post.
+    fn start_comment(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast {
+                text: "Comments work on tasks only".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let initial = self.drafts.remove(&task_gid).unwrap_or_default();
+        vec![Effect::EditComment { task_gid, initial }]
+    }
+
+    /// Shows the comment right away (if the task is on screen) and posts it.
+    fn show_and_post_comment(&mut self, task_gid: String, text: String) -> Vec<Effect> {
+        self.next_local_id += 1;
+        let local_gid = format!("local-{}", self.next_local_id);
+        if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
+            detail.comments.push(TaskStory {
+                gid: local_gid.clone(),
+                kind: "comment".into(),
+                resource_subtype: Some("comment_added".into()),
+                text: Some(text.clone()),
+                created_at: format::timestamp(self.now),
+                created_by: Some(Named {
+                    gid: "me".into(),
+                    name: "You".into(),
+                }),
+            });
+        }
+        self.posting.insert(local_gid.clone(), text.clone());
+        vec![Effect::PostComment {
+            task_gid,
+            local_gid,
+            text,
+        }]
     }
 
     /// Opens the selected item: a loaded task by its permalink, otherwise by
@@ -1382,5 +1491,158 @@ mod tests {
         });
 
         assert_eq!(app.detail_scroll, 0);
+    }
+    // --- Comments ------------------------------------------------------------
+
+    fn comments_of(app: &App, gid: &str) -> Vec<(String, String)> {
+        match app.details.get(gid) {
+            Some(Detail::Loaded(d)) => d
+                .comments
+                .iter()
+                .map(|c| (c.gid.clone(), c.text.clone().unwrap_or_default()))
+                .collect(),
+            _ => panic!("detail for {gid} not loaded"),
+        }
+    }
+
+    #[test]
+    fn c_and_tab_c_open_the_editor_for_the_selected_task() {
+        let mut app = loaded(3, 10);
+
+        assert_eq!(
+            keys(&mut app, "c"),
+            [Effect::EditComment {
+                task_gid: "t0".into(),
+                initial: String::new()
+            }]
+        );
+        key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+        assert_eq!(
+            keys(&mut app, "c"),
+            [Effect::EditComment {
+                task_gid: "t0".into(),
+                initial: String::new()
+            }]
+        );
+    }
+
+    #[test]
+    fn c_on_a_non_task_explains_why_nothing_happens() {
+        let (mut app, _) = App::new();
+        let mut notifications = inbox(1, |_| false);
+        notifications[0].work_objects[0].resource_type = "project".into();
+        app.update(Msg::InboxLoaded(Ok((notifications, None))));
+
+        assert!(keys(&mut app, "c").is_empty());
+        assert!(app.toast.is_some());
+    }
+
+    #[test]
+    fn a_cancelled_editor_posts_nothing() {
+        let mut app = loaded(3, 10);
+
+        let effects = app.update(Msg::CommentWritten {
+            task_gid: "t0".into(),
+            text: None,
+        });
+
+        assert!(effects.is_empty());
+    }
+
+    #[test]
+    fn a_written_comment_appears_at_once_and_is_posted() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        let before = comments_of(&app, "t0").len();
+
+        let effects = app.update(Msg::CommentWritten {
+            task_gid: "t0".into(),
+            text: Some("Ship it\n".into()),
+        });
+
+        assert_eq!(
+            effects,
+            [Effect::PostComment {
+                task_gid: "t0".into(),
+                local_gid: "local-1".into(),
+                text: "Ship it\n".into()
+            }]
+        );
+        let comments = comments_of(&app, "t0");
+        assert_eq!(comments.len(), before + 1);
+        assert_eq!(
+            comments.last().unwrap(),
+            &("local-1".to_string(), "Ship it\n".to_string())
+        );
+    }
+
+    #[test]
+    fn the_posted_comment_replaces_the_local_one() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        app.update(Msg::CommentWritten {
+            task_gid: "t0".into(),
+            text: Some("Ship it\n".into()),
+        });
+        let mut stored = task_detail().comments[0].clone();
+        stored.gid = "999".into();
+        stored.text = Some("Ship it\n".into());
+
+        app.update(Msg::CommentPosted {
+            task_gid: "t0".into(),
+            local_gid: "local-1".into(),
+            result: Ok(Box::new(stored)),
+        });
+
+        let comments = comments_of(&app, "t0");
+        assert_eq!(comments.last().unwrap().0, "999");
+        assert!(!comments.iter().any(|(gid, _)| gid == "local-1"));
+        assert!(!app.toast.as_ref().unwrap().is_error);
+    }
+
+    #[test]
+    fn a_failed_post_removes_the_comment_and_keeps_the_text_as_a_draft() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        let before = comments_of(&app, "t0").len();
+        app.update(Msg::CommentWritten {
+            task_gid: "t0".into(),
+            text: Some("Ship it\n".into()),
+        });
+
+        app.update(Msg::CommentPosted {
+            task_gid: "t0".into(),
+            local_gid: "local-1".into(),
+            result: Err("timed out".into()),
+        });
+
+        assert_eq!(comments_of(&app, "t0").len(), before);
+        assert!(app.toast.as_ref().unwrap().is_error);
+        assert_eq!(
+            keys(&mut app, "c"),
+            [Effect::EditComment {
+                task_gid: "t0".into(),
+                initial: "Ship it\n".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn commenting_works_before_the_details_have_loaded() {
+        let mut app = loaded(3, 10);
+
+        let effects = app.update(Msg::CommentWritten {
+            task_gid: "t0".into(),
+            text: Some("Hi".into()),
+        });
+
+        assert_eq!(
+            effects,
+            [Effect::PostComment {
+                task_gid: "t0".into(),
+                local_gid: "local-1".into(),
+                text: "Hi".into()
+            }]
+        );
     }
 }

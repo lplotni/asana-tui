@@ -120,7 +120,9 @@ themes/          // built-in themes as TOML, embedded with include_str!
 ### F3. Add comment
 
 - `c` suspends the TUI and opens `$EDITOR` on an empty temp file. On save and quit, non-empty content is posted. An empty file or a `:cq` exit cancels.
-- The comment appears optimistically. If the request fails, it's removed and an error toast is shown.
+- The comment appears optimistically. If the request fails, it's removed and an error toast is shown. The text is kept as a draft: the next `c` on that task reopens the editor with it.
+- The temp file is created with mode 0600 and removed afterwards. The editor doesn't inherit `ASANA_TOKEN`. While the editor runs, `asn` stops reading the keyboard so no keystroke is taken from it.
+- Comments work on tasks only; on other items `c` explains that.
 
 ### F4. Edit description
 

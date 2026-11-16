@@ -93,7 +93,7 @@ impl Client {
             "data": { "workspace": workspace, "notification_gids": gids }
         });
         let response: Response = self
-            .post(&format!("/users/me/notifications/{endpoint}"), &body)
+            .post(&format!("/users/me/notifications/{endpoint}"), &[], &body)
             .await?;
         Ok(response.data.failed_gids)
     }

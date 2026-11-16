@@ -155,13 +155,47 @@ async fn main() -> ExitCode {
             }
             Err(err) => fail(&err, err.exit_code()),
         },
+        Some(Command::Comment {
+            gid,
+            message,
+            stdin,
+        }) => {
+            let text = match (message, stdin) {
+                (Some(text), _) => Some(text),
+                (None, Some(_)) => {
+                    let mut text = String::new();
+                    std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                        .ok()
+                        .map(|_| text)
+                }
+                (None, None) => {
+                    let editor = asn::editor::editor_command(|key| std::env::var(key).ok());
+                    asn::editor::edit(&editor, "").ok().flatten()
+                }
+            };
+            let Some(text) = text.filter(|t| !t.trim().is_empty()) else {
+                eprintln!("Empty comment; nothing posted");
+                return ExitCode::FAILURE;
+            };
+            match core::comment(&client, &gid, &text).await {
+                Ok(story) => {
+                    println!("{}", story.gid);
+                    ExitCode::SUCCESS
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
+        }
         other => {
             let what = match other {
-                Some(Command::Comment { .. }) => "`asn comment`",
                 Some(Command::Desc { .. }) => "`asn desc`",
                 Some(Command::Project { .. }) => "`asn project`",
                 None
-                | Some(Command::Inbox { .. } | Command::Read { .. } | Command::Task { .. }) => {
+                | Some(
+                    Command::Inbox { .. }
+                    | Command::Read { .. }
+                    | Command::Task { .. }
+                    | Command::Comment { .. },
+                ) => {
                     unreachable!()
                 }
             };

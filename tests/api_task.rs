@@ -105,3 +105,32 @@ async fn completed_task_parses() {
     assert!(detail.task.completed);
     assert!(detail.comments.is_empty());
 }
+
+#[tokio::test]
+async fn comment_posts_the_text_and_returns_the_new_story() {
+    let server = MockServer::start().await;
+    let stories = fixture("stories_thread.json");
+    let created = stories["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["type"] == "comment")
+        .unwrap()
+        .clone();
+    Mock::given(method("POST"))
+        .and(path(format!("/tasks/{TASK}/stories")))
+        .and(query_param("opt_fields", STORY_FIELDS))
+        .and(wiremock::matchers::body_json(
+            json!({ "data": { "text": "Ship it\n" } }),
+        ))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({ "data": created })))
+        .mount(&server)
+        .await;
+
+    let story = core::comment(&client(&server), TASK, "Ship it\n")
+        .await
+        .unwrap();
+
+    assert!(story.is_comment());
+    assert_eq!(story.gid, created["gid"]);
+}

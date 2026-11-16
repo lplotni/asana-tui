@@ -10,6 +10,7 @@ pub mod tint;
 pub mod ui;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ratatui::crossterm::event::{self, Event};
@@ -19,6 +20,7 @@ use tokio::task::JoinSet;
 use crate::api::Client;
 use crate::config::Config;
 use crate::core;
+use crate::editor;
 use app::{App, Effect, Msg};
 use theme::Theme;
 
@@ -41,7 +43,9 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     // ratatui::init enters raw mode and the alternate screen, and installs a
     // panic hook that restores the terminal before the panic is printed.
     let mut terminal = ratatui::init();
-    spawn_input_reader(tx.clone());
+    let input = Arc::new(InputGate::default());
+    spawn_input_reader(tx.clone(), input.clone());
+    let editor = editor::editor_command(|key| std::env::var(key).ok());
     spawn_refresh_timer(tx.clone());
 
     let (mut app, effects) = App::new();
@@ -57,6 +61,15 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
         };
         app.now = now();
         let effects = app.update(msg);
+        let (edits, effects): (Vec<_>, Vec<_>) = effects
+            .into_iter()
+            .partition(|e| matches!(e, Effect::EditComment { .. }));
+        for edit in edits {
+            if let Effect::EditComment { task_gid, initial } = edit {
+                let text = edit_in_terminal(&mut terminal, &input, &editor, initial).await;
+                let _ = tx.send(Msg::CommentWritten { task_gid, text });
+            }
+        }
         run_effects(effects, &client, &workspace, &tx, &mut writes);
         while writes.try_join_next().is_some() {}
         if app.should_quit {
@@ -72,10 +85,72 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     result
 }
 
+/// Lets the event loop stop the input reader while another program (the
+/// editor) owns the terminal, so none of its keystrokes are stolen.
+#[derive(Default)]
+struct InputGate {
+    paused: AtomicBool,
+    /// Set by the reader once it has seen `paused` and stopped reading.
+    idle: AtomicBool,
+}
+
+impl InputGate {
+    /// Stops the reader and waits until it confirms (at most 1 s).
+    fn pause(&self) {
+        self.paused.store(true, Ordering::SeqCst);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while !self.idle.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    fn resume(&self) {
+        self.idle.store(false, Ordering::SeqCst);
+        self.paused.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Suspends the TUI, runs the editor in the foreground with `initial`, and
+/// restores the TUI. Returns the text, or `None` if cancelled or it failed.
+async fn edit_in_terminal(
+    terminal: &mut ratatui::DefaultTerminal,
+    input: &InputGate,
+    editor: &str,
+    initial: String,
+) -> Option<String> {
+    input.pause();
+    ratatui::restore();
+    let editor = editor.to_owned();
+    let text = tokio::task::spawn_blocking(move || editor::edit(&editor, &initial))
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten();
+    let _ = ratatui::crossterm::terminal::enable_raw_mode();
+    let _ = ratatui::crossterm::execute!(
+        std::io::stdout(),
+        ratatui::crossterm::terminal::EnterAlternateScreen
+    );
+    let _ = terminal.clear();
+    input.resume();
+    text
+}
+
 /// Reads terminal events on a dedicated thread so the UI never waits on them.
-fn spawn_input_reader(tx: UnboundedSender<Msg>) {
+/// While the gate is paused it doesn't read at all.
+fn spawn_input_reader(tx: UnboundedSender<Msg>, gate: Arc<InputGate>) {
     std::thread::spawn(move || {
         loop {
+            if gate.paused.load(Ordering::SeqCst) {
+                gate.idle.store(true, Ordering::SeqCst);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                continue;
+            }
+            match event::poll(std::time::Duration::from_millis(50)) {
+                Ok(true) if !gate.paused.load(Ordering::SeqCst) => {}
+                Ok(_) => continue,
+                Err(_) => break,
+            }
             let msg = match event::read() {
                 Ok(Event::Key(key)) => Msg::Key(key),
                 Ok(Event::Resize(width, height)) => {
@@ -100,7 +175,7 @@ fn run_effects(
 ) {
     for effect in effects {
         let (client, workspace, tx) = (client.clone(), workspace.clone(), tx.clone());
-        let is_write = matches!(effect, Effect::MarkRead { .. });
+        let is_write = matches!(effect, Effect::MarkRead { .. } | Effect::PostComment { .. });
         let task = async move {
             let msg = match effect {
                 Effect::LoadInbox { target } => Msg::InboxLoaded(
@@ -128,6 +203,23 @@ fn run_effects(
                     open_in_browser(&url);
                     return;
                 }
+                Effect::PostComment {
+                    task_gid,
+                    local_gid,
+                    text,
+                } => {
+                    let result = core::comment(&client, &task_gid, &text)
+                        .await
+                        .map(Box::new)
+                        .map_err(|e| e.to_string());
+                    Msg::CommentPosted {
+                        task_gid,
+                        local_gid,
+                        result,
+                    }
+                }
+                // Needs the terminal; handled by the event loop.
+                Effect::EditComment { .. } => return,
                 Effect::MarkRead { gids, read } => {
                     let result = core::mark_read(&client, &workspace, &gids, read)
                         .await

@@ -49,6 +49,35 @@ pub fn relative_time(created_at: &str, now: i64) -> String {
     }
 }
 
+/// `now` in Asana's timestamp format, e.g. `2026-11-16T13:00:00.000Z`.
+pub fn timestamp(now: i64) -> String {
+    let days = now.div_euclid(86_400);
+    let seconds = now.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.000Z",
+        seconds / 3600,
+        seconds % 3600 / 60,
+        seconds % 60
+    )
+}
+
+/// (year, month, day) for days since 1970-01-01 (Howard Hinnant's
+/// `civil_from_days`, the inverse of [`days_from_civil`]).
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let mp = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    (year, month, day)
+}
+
 /// `2026-11-04` → "Wed 4 Nov" in the year of `now`, else "Wed 31 Dec 2025".
 /// Unparseable input is returned unchanged.
 pub fn short_date(date: &str, now: i64) -> String {
@@ -164,5 +193,16 @@ mod tests {
         assert!(is_before_today("2026-11-15", now));
         assert!(!is_before_today("2026-11-16", now));
         assert!(!is_before_today("2026-11-20", now));
+    }
+
+    #[test]
+    fn timestamp_round_trips_with_parse_timestamp() {
+        for text in [
+            "2026-11-16T13:00:00.000Z",
+            "2024-02-29T23:59:59.000Z",
+            "1970-01-01T00:00:00.000Z",
+        ] {
+            assert_eq!(timestamp(parse_timestamp(text).unwrap()), text);
+        }
     }
 }

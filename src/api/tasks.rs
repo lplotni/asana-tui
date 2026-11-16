@@ -97,6 +97,20 @@ impl Client {
         Ok(response.data)
     }
 
+    /// Adds a comment; returns the created story.
+    pub async fn add_comment(&self, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
+        #[derive(Deserialize)]
+        struct Response {
+            data: TaskStory,
+        }
+        let query = [("opt_fields", STORY_FIELDS.to_owned())];
+        let body = serde_json::json!({ "data": { "text": text } });
+        let response: Response = self
+            .post(&format!("/tasks/{task_gid}/stories"), &query, &body)
+            .await?;
+        Ok(response.data)
+    }
+
     pub async fn stories_page(
         &self,
         task_gid: &str,

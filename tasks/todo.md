@@ -268,7 +268,7 @@ In the TUI:
 
 **Estimated scope:** M
 
-### - [ ] T10: `$EDITOR` round-trip and add comment
+### - [x] T10: `$EDITOR` round-trip and add comment
 
 **Description:** Add `editor.rs`, which:
 1. resolves `$VISUAL`, then `$EDITOR`, then `vi`
@@ -281,13 +281,13 @@ In the TUI:
 Add `core::comment(task, text)` and `asn comment <gid> [-m TEXT | -]`, which takes text from `-m`, from stdin with `-`, or from the editor if neither is given. In the TUI, `c` and `Tab c` open the editor and post the comment optimistically into the pane, rolling back with a toast on failure.
 
 **Acceptance criteria:**
-- [ ] An empty buffer or a non-zero editor exit posts nothing (tested with `EDITOR` set to a stub script).
-- [ ] After the editor exits, whether successfully or not, the TUI redraws fully and keys work.
-- [ ] An optimistic comment is replaced by the server's version on success and removed on failure.
+- [x] An empty buffer or a non-zero editor exit posts nothing (tested with `EDITOR` set to a stub script).
+- [x] After the editor exits, whether successfully or not, the TUI redraws fully and keys work.
+- [x] An optimistic comment is replaced by the server's version on success and removed on failure.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: in Rex, a comment written in vim appears in the web app. `:cq` cancels.
+- [x] `cargo test`
+- [ ] Manual: in Rex, a comment written in vim appears in the web app (**not done: it would post a real comment; for the user**). `:cq` cancels (**verified in Rex**: vi received every key, the TUI came back, nothing was posted, no temp file left).
 
 **Dependencies:** T9
 
