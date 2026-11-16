@@ -10,6 +10,7 @@ class Asn < Formula
   desc "Your Asana Inbox in the terminal, with vim keys and a scriptable CLI"
   homepage "https://github.com/lplotni/asana-tui"
   version "$version"
+  license "MIT"
 
   on_macos do
     on_arm do

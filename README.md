@@ -87,3 +87,7 @@ cargo run --example screenshot > docs/screenshot.svg   # regenerate the screensh
 ```
 
 Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.
+
+## License
+
+[MIT](LICENSE)
