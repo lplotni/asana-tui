@@ -185,7 +185,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 **Estimated scope:** M
 
-### - [ ] T7: TUI Inbox list with navigation
+### - [x] T7: TUI Inbox list with navigation
 
 **Description:** Running `asn` with no subcommand starts the TUI. Pieces:
 - **Terminal guard:** raw mode, the alternate screen and a panic hook that always restore the terminal.
@@ -195,13 +195,13 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 - **Navigation:** loads the first page via `core::inbox`. `j`/`k`, counts, `gg`/`G`, `Ctrl-d`/`Ctrl-u` and `q` work. Loading and error states are visible, and the UI never blocks on the network.
 
 **Acceptance criteria:**
-- [ ] Navigation keys move the cursor correctly at list edges and with counts (state-machine unit tests).
-- [ ] Quitting with `q`, with Ctrl-C, or through a forced panic leaves the terminal in its original mode (manual test plus a guard unit test where possible).
-- [ ] `TestBackend` snapshot of the Inbox screen with fixture data and the `terminal` theme, plus one with `NO_COLOR`.
+- [x] Navigation keys move the cursor correctly at list edges and with counts (state-machine unit tests).
+- [x] Quitting with `q`, with Ctrl-C, or through a forced panic leaves the terminal in its original mode (manual test plus a guard unit test where possible). Verified in Rex for `q` and Ctrl-C (`icanon echo` restored, exit 0). Panics are covered by `ratatui::init`'s restore hook, which wasn't triggered manually.
+- [x] `TestBackend` snapshot of the Inbox screen with fixture data and the `terminal` theme, plus one with `NO_COLOR`.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: `cargo run` in Rex shows the real Inbox, and keys feel instant while loading
+- [x] `cargo test`
+- [x] Manual: `cargo run` in Rex shows the real Inbox, and keys feel instant while loading
 
 **Dependencies:** T2, T4, T6 (T5 optional: tints plug in without code changes)
 

@@ -140,14 +140,17 @@ async fn main() -> ExitCode {
                 Err(err) => fail(&err, err.exit_code()),
             }
         }
+        None => match asn::tui::run(config, client).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => fail(&err, 1),
+        },
         other => {
             let what = match other {
-                None => "the TUI",
                 Some(Command::Task { .. }) => "`asn task`",
                 Some(Command::Comment { .. }) => "`asn comment`",
                 Some(Command::Desc { .. }) => "`asn desc`",
                 Some(Command::Project { .. }) => "`asn project`",
-                Some(Command::Inbox { .. } | Command::Read { .. }) => unreachable!(),
+                None | Some(Command::Inbox { .. } | Command::Read { .. }) => unreachable!(),
             };
             eprintln!("{what} is not implemented yet");
             ExitCode::FAILURE

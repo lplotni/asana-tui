@@ -56,7 +56,7 @@ T0 API spike + fixtures
 - [x] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
 - [x] T5: Terminal color query and tints
 - [x] T6: Keymap table and key parser
-- [ ] T7: TUI Inbox list with navigation
+- [x] T7: TUI Inbox list with navigation
 - [ ] T8: TUI read actions, visual mode, filter, polling, pagination
 
 ### Checkpoint B: daily triage possible
