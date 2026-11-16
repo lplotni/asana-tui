@@ -1,6 +1,7 @@
 //! Operations shared by the CLI and the TUI.
 
 use crate::api::notifications::{MARK_BATCH, Notification};
+use crate::api::tasks::{Task, TaskStory};
 use crate::api::{ApiError, Client};
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
@@ -44,6 +45,40 @@ pub async fn inbox_pages(
         offset = page.next_page.map(|next| next.offset);
         if offset.is_none() || found.len() >= target {
             return Ok((found, offset));
+        }
+    }
+}
+
+/// A task with all its comments, oldest first.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct TaskDetail {
+    pub task: Task,
+    pub comments: Vec<TaskStory>,
+    /// System stories (activity) not shown as comments.
+    pub activity_count: usize,
+}
+
+/// Fetches the task and every page of its stories at the same time.
+pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiError> {
+    let (task, stories) = tokio::join!(client.task(gid), all_stories(client, gid));
+    let (comments, activity): (Vec<TaskStory>, Vec<TaskStory>) =
+        stories?.into_iter().partition(TaskStory::is_comment);
+    Ok(TaskDetail {
+        task: task?,
+        comments,
+        activity_count: activity.len(),
+    })
+}
+
+async fn all_stories(client: &Client, gid: &str) -> Result<Vec<TaskStory>, ApiError> {
+    let mut stories = Vec::new();
+    let mut offset: Option<String> = None;
+    loop {
+        let page = client.stories_page(gid, offset.as_deref()).await?;
+        stories.extend(page.data);
+        match page.next_page {
+            Some(next) => offset = Some(next.offset),
+            None => return Ok(stories),
         }
     }
 }

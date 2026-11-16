@@ -1,5 +1,5 @@
 # Thoughts:
-* [ ] Add kemap
+* [ ] Add
 * [ ] README
 * [ ] Push to github
-* [ ] Stats for code (lines / tests etc.)
+* [ ] Stats for co ede (lines / tests etc.)

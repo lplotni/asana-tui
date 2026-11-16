@@ -4,7 +4,7 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
-> Early development (v0.1). The Inbox and read state work; task details, comments, description editing and adding to projects are next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
+> Early development (v0.1). The Inbox, read state and task details work; commenting, description editing and adding to projects are next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
 
 ## Install
 
@@ -26,11 +26,13 @@ Everything comes from the environment. Nothing is written to disk.
 
 ## Use
 
-`asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first.
+`asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first, and the selected task's details: status, assignee, dates, projects, tags, custom fields, description and every comment.
 
 | Keys | |
 |---|---|
 | `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move (with counts: `5j`, `12G`) |
+| `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
+| `o` | Open the task in the browser |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
@@ -43,6 +45,7 @@ Every action is also a command for scripts:
 asn inbox --unread                      # gid, unread marker, time, actor, action, task (tab-separated)
 asn inbox --json | jq '.[0]'            # Asana's own JSON
 asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
+asn task <task-gid>                     # a task with its description and comments (--json too)
 ```
 
 `asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.

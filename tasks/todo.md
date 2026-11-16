@@ -243,7 +243,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 ## Phase 3: Act on tasks
 
-### - [ ] T9: Task detail (`asn task` and the detail pane)
+### - [x] T9: Task detail (`asn task` and the detail pane)
 
 **Description:** Add `core::task_detail(gid)`, which fetches the task (with spec `opt_fields`) and its stories in parallel and keeps only comments. Add `asn task <gid> [--json]`.
 
@@ -254,13 +254,13 @@ In the TUI:
 - Non-task work objects show compact info only.
 
 **Acceptance criteria:**
-- [ ] Moving quickly across 10 rows triggers only one detail fetch (debounce test with a fake clock).
-- [ ] A response for a task that is no longer selected doesn't overwrite the current pane.
-- [ ] `asn task <gid> --json` returns `{task, comments}`. Text output matches the pane's fields.
+- [x] Moving quickly across 10 rows triggers only one detail fetch (debounce test with a fake clock).
+- [x] A response for a task that is no longer selected doesn't overwrite the current pane.
+- [x] `asn task <gid> --json` returns `{task, comments}`. Text output matches the pane's fields.
 
 **Verification:**
-- [ ] `cargo test` (wiremock for core, state-machine tests for debounce and focus, snapshot of the pane)
-- [ ] Manual: browsing the real Inbox, the details are correct and `o` opens the right task
+- [x] `cargo test` (wiremock for core, state-machine tests for debounce and focus, snapshot of the pane)
+- [x] Manual: browsing the real Inbox, the details are correct and `o` opens the right task
 
 **Dependencies:** T8
 

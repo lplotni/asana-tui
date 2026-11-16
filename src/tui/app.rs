@@ -3,8 +3,14 @@
 
 use ratatui::crossterm::event::KeyEvent;
 
+use super::detail;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
+use super::theme::Theme;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use crate::api::notifications::Notification;
+use crate::core::TaskDetail;
 
 /// Notifications fetched on start and the minimum fetched on refresh.
 pub const INITIAL_LOAD: usize = 100;
@@ -18,16 +24,22 @@ pub type Loaded = Result<(Vec<Notification>, Option<String>), String>;
 #[derive(Debug)]
 pub enum Msg {
     Key(KeyEvent),
-    /// How many Inbox items fit on screen (sent on start and resize).
-    Resize {
-        list_rows: usize,
-    },
+    /// How much fits on screen (sent on start and resize).
+    Resize(Sizes),
     /// The 60-second refresh timer.
     Tick,
     /// The Inbox from the first page (start or refresh).
     InboxLoaded(Loaded),
     /// More notifications after the current ones.
     MoreLoaded(Loaded),
+    /// The cursor rested on task `gid` long enough to load its details.
+    DetailDue {
+        gid: String,
+    },
+    DetailLoaded {
+        gid: String,
+        result: Result<Box<TaskDetail>, String>,
+    },
     /// Result of marking `gids` read (or unread): the GIDs Asana couldn't update.
     Marked {
         gids: Vec<String>,
@@ -51,6 +63,45 @@ pub enum Effect {
         gids: Vec<String>,
         read: bool,
     },
+    /// Send [`Msg::DetailDue`] for `gid` after [`DETAIL_DWELL`].
+    ScheduleDetail {
+        gid: String,
+    },
+    LoadDetail {
+        gid: String,
+    },
+    OpenUrl {
+        url: String,
+    },
+}
+
+/// How long the cursor rests on a task before its details load.
+pub const DETAIL_DWELL: std::time::Duration = std::time::Duration::from_millis(250);
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    #[default]
+    List,
+    Detail,
+}
+
+/// A task's details as far as they're known.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Detail {
+    Loading,
+    Loaded(Box<TaskDetail>),
+    Failed(String),
+}
+
+/// Space available to the panes, in cells.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Sizes {
+    /// Inbox items that fit in the list.
+    pub list_rows: usize,
+    /// Text columns inside the detail pane.
+    pub detail_width: usize,
+    /// Text rows inside the detail pane.
+    pub detail_rows: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +123,7 @@ pub struct App {
     /// Index of the first visible row.
     pub scroll: usize,
     pub list_rows: usize,
+    pub sizes: Sizes,
     /// Where visual mode started, as a visible position.
     pub visual_anchor: Option<usize>,
     pub loading: bool,
@@ -82,6 +134,13 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// Task details by task GID (several notifications can share a task).
+    pub details: HashMap<String, Detail>,
+    pub focus: Focus,
+    /// First visible line of the detail pane.
+    pub detail_scroll: usize,
+    /// Current Unix time, set by the event loop (for line counts).
+    pub now: i64,
     pub should_quit: bool,
     pub keys: KeyParser,
 }
@@ -102,6 +161,21 @@ impl App {
     }
 
     pub fn update(&mut self, msg: Msg) -> Vec<Effect> {
+        let before = self.selected_task_gid().map(str::to_owned);
+        let mut effects = self.handle(msg);
+        let after = self.selected_task_gid().map(str::to_owned);
+        if after != before {
+            self.detail_scroll = 0;
+            if let Some(gid) = after
+                && !self.details.contains_key(&gid)
+            {
+                effects.push(Effect::ScheduleDetail { gid });
+            }
+        }
+        effects
+    }
+
+    fn handle(&mut self, msg: Msg) -> Vec<Effect> {
         match msg {
             Msg::Key(event) => {
                 self.toast = None;
@@ -110,8 +184,9 @@ impl App {
                     Outcome::Insert(_) | Outcome::Pending | Outcome::Ignored => Vec::new(),
                 }
             }
-            Msg::Resize { list_rows } => {
-                self.list_rows = list_rows.max(1);
+            Msg::Resize(sizes) => {
+                self.list_rows = sizes.list_rows.max(1);
+                self.sizes = sizes;
                 self.move_to(self.cursor);
                 self.load_more_if_needed()
             }
@@ -123,7 +198,26 @@ impl App {
                 self.next_offset = next;
                 self.visual_anchor = None;
                 self.replace_keeping_selection(|app| app.notifications = notifications);
-                self.load_more_if_needed()
+                let mut effects = self.reload_shown_detail();
+                effects.extend(self.load_more_if_needed());
+                effects
+            }
+            Msg::DetailDue { gid } => {
+                if self.selected_task_gid() != Some(gid.as_str()) || self.details.contains_key(&gid)
+                {
+                    return Vec::new();
+                }
+                self.details.insert(gid.clone(), Detail::Loading);
+                vec![Effect::LoadDetail { gid }]
+            }
+            Msg::DetailLoaded { gid, result } => {
+                let detail = match result {
+                    Ok(detail) => Detail::Loaded(detail),
+                    Err(message) => Detail::Failed(message),
+                };
+                self.details.insert(gid, detail);
+                self.detail_scroll = self.detail_scroll.min(self.detail_max_scroll());
+                Vec::new()
             }
             Msg::InboxLoaded(Err(message)) => {
                 self.loading = false;
@@ -187,6 +281,17 @@ impl App {
             .map(|&i| &self.notifications[i])
     }
 
+    /// The task the selected notification is about, if it is about a task.
+    pub fn selected_task_gid(&self) -> Option<&str> {
+        let object = self.selected()?.work_objects.first()?;
+        (object.resource_type == "task").then_some(object.gid.as_str())
+    }
+
+    /// What's known about the selected task.
+    pub fn selected_detail(&self) -> Option<&Detail> {
+        self.details.get(self.selected_task_gid()?)
+    }
+
     /// Whether visible position `index` is inside the visual selection.
     pub fn in_visual(&self, index: usize) -> bool {
         self.visual_anchor.is_some_and(|anchor| {
@@ -197,6 +302,9 @@ impl App {
 
     fn run(&mut self, Action { cmd, count }: Action) -> Vec<Effect> {
         let n = count.unwrap_or(1);
+        if self.focus == Focus::Detail && self.scroll_detail(cmd, count) {
+            return Vec::new();
+        }
         let half_page = (self.list_rows / 2).max(1);
         match cmd {
             Cmd::MoveDown => self.move_to(self.cursor.saturating_add(n)),
@@ -211,7 +319,10 @@ impl App {
                     None => (!self.visible.is_empty()).then_some(self.cursor),
                 };
             }
-            Cmd::Back => self.visual_anchor = None,
+            Cmd::Back if self.visual_anchor.is_some() => self.visual_anchor = None,
+            Cmd::Back | Cmd::FocusLeft => self.focus = Focus::List,
+            Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
+            Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::MarkRead => return self.mark(Some(true)),
             Cmd::MarkUnread => return self.mark(Some(false)),
             Cmd::ToggleRead => return self.mark(None),
@@ -224,6 +335,66 @@ impl App {
             _ => {}
         }
         self.load_more_if_needed()
+    }
+
+    /// Scrolls the detail pane for a motion command. Returns false for
+    /// commands that aren't motions.
+    fn scroll_detail(&mut self, cmd: Cmd, count: Option<usize>) -> bool {
+        let n = count.unwrap_or(1);
+        let half_page = (self.sizes.detail_rows / 2).max(1);
+        let target = match cmd {
+            Cmd::MoveDown => self.detail_scroll.saturating_add(n),
+            Cmd::MoveUp => self.detail_scroll.saturating_sub(n),
+            Cmd::HalfPageDown => self.detail_scroll.saturating_add(half_page),
+            Cmd::HalfPageUp => self.detail_scroll.saturating_sub(half_page),
+            Cmd::Top => 0,
+            Cmd::Bottom => usize::MAX,
+            _ => return false,
+        };
+        self.detail_scroll = target.min(self.detail_max_scroll());
+        true
+    }
+
+    /// The last scroll position that still fills the detail pane.
+    fn detail_max_scroll(&self) -> usize {
+        static COUNTING_THEME: OnceLock<Theme> = OnceLock::new();
+        match self.selected_detail() {
+            Some(Detail::Loaded(detail)) => {
+                let theme = COUNTING_THEME.get_or_init(Theme::no_color);
+                detail::lines(detail, theme, self.sizes.detail_width, self.now)
+                    .len()
+                    .saturating_sub(self.sizes.detail_rows)
+            }
+            _ => 0,
+        }
+    }
+
+    fn open_in_browser(&mut self) -> Vec<Effect> {
+        match self.selected_detail() {
+            Some(Detail::Loaded(detail)) => vec![Effect::OpenUrl {
+                url: detail.task.permalink_url.clone(),
+            }],
+            _ => {
+                self.toast = Some(Toast {
+                    text: "The task isn't loaded yet".into(),
+                    is_error: false,
+                });
+                Vec::new()
+            }
+        }
+    }
+
+    /// After a refresh: keep showing the selected task while reloading it,
+    /// and forget the other cached tasks so they're fresh when revisited.
+    fn reload_shown_detail(&mut self) -> Vec<Effect> {
+        let shown = self.selected_task_gid().map(str::to_owned);
+        self.details.retain(|gid, _| Some(gid) == shown.as_ref());
+        match (shown, self.selected_detail()) {
+            (Some(gid), Some(Detail::Loaded(_) | Detail::Failed(_))) => {
+                vec![Effect::LoadDetail { gid }]
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// Marks the selection (visual range or cursor) read, unread, or (`None`)
@@ -337,17 +508,25 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&text).unwrap();
         let template: Notification = serde_json::from_value(value["data"][0].clone()).unwrap();
         (0..n)
-            .map(|i| Notification {
-                gid: i.to_string(),
-                is_read: read(i),
-                ..template.clone()
+            .map(|i| {
+                let mut n = Notification {
+                    gid: i.to_string(),
+                    is_read: read(i),
+                    ..template.clone()
+                };
+                n.work_objects[0].gid = format!("t{i}");
+                n
             })
             .collect()
     }
 
     fn loaded_with(notifications: Vec<Notification>, next: Option<&str>, list_rows: usize) -> App {
         let (mut app, _) = App::new();
-        app.update(Msg::Resize { list_rows });
+        app.update(Msg::Resize(Sizes {
+            list_rows,
+            detail_width: 60,
+            detail_rows: 20,
+        }));
         app.update(Msg::InboxLoaded(Ok((
             notifications,
             next.map(str::to_owned),
@@ -359,7 +538,8 @@ mod tests {
         loaded_with(inbox(n, |_| false), None, list_rows)
     }
 
-    fn keys(app: &mut App, typed: &str) -> Vec<Effect> {
+    /// Every effect of typing `typed`.
+    fn keys_all(app: &mut App, typed: &str) -> Vec<Effect> {
         typed
             .chars()
             .flat_map(|c| {
@@ -368,6 +548,18 @@ mod tests {
                     KeyModifiers::NONE,
                 )))
             })
+            .collect()
+    }
+
+    /// The effects of typing `typed`, minus detail scheduling (tested apart).
+    fn keys(app: &mut App, typed: &str) -> Vec<Effect> {
+        ignoring_detail(keys_all(app, typed))
+    }
+
+    fn ignoring_detail(effects: Vec<Effect>) -> Vec<Effect> {
+        effects
+            .into_iter()
+            .filter(|e| !matches!(e, Effect::ScheduleDetail { .. }))
             .collect()
     }
 
@@ -750,12 +942,16 @@ mod tests {
     #[test]
     fn a_short_inbox_keeps_loading_until_the_cursor_has_room() {
         let (mut app, _) = App::new();
-        app.update(Msg::Resize { list_rows: 10 });
+        app.update(Msg::Resize(Sizes {
+            list_rows: 10,
+            detail_width: 60,
+            detail_rows: 20,
+        }));
 
-        let effects = app.update(Msg::InboxLoaded(Ok((
+        let effects = ignoring_detail(app.update(Msg::InboxLoaded(Ok((
             inbox(3, |_| false),
             Some("p2".into()),
-        ))));
+        )))));
 
         assert_eq!(
             effects,
@@ -806,5 +1002,225 @@ mod tests {
         keys(&mut app, "j");
 
         assert_eq!(app.toast, None);
+    }
+
+    // --- Task detail ---------------------------------------------------------
+
+    fn task_detail() -> TaskDetail {
+        let read = |name: &str| -> serde_json::Value {
+            serde_json::from_str(
+                &std::fs::read_to_string(format!("tests/fixtures/{name}")).unwrap(),
+            )
+            .unwrap()
+        };
+        let task = serde_json::from_value(read("task_full.json")["data"].clone()).unwrap();
+        let stories: Vec<crate::api::tasks::TaskStory> =
+            serde_json::from_value(read("stories_thread.json")["data"].clone()).unwrap();
+        let (comments, activity): (Vec<_>, Vec<_>) = stories
+            .into_iter()
+            .partition(crate::api::tasks::TaskStory::is_comment);
+        TaskDetail {
+            task,
+            comments,
+            activity_count: activity.len(),
+        }
+    }
+
+    fn schedules(effects: &[Effect]) -> Vec<&str> {
+        effects
+            .iter()
+            .filter_map(|e| match e {
+                Effect::ScheduleDetail { gid } => Some(gid.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn loaded_detail(app: &mut App, gid: &str) {
+        app.update(Msg::DetailDue { gid: gid.into() });
+        app.update(Msg::DetailLoaded {
+            gid: gid.into(),
+            result: Ok(Box::new(task_detail())),
+        });
+    }
+
+    #[test]
+    fn loading_the_inbox_schedules_the_first_tasks_details() {
+        let (mut app, _) = App::new();
+
+        let effects = app.update(Msg::InboxLoaded(Ok((inbox(3, |_| false), None))));
+
+        assert_eq!(schedules(&effects), ["t0"]);
+        assert_eq!(app.selected_task_gid(), Some("t0"));
+    }
+
+    #[test]
+    fn moving_fast_over_ten_rows_loads_only_the_task_it_stops_on() {
+        let mut app = loaded(20, 10);
+        let mut scheduled: Vec<String> = Vec::new();
+        for _ in 0..10 {
+            scheduled.extend(
+                schedules(&keys_all(&mut app, "j"))
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+        }
+
+        let loads: Vec<Effect> = scheduled
+            .into_iter()
+            .flat_map(|gid| app.update(Msg::DetailDue { gid }))
+            .collect();
+
+        assert_eq!(loads, [Effect::LoadDetail { gid: "t10".into() }]);
+        assert_eq!(app.selected_detail(), Some(&Detail::Loading));
+    }
+
+    #[test]
+    fn a_cached_task_is_not_loaded_again() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "j");
+
+        let effects = keys_all(&mut app, "k");
+
+        assert!(schedules(&effects).is_empty());
+        assert!(matches!(app.selected_detail(), Some(Detail::Loaded(_))));
+    }
+
+    #[test]
+    fn a_response_for_another_task_does_not_replace_the_selected_one() {
+        let mut app = loaded(3, 10);
+        app.update(Msg::DetailDue { gid: "t0".into() });
+
+        app.update(Msg::DetailLoaded {
+            gid: "t2".into(),
+            result: Ok(Box::new(task_detail())),
+        });
+
+        assert_eq!(app.selected_detail(), Some(&Detail::Loading));
+    }
+
+    #[test]
+    fn a_failed_load_is_shown_for_that_task() {
+        let mut app = loaded(3, 10);
+        app.update(Msg::DetailDue { gid: "t0".into() });
+
+        app.update(Msg::DetailLoaded {
+            gid: "t0".into(),
+            result: Err("timed out".into()),
+        });
+
+        assert_eq!(
+            app.selected_detail(),
+            Some(&Detail::Failed("timed out".into()))
+        );
+    }
+
+    #[test]
+    fn notifications_about_non_tasks_load_nothing() {
+        let (mut app, _) = App::new();
+        let mut notifications = inbox(1, |_| false);
+        notifications[0].work_objects[0].resource_type = "project".into();
+
+        let effects = app.update(Msg::InboxLoaded(Ok((notifications, None))));
+
+        assert!(schedules(&effects).is_empty());
+        assert_eq!(app.selected_task_gid(), None);
+    }
+
+    #[test]
+    fn l_enter_h_and_esc_move_focus_between_panes() {
+        let mut app = loaded(3, 10);
+
+        keys(&mut app, "l");
+        assert_eq!(app.focus, Focus::Detail);
+        keys(&mut app, "h");
+        assert_eq!(app.focus, Focus::List);
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        assert_eq!(app.focus, Focus::Detail);
+        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        assert_eq!(app.focus, Focus::List);
+    }
+
+    #[test]
+    fn with_the_detail_focused_motions_scroll_it_instead_of_the_list() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "l");
+
+        keys(&mut app, "3j");
+        assert_eq!((app.cursor, app.detail_scroll), (0, 3));
+        keys(&mut app, "k");
+        assert_eq!(app.detail_scroll, 2);
+        keys(&mut app, "gg");
+        assert_eq!(app.detail_scroll, 0);
+    }
+
+    #[test]
+    fn capital_g_scrolls_the_detail_to_its_last_page() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "l");
+        let total = crate::tui::detail::lines(
+            &task_detail(),
+            &crate::tui::theme::Theme::no_color(),
+            60,
+            app.now,
+        )
+        .len();
+
+        keys(&mut app, "G");
+
+        assert_eq!(app.detail_scroll, total - 20);
+        keys(&mut app, "j");
+        assert_eq!(app.detail_scroll, total - 20, "can't scroll past the end");
+    }
+
+    #[test]
+    fn selecting_another_notification_resets_the_detail_scroll() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "l3jh");
+
+        keys(&mut app, "j");
+
+        assert_eq!(app.detail_scroll, 0);
+    }
+
+    #[test]
+    fn o_opens_the_loaded_task_in_the_browser() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t0");
+
+        let effects = keys(&mut app, "o");
+
+        assert_eq!(
+            effects,
+            [Effect::OpenUrl {
+                url: task_detail().task.permalink_url
+            }]
+        );
+    }
+
+    #[test]
+    fn o_before_the_task_is_loaded_explains_why_nothing_happens() {
+        let mut app = loaded(3, 10);
+
+        assert!(keys(&mut app, "o").is_empty());
+        assert!(app.toast.is_some());
+    }
+
+    #[test]
+    fn refresh_reloads_the_shown_task_without_hiding_it_and_forgets_the_rest() {
+        let mut app = loaded(3, 10);
+        loaded_detail(&mut app, "t1");
+        loaded_detail(&mut app, "t0");
+        keys(&mut app, "R");
+
+        let effects = app.update(Msg::InboxLoaded(Ok((inbox(3, |_| false), None))));
+
+        assert_eq!(effects, [Effect::LoadDetail { gid: "t0".into() }]);
+        assert!(matches!(app.selected_detail(), Some(Detail::Loaded(_))));
+        assert!(!app.details.contains_key("t1"));
     }
 }

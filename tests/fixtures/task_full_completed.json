@@ -1,0 +1,76 @@
+{
+  "data": {
+    "gid": "1200000000000005",
+    "assignee": {
+      "gid": "1200000000000002",
+      "name": "Ada Lovelace"
+    },
+    "completed": true,
+    "completed_at": "2026-11-16T12:43:22.628Z",
+    "custom_fields": [
+      {
+        "gid": "1200000000000080",
+        "name": "River alpha",
+        "display_value": null
+      },
+      {
+        "gid": "1200000000000081",
+        "name": "Amber lima",
+        "display_value": null
+      },
+      {
+        "gid": "1200000000000082",
+        "name": "Foxtrot hotel",
+        "display_value": null
+      },
+      {
+        "gid": "1200000000000083",
+        "name": "Echo golf",
+        "display_value": "Delta"
+      },
+      {
+        "gid": "1200000000000084",
+        "name": "Willow romeo",
+        "display_value": ""
+      },
+      {
+        "gid": "1200000000000085",
+        "name": "Victor maple",
+        "display_value": "Whiskey"
+      }
+    ],
+    "due_at": null,
+    "due_on": null,
+    "html_notes": "<body>Bravo<a href=\"https://example.com/link\" data-asana-gid=\"1200000000000012\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Kilo mike</a> <a href=\"https://example.com/link\" data-asana-gid=\"1200000000000010\" data-asana-accessible=\"true\" data-asana-type=\"user\" data-asana-dynamic=\"true\">Yankee victor</a>\n<strong>Mike</strong>Ember maple willow romeo delta alpha oscar uniform yankee willow yankee victor hotel uniform foxtrot kilo sierra yankee cedar hotel uniform foxtrot whiskey xray willow golf charlie papa cloud cedar sierra river xray charlie uniform quebec papa willow<strong>Quebec quebec zulu</strong>Cedar alpha tango zulu victor oscar river xray hotel kilo hotel echo yankee uniform foxtrot tango stone victor whiskey romeo india bravo victor willow foxtrot delta ember papa yankee romeo maple river hotel cloud<strong>Amber amber</strong>\n<ul><li>Zulu river sierra kilo november mike papa xray river maple alpha lima victor whiskey stone sierra</li><li>River stone papa foxtrot foxtrot amber river foxtrot river</li><li>Kilo whiskey charlie november alpha sierra mike echo river papa romeo bravo willow alpha india cloud lima</li></ul><strong>Alpha whiskey oscar tango</strong>India ember juliet bravo november hotel yankee papa sierra xray cedar hotel oscar charlie quebec<ol><li>Cedar india<strong>Ember papa charlie uniform</strong>Mike quebec charlie xray</li><li>Xray oscar cedar mike<strong>India charlie juliet</strong>Charlie whiskey cedar willow</li><li>Juliet golf charlie bravo delta cedar<strong>Cedar delta victor</strong>Cedar yankee india yankee maple november lima</li></ol>Delta quebec delta november river delta hotel golf ember victor romeo amber<strong>Uniform whiskey uniform xray</strong>Romeo whiskey amber juliet mike<strong>Oscar amber lima</strong>Cloud xray bravo yankee yankee oscar juliet charlie foxtrot quebec romeo yankee hotel india amber stone foxtrot papa xray mike amber juliet papa juliet cedar papa romeo hotel sierra papa hotel maple victor river maple romeo bravo lima tango november<a href=\"https://example.com/link\">Quebec</a></body>",
+    "memberships": [
+      {
+        "project": {
+          "gid": "1200000000000048",
+          "name": "Victor stone echo amber november willow kilo willow"
+        },
+        "section": {
+          "gid": "1200000000000086",
+          "name": "Whiskey amber"
+        }
+      },
+      {
+        "project": {
+          "gid": "1200000000000057",
+          "name": "Amber golf river kilo quebec"
+        },
+        "section": {
+          "gid": "1200000000000078",
+          "name": "Cedar bravo"
+        }
+      }
+    ],
+    "modified_at": "2026-11-16T12:43:24.418Z",
+    "name": "Bravo papa foxtrot stone stone kilo ember",
+    "notes": "Juliet bravo delta\nMike\nPapa ember mike amber yankee delta golf river juliet xray hotel zulu sierra quebec india bravo papa amber oscar sierra ember lima india kilo juliet oscar willow oscar november mike quebec xray yankee amber foxtrot india india yankee\nQuebec quebec zulu\nCedar papa whiskey charlie zulu papa mike quebec sierra alpha xray willow oscar ember amber foxtrot charlie charlie tango river oscar romeo quebec lima sierra mike juliet willow bravo amber whiskey cedar amber hotel\nAmber amber\nRiver hotel november echo papa uniform papa stone amber stone golf whiskey zulu kilo yankee sierra\nTango whiskey lima tango cedar papa oscar amber cloud\nEmber echo charlie whiskey india victor india golf maple xray whiskey bravo echo quebec quebec mike charlie\nAlpha whiskey oscar tango\nKilo sierra whiskey hotel whiskey india willow kilo stone cloud yankee tango zulu stone zulu\nAlpha stone stone kilo kilo quebec victor amber river kilo\nRiver quebec amber delta cedar ember cedar bravo oscar november lima\nRiver quebec stone cloud juliet echo november sierra golf november victor xray foxtrot golf xray\nJuliet november cedar echo xray india papa victor kilo hotel india whiskey cloud xray india amber maple echo yankee maple mike kilo ember hotel quebec\nVictor alpha echo bravo xray golf mike echo alpha victor romeo quebec golf uniform hotel echo zulu charlie hotel willow kilo mike foxtrot tango ember tango foxtrot ember echo november oscar papa stone ember charlie maple delta whiskey foxtrot\nQuebec",
+    "num_subtasks": 0,
+    "parent": null,
+    "permalink_url": "https://app.asana.com/1/1200000000000008/project/1200000000000057/task/1200000000000005",
+    "start_on": null,
+    "tags": []
+  }
+}

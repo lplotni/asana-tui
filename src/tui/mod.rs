@@ -2,6 +2,7 @@
 //! in [`app`], drawing in [`ui`].
 
 pub mod app;
+pub mod detail;
 pub mod format;
 pub mod keys;
 pub mod theme;
@@ -44,9 +45,7 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     spawn_refresh_timer(tx.clone());
 
     let (mut app, effects) = App::new();
-    app.update(Msg::Resize {
-        list_rows: ui::list_rows(terminal.size()?.into()),
-    });
+    app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
     run_effects(effects, &client, &workspace, &tx, &mut writes);
 
     let result = loop {
@@ -56,6 +55,7 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
         let Some(msg) = rx.recv().await else {
             break Ok(());
         };
+        app.now = now();
         let effects = app.update(msg);
         run_effects(effects, &client, &workspace, &tx, &mut writes);
         while writes.try_join_next().is_some() {}
@@ -78,9 +78,9 @@ fn spawn_input_reader(tx: UnboundedSender<Msg>) {
         loop {
             let msg = match event::read() {
                 Ok(Event::Key(key)) => Msg::Key(key),
-                Ok(Event::Resize(width, height)) => Msg::Resize {
-                    list_rows: ui::list_rows(ratatui::layout::Rect::new(0, 0, width, height)),
-                },
+                Ok(Event::Resize(width, height)) => {
+                    Msg::Resize(ui::sizes(ratatui::layout::Rect::new(0, 0, width, height)))
+                }
                 Ok(_) => continue,
                 Err(_) => break,
             };
@@ -113,6 +113,21 @@ fn run_effects(
                         .await
                         .map_err(|e| e.to_string()),
                 ),
+                Effect::ScheduleDetail { gid } => {
+                    tokio::time::sleep(app::DETAIL_DWELL).await;
+                    Msg::DetailDue { gid }
+                }
+                Effect::LoadDetail { gid } => {
+                    let result = core::task_detail(&client, &gid)
+                        .await
+                        .map(Box::new)
+                        .map_err(|e| e.to_string());
+                    Msg::DetailLoaded { gid, result }
+                }
+                Effect::OpenUrl { url } => {
+                    open_in_browser(&url);
+                    return;
+                }
                 Effect::MarkRead { gids, read } => {
                     let result = core::mark_read(&client, &workspace, &gids, read)
                         .await
@@ -142,6 +157,21 @@ fn spawn_refresh_timer(tx: UnboundedSender<Msg>) {
             }
         }
     });
+}
+
+/// Opens `url` with the system's default handler, without touching the TUI.
+fn open_in_browser(url: &str) {
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let _ = std::process::Command::new(opener)
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 fn now() -> i64 {

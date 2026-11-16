@@ -1,0 +1,51 @@
+{
+  "data": {
+    "gid": "1200000000000031",
+    "assignee": {
+      "gid": "1200000000000010",
+      "name": "Donald Knuth"
+    },
+    "completed": false,
+    "completed_at": null,
+    "custom_fields": [
+      {
+        "gid": "1200000000000079",
+        "name": "Quebec river",
+        "display_value": null
+      }
+    ],
+    "due_at": null,
+    "due_on": "2026-11-04",
+    "html_notes": "<body><h1>Lima</h1>Whiskey amber xray sierra november maple zulu uniform river ember foxtrot ember cedar stone amber papa sierra echo charlie tango november lima zulu whiskey ember alpha victor echo juliet kilo papa delta kilo india charlie delta uniform uniform uniform ember whiskey kilo delta cloud foxtrot xray amber foxtrot xray cedar bravo mike november stone stone quebec alpha golf cedar victor charlie cloud sierra amber oscar foxtrot river ember cloud bravo maple xray sierra amber<em>Delta quebec echo<a href=\"https://example.com/link\">Whiskey river</a> </em>Foxtrot<a href=\"https://example.com/link\">Papa mike</a>Cedar<h1>Kilo</h1>Tango alpha delta kilo oscar alpha stone papa stone hotel echo stone whiskey yankee tango november uniform golf stone hotel tango foxtrot xray india victor kilo cloud papa juliet zulu stone ember xray november mike hotel yankee november india bravo river oscar zulu kilo papa november river juliet kilo uniform charlie juliet river xray echo kilo mike lima tango echo juliet victor<strong>Uniform willow amber tango india</strong>\n<ul><li><strong>Hotel sierra echo</strong>Amber tango zulu india papa lima tango charlie yankee yankee victor mike sierra zulu zulu mike oscar lima hotel alpha river</li><li><strong>Delta xray delta stone tango november romeo</strong>Xray quebec golf willow</li><li><strong>Hotel papa stone stone echo lima</strong>Uniform quebec uniform echo sierra cedar</li><li><strong>November oscar hotel zulu</strong>Cloud bravo hotel tango echo maple hotel foxtrot uniform</li><li><strong>Willow golf cloud</strong>Alpha november ember golf alpha zulu alpha sierra alpha charlie maple bravo</li></ul></body>",
+    "memberships": [
+      {
+        "project": {
+          "gid": "1200000000000043",
+          "name": "Stone maple zulu cedar"
+        },
+        "section": {
+          "gid": "1200000000000044",
+          "name": "Maple ember"
+        }
+      },
+      {
+        "project": {
+          "gid": "1200000000000045",
+          "name": "Ember zulu"
+        },
+        "section": {
+          "gid": "1200000000000046",
+          "name": "Mike maple"
+        }
+      }
+    ],
+    "modified_at": "2026-11-09T15:12:58.803Z",
+    "name": "Quebec quebec mike mike cloud kilo sierra alpha",
+    "notes": "Lima\n\nUniform bravo willow foxtrot echo mike november lima hotel amber river yankee victor india golf cedar ember whiskey november papa zulu alpha papa sierra hotel victor xray quebec november bravo hotel zulu maple mike romeo november zulu maple golf bravo mike cloud victor bravo echo bravo uniform river foxtrot papa charlie yankee willow tango river stone foxtrot november cloud maple charlie oscar india river golf whiskey hotel charlie lima zulu xray cedar maple bravo\nBravo whiskey maple lima charlie river\n\n\nKilo\n\nHotel maple tango india sierra cedar stone kilo juliet kilo cloud maple lima quebec xray zulu india amber uniform ember cedar juliet uniform oscar cloud bravo zulu ember charlie oscar willow tango hotel juliet alpha romeo oscar juliet amber maple tango lima november xray golf romeo xray quebec hotel delta bravo india lima river tango echo november foxtrot delta india stone kilo\n\nUniform willow amber tango india\nMike amber charlie sierra november papa amber cedar zulu whiskey victor willow delta alpha hotel india maple romeo mike cedar amber india hotel romeo\nLima cedar oscar cloud stone xray golf november uniform amber hotel\nSierra papa november stone november kilo amber tango lima kilo yankee stone\nKilo uniform zulu kilo delta yankee willow victor romeo zulu victor victor whiskey\nFoxtrot quebec alpha romeo stone golf golf amber kilo kilo kilo charlie sierra stone november\n",
+    "num_subtasks": 0,
+    "parent": null,
+    "permalink_url": "https://app.asana.com/1/1200000000000008/project/1200000000000045/task/1200000000000031",
+    "start_on": null,
+    "tags": []
+  }
+}

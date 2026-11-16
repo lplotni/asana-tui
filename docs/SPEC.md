@@ -102,8 +102,20 @@ themes/          // built-in themes as TOML, embedded with include_str!
 
 ### F2. Task detail
 
-- Shows the name, completed state, assignee, due date, projects and sections, description (plain `notes`), and comments (oldest to newest, author, relative time).
-- `o` opens `permalink_url` in the browser (the escape hatch for anything the MVP doesn't cover).
+- Shows what the web task pane shows, as far as the API allows:
+  - name and completion status
+  - assignee
+  - start and due dates (`due_at` with its UTC time), with "(overdue)" for incomplete tasks past due
+  - every project with its section
+  - tags and custom fields (`—` when empty)
+  - the parent task, and the number of subtasks
+  - the full description
+  - **every** comment, oldest to newest, with author and relative time, following story pages
+- System activity (moves, date changes, …) is counted ("N updates not shown") rather than listed, like the web's collapsed activity.
+- Details load after the cursor rests on a task for 250 ms, and are cached per task. A refresh reloads the shown task in place and forgets the rest.
+- `l`/`Enter` focus the pane, and `h`/`Esc` return to the list. While the pane is focused, `j`/`k`/`gg`/`G`/`Ctrl-d`/`Ctrl-u` scroll it.
+- `o` opens `permalink_url` in the browser (the escape hatch for anything the MVP doesn't cover, e.g. subtasks and attachments).
+- `asn task <gid> [--json]` prints the same content (or `{task, comments, activity_count}` as JSON).
 
 ### F3. Add comment
 

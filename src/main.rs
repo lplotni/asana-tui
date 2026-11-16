@@ -144,13 +144,26 @@ async fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, 1),
         },
+        Some(Command::Task { gid, json }) => match core::task_detail(&client, &gid).await {
+            Ok(detail) if json => {
+                println!("{}", asn::cli::task::render_json(&detail));
+                ExitCode::SUCCESS
+            }
+            Ok(detail) => {
+                print!("{}", asn::cli::task::render_text(&detail, unix_now()));
+                ExitCode::SUCCESS
+            }
+            Err(err) => fail(&err, err.exit_code()),
+        },
         other => {
             let what = match other {
-                Some(Command::Task { .. }) => "`asn task`",
                 Some(Command::Comment { .. }) => "`asn comment`",
                 Some(Command::Desc { .. }) => "`asn desc`",
                 Some(Command::Project { .. }) => "`asn project`",
-                None | Some(Command::Inbox { .. } | Command::Read { .. }) => unreachable!(),
+                None
+                | Some(Command::Inbox { .. } | Command::Read { .. } | Command::Task { .. }) => {
+                    unreachable!()
+                }
             };
             eprintln!("{what} is not implemented yet");
             ExitCode::FAILURE
@@ -161,4 +174,10 @@ async fn main() -> ExitCode {
 fn fail(err: &dyn std::fmt::Display, code: i32) -> ExitCode {
     eprintln!("{err}");
     ExitCode::from(code as u8)
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }

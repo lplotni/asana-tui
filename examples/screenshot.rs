@@ -3,6 +3,8 @@
 //!     cargo run --example screenshot > docs/screenshot.svg
 
 use asn::api::notifications::{Actor, Notification, Story, WorkObject};
+use asn::api::tasks::{CustomField, Membership, Named, Task, TaskStory};
+use asn::core::TaskDetail;
 use asn::tui::app::{App, Msg};
 use asn::tui::theme::{Role, Theme};
 use asn::tui::{format, ui};
@@ -26,16 +28,81 @@ fn main() {
     let now = format::parse_timestamp(NOW).expect("valid timestamp");
 
     let (mut app, _) = App::new();
-    app.update(Msg::Resize {
-        list_rows: ui::list_rows(Rect::new(0, 0, WIDTH, HEIGHT)),
-    });
+    app.update(Msg::Resize(ui::sizes(Rect::new(0, 0, WIDTH, HEIGHT))));
     app.update(Msg::InboxLoaded(Ok((demo_inbox(), None))));
+    let gid = app.selected_task_gid().expect("a task").to_owned();
+    app.update(Msg::DetailDue { gid: gid.clone() });
+    app.update(Msg::DetailLoaded {
+        gid,
+        result: Ok(Box::new(demo_task())),
+    });
 
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("test backend");
     terminal
         .draw(|frame| ui::render(frame, &app, &theme, now))
         .expect("draw");
     print!("{}", svg(terminal.backend().buffer(), &theme));
+}
+
+/// The selected task: fictional, like everything else here.
+fn demo_task() -> TaskDetail {
+    let named = |gid: &str, name: &str| Named {
+        gid: gid.into(),
+        name: name.into(),
+    };
+    let comment = |gid: &str, who: &str, when: &str, text: &str| TaskStory {
+        gid: gid.into(),
+        kind: "comment".into(),
+        resource_subtype: Some("comment_added".into()),
+        text: Some(text.into()),
+        created_at: when.into(),
+        created_by: Some(named("2", who)),
+    };
+    TaskDetail {
+        task: Task {
+            gid: "4000000000000000".into(),
+            name: "Fix checkout redirect loop".into(),
+            completed: false,
+            completed_at: None,
+            assignee: Some(named("1", "Sam Chen")),
+            due_on: Some("2026-11-18".into()),
+            due_at: None,
+            start_on: None,
+            notes: "Users on Safari get stuck between /cart and /checkout after logging in.\n\n\
+                    Repro: log out, add an item, log in on the checkout page."
+                .into(),
+            html_notes: None,
+            permalink_url: "https://app.asana.com/".into(),
+            modified_at: None,
+            memberships: vec![Membership {
+                project: named("5", "Webshop"),
+                section: Some(named("6", "In progress")),
+            }],
+            tags: vec![named("7", "bug")],
+            custom_fields: vec![CustomField {
+                gid: "8".into(),
+                name: "Priority".into(),
+                display_value: Some("High".into()),
+            }],
+            parent: None,
+            num_subtasks: 0,
+        },
+        comments: vec![
+            comment(
+                "9",
+                "Sam Chen",
+                "2026-11-15T10:00:00.000Z",
+                "Can reproduce on iOS too.",
+            ),
+            comment(
+                "10",
+                "Alex Rivera",
+                "2026-11-16T12:58:00.000Z",
+                "Looks like the session cookie is SameSite=Strict. PR incoming.",
+            ),
+        ],
+        activity_count: 6,
+    }
 }
 
 /// Actor (`None` = Asana), subtype, task, read, when, comment.

@@ -26,54 +26,70 @@
 <rect x="83.2" y="66.4" width="218.4" height="16.8" fill="#3c3836"/>
 <text x="83.2" y="79.5" fill="#fbf1c7" font-weight="bold" textLength="218.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Fix checkout redirect loop</text>
 <rect x="301.6" y="66.4" width="84.0" height="16.8" fill="#3c3836"/>
+<text x="410.8" y="79.5" fill="#fabd2f" textLength="336.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">☐ Incomplete · Sam Chen · Due Wed 18 Nov</text>
 <text x="32.8" y="96.3" fill="#83a598" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">●</text>
 <text x="49.6" y="96.3" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">59m </text>
 <text x="83.2" y="96.3" fill="#8ec07c" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sam Chen</text>
 <text x="167.2" y="96.3" fill="#928374" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">assigned you</text>
-<text x="410.8" y="96.3" fill="#8ec07c" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Alex Rivera</text>
-<rect x="503.2" y="83.2" width="84.0" height="16.8" fill="#282828"/>
-<text x="503.2" y="96.3" fill="#ebdbb2" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> commented</text>
-<text x="587.2" y="96.3" fill="#928374" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · 2m</text>
+<text x="410.8" y="96.3" fill="#fabd2f" textLength="176.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Webshop › In progress</text>
 <text x="83.2" y="113.1" fill="#fbf1c7" font-weight="bold" textLength="302.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Migrate product catalog to the new C</text>
+<text x="410.8" y="113.1" fill="#fabd2f" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Tags: bug</text>
 <text x="32.8" y="129.9" fill="#83a598" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">●</text>
 <text x="49.6" y="129.9" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3h  </text>
 <text x="83.2" y="129.9" fill="#8ec07c" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Asana</text>
 <text x="142.0" y="129.9" fill="#928374" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">overdue reminder</text>
-<rect x="410.8" y="116.8" width="411.6" height="16.8" fill="#282828"/>
-<text x="410.8" y="129.9" fill="#ebdbb2" textLength="411.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Looks like the session cookie is SameSite=Strict.</text>
+<rect x="410.8" y="116.8" width="117.6" height="16.8" fill="#282828"/>
+<text x="410.8" y="129.9" fill="#ebdbb2" textLength="117.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Priority: High</text>
 <text x="83.2" y="146.7" fill="#fbf1c7" font-weight="bold" textLength="151.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Update CSP headers</text>
-<rect x="410.8" y="133.6" width="243.6" height="16.8" fill="#282828"/>
-<text x="410.8" y="146.7" fill="#ebdbb2" textLength="243.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">PR incoming in a few minutes.</text>
 <text x="32.8" y="163.5" fill="#83a598" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">●</text>
 <text x="49.6" y="163.5" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3h  </text>
 <text x="83.2" y="163.5" fill="#8ec07c" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Priya Patel</text>
 <text x="192.4" y="163.5" fill="#928374" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">commented</text>
+<text x="410.8" y="163.5" fill="#83a598" font-weight="bold" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Description</text>
 <text x="83.2" y="180.3" fill="#fbf1c7" font-weight="bold" textLength="159.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Q4 launch checklist</text>
+<rect x="410.8" y="167.2" width="361.2" height="16.8" fill="#282828"/>
+<text x="410.8" y="180.3" fill="#ebdbb2" textLength="361.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Users on Safari get stuck between /cart and</text>
 <text x="49.6" y="197.1" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1d  </text>
 <text x="83.2" y="197.1" fill="#8ec07c" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Jordan Lee</text>
 <text x="184.0" y="197.1" fill="#928374" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">added to project</text>
+<rect x="410.8" y="184.0" width="226.8" height="16.8" fill="#282828"/>
+<text x="410.8" y="197.1" fill="#ebdbb2" textLength="226.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">/checkout after logging in.</text>
 <rect x="83.2" y="200.8" width="260.4" height="16.8" fill="#282828"/>
 <text x="83.2" y="213.9" fill="#ebdbb2" textLength="260.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cart drawer accessibility audit</text>
 <text x="49.6" y="230.7" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3d  </text>
 <text x="83.2" y="230.7" fill="#8ec07c" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mo Okafor</text>
 <text x="175.6" y="230.7" fill="#928374" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">completed</text>
+<rect x="410.8" y="217.6" width="428.4" height="16.8" fill="#282828"/>
+<text x="410.8" y="230.7" fill="#ebdbb2" textLength="428.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Repro: log out, add an item, log in on the checkout</text>
 <rect x="83.2" y="234.4" width="184.8" height="16.8" fill="#282828"/>
 <text x="83.2" y="247.5" fill="#ebdbb2" textLength="184.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Bump payment SDK to v5</text>
+<rect x="410.8" y="234.4" width="42.0" height="16.8" fill="#282828"/>
+<text x="410.8" y="247.5" fill="#ebdbb2" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">page.</text>
 <text x="49.6" y="264.3" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">6d  </text>
 <text x="83.2" y="264.3" fill="#8ec07c" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sam Chen</text>
 <text x="167.2" y="264.3" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">reacted</text>
 <rect x="83.2" y="268.0" width="201.6" height="16.8" fill="#282828"/>
 <text x="83.2" y="281.1" fill="#ebdbb2" textLength="201.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Quarterly planning notes</text>
+<text x="410.8" y="281.1" fill="#83a598" font-weight="bold" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Comments (2)</text>
+<text x="511.6" y="281.1" fill="#928374" textLength="184.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · 6 updates not shown</text>
 <text x="49.6" y="297.9" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1w  </text>
 <text x="83.2" y="297.9" fill="#8ec07c" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Alex Rivera</text>
 <text x="192.4" y="297.9" fill="#928374" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">commented</text>
 <rect x="83.2" y="301.6" width="226.8" height="16.8" fill="#282828"/>
 <text x="83.2" y="314.7" fill="#ebdbb2" textLength="226.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Remove legacy feature flags</text>
+<text x="410.8" y="314.7" fill="#8ec07c" font-weight="bold" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Sam Chen</text>
+<text x="478.0" y="314.7" fill="#928374" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · 1d</text>
 <text x="49.6" y="331.5" fill="#928374" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">2w  </text>
 <text x="83.2" y="331.5" fill="#8ec07c" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Priya Patel</text>
 <text x="192.4" y="331.5" fill="#928374" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">assigned you</text>
+<rect x="410.8" y="318.4" width="226.8" height="16.8" fill="#282828"/>
+<text x="410.8" y="331.5" fill="#ebdbb2" textLength="226.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Can reproduce on iOS too.</text>
 <rect x="83.2" y="335.2" width="184.8" height="16.8" fill="#282828"/>
 <text x="83.2" y="348.3" fill="#ebdbb2" textLength="184.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Write onboarding guide</text>
+<text x="410.8" y="365.1" fill="#8ec07c" font-weight="bold" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Alex Rivera</text>
+<text x="503.2" y="365.1" fill="#928374" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> · 2m</text>
+<rect x="410.8" y="368.8" width="428.4" height="16.8" fill="#282828"/>
+<text x="410.8" y="381.9" fill="#ebdbb2" textLength="428.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Looks like the session cookie is SameSite=Strict.</text>
 <rect x="16.0" y="402.4" width="67.2" height="16.8" fill="#83a598"/>
 <text x="16.0" y="415.5" fill="#282828" font-weight="bold" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> NORMAL </text>
 <rect x="83.2" y="402.4" width="386.4" height="16.8" fill="#32302f"/>

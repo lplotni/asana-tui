@@ -49,6 +49,44 @@ pub fn relative_time(created_at: &str, now: i64) -> String {
     }
 }
 
+/// `2026-11-04` → "Wed 4 Nov" in the year of `now`, else "Wed 31 Dec 2025".
+/// Unparseable input is returned unchanged.
+pub fn short_date(date: &str, now: i64) -> String {
+    const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let Some((year, month, day)) = parse_date(date) else {
+        return date.to_owned();
+    };
+    let days = days_from_civil(year, month, day);
+    let weekday = WEEKDAYS[(days + 4).rem_euclid(7) as usize];
+    let month_name = MONTHS[(month - 1) as usize];
+    let today = now.div_euclid(86_400);
+    let same_year = days_from_civil(year, 1, 1) <= today && today < days_from_civil(year + 1, 1, 1);
+    if same_year {
+        format!("{weekday} {day} {month_name}")
+    } else {
+        format!("{weekday} {day} {month_name} {year}")
+    }
+}
+
+/// Whether the `YYYY-MM-DD` day `date` lies before the day of `now`.
+pub fn is_before_today(date: &str, now: i64) -> bool {
+    parse_date(date).is_some_and(|(y, m, d)| days_from_civil(y, m, d) < now.div_euclid(86_400))
+}
+
+/// `YYYY-MM-DD` (or the date part of a timestamp) as (year, month, day).
+fn parse_date(text: &str) -> Option<(i64, i64, i64)> {
+    let b = text.as_bytes();
+    if b.len() < 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let num = |range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
+    let (year, month, day) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    ((1..=12).contains(&month) && (1..=31).contains(&day)).then_some((year, month, day))
+}
+
 /// What happened, as read in the Inbox: `comment_added` → "commented".
 /// Unknown subtypes are shown with spaces instead of underscores.
 pub fn describe(subtype: &str) -> String {
@@ -108,5 +146,23 @@ mod tests {
         assert_eq!(describe("assigned"), "assigned you");
         assert_eq!(describe("story_reaction_added"), "reacted");
         assert_eq!(describe("some_future_subtype"), "some future subtype");
+    }
+
+    #[test]
+    fn short_date_shows_weekday_day_and_month() {
+        let now = parse_timestamp("2026-11-16T13:00:00.000Z").unwrap();
+
+        assert_eq!(short_date("2026-11-04", now), "Wed 4 Nov");
+        assert_eq!(short_date("2025-12-31", now), "Wed 31 Dec 2025");
+        assert_eq!(short_date("someday", now), "someday");
+    }
+
+    #[test]
+    fn is_before_today_compares_whole_days() {
+        let now = parse_timestamp("2026-11-16T13:00:00.000Z").unwrap();
+
+        assert!(is_before_today("2026-11-15", now));
+        assert!(!is_before_today("2026-11-16", now));
+        assert!(!is_before_today("2026-11-20", now));
     }
 }

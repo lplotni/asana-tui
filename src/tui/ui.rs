@@ -4,10 +4,11 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Wrap,
+    Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
-use super::app::App;
+use super::app::{App, Detail, Focus, Sizes};
+use super::detail;
 use super::format::{describe, relative_time};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
@@ -15,22 +16,40 @@ use crate::api::notifications::Notification;
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
 
-/// How many Inbox items fit in a terminal of `size`.
-pub fn list_rows(size: Rect) -> usize {
-    // Header and status bar, plus the list's top and bottom border.
-    let inner = size.height.saturating_sub(4);
-    usize::from((inner / ITEM_HEIGHT).max(1))
+/// What fits in a terminal of `size`: Inbox items and the detail pane's text
+/// area. Must match the layout in [`render`].
+pub fn sizes(size: Rect) -> Sizes {
+    let (_, body, _) = split_screen(size);
+    let (list, detail) = split_body(body);
+    // List: top and bottom border. Detail: borders plus one column of padding
+    // on each side.
+    let list_inner = list.height.saturating_sub(2);
+    Sizes {
+        list_rows: usize::from((list_inner / ITEM_HEIGHT).max(1)),
+        detail_width: usize::from(detail.width.saturating_sub(4)),
+        detail_rows: usize::from(detail.height.saturating_sub(2)),
+    }
 }
 
-pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
+fn split_screen(area: Rect) -> (Rect, Rect, Rect) {
     let [header, body, status] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
         Constraint::Length(1),
     ])
-    .areas(frame.area());
+    .areas(area);
+    (header, body, status)
+}
+
+fn split_body(body: Rect) -> (Rect, Rect) {
     let [list, detail] =
         Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(body);
+    (list, detail)
+}
+
+pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
+    let (header, body, status) = split_screen(frame.area());
+    let (list, detail) = split_body(body);
 
     render_header(frame, header, app, theme);
     render_list(frame, list, app, theme, now);
@@ -86,7 +105,7 @@ fn pane(title: &str, focused: bool, theme: &Theme) -> Block<'static> {
 }
 
 fn render_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
-    let block = pane("Inbox", true, theme);
+    let block = pane("Inbox", app.focus == Focus::List, theme);
     let message = if app.loading && app.notifications.is_empty() {
         Some("Loading Inbox…")
     } else if app.error.is_some() && app.notifications.is_empty() {
@@ -162,41 +181,50 @@ fn item<'a>(n: &'a Notification, theme: &Theme, now: i64) -> ListItem<'a> {
     ListItem::new(vec![header, name])
 }
 
-/// Until the task detail pane exists (T9), shows what the notification says.
+/// The selected notification's task: its details once loaded, otherwise
+/// what's known so far.
 fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
-    let block = pane("Task", false, theme).padding(Padding::horizontal(1));
+    let block = pane("Task", app.focus == Focus::Detail, theme).padding(Padding::horizontal(1));
+    let width = usize::from(area.width.saturating_sub(4));
+    let muted = theme.style(Role::TextMuted);
     let Some(n) = app.selected() else {
         frame.render_widget(block, area);
         return;
     };
-    let actor = n.created_by.as_ref().map_or("Asana", |a| a.name.as_str());
-    let object = n.work_objects.first().map_or("-", |o| o.name.as_str());
-    let mut lines = vec![
-        Line::styled(object, theme.style(Role::Title)),
-        Line::default(),
-        Line::from(vec![
-            Span::styled(actor, theme.style(Role::Actor)),
-            Span::styled(
-                format!(" {}", describe(&n.story_resource_subtype)),
-                theme.style(Role::Text),
+    let name = n.work_objects.first().map_or("-", |o| o.name.as_str());
+    let title = || Line::styled(name.to_owned(), theme.style(Role::Title));
+    let lines = match (app.selected_task_gid(), app.selected_detail()) {
+        (Some(_), Some(Detail::Loaded(detail))) => detail::lines(detail, theme, width, now),
+        (Some(_), Some(Detail::Failed(message))) => vec![
+            title(),
+            Line::default(),
+            Line::styled(
+                format!("Couldn't load the task: {message}"),
+                theme.style(Role::ToastError),
             ),
-            Span::styled(
-                format!(" · {}", relative_time(&n.created_at, now)),
-                theme.style(Role::Timestamp),
-            ),
-        ]),
-    ];
-    if let Some(text) = n.story.as_ref().and_then(|s| s.text.as_deref()) {
-        lines.push(Line::default());
-        lines.extend(
-            text.lines()
-                .map(|l| Line::styled(l.to_owned(), theme.style(Role::Text))),
-        );
-    }
-    let detail = Paragraph::new(lines)
-        .block(block)
-        .wrap(Wrap { trim: false });
-    frame.render_widget(detail, area);
+        ],
+        (Some(_), _) => vec![
+            title(),
+            Line::default(),
+            Line::styled("Loading task…", muted),
+        ],
+        (None, _) => {
+            let kind = n
+                .work_objects
+                .first()
+                .map_or("item", |o| o.resource_type.as_str());
+            vec![
+                title(),
+                Line::default(),
+                Line::styled(
+                    format!("This notification is about a {kind}; asn shows task details only."),
+                    muted,
+                ),
+            ]
+        }
+    };
+    let scroll = u16::try_from(app.detail_scroll).unwrap_or(u16::MAX);
+    frame.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), area);
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -272,9 +300,7 @@ mod tests {
 
     fn app_with(notifications: Vec<Notification>) -> App {
         let (mut app, _) = App::new();
-        app.update(Msg::Resize {
-            list_rows: list_rows(Rect::new(0, 0, 100, 24)),
-        });
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 100, 24))));
         app.update(Msg::InboxLoaded(Ok((notifications, None))));
         app
     }
@@ -309,10 +335,13 @@ mod tests {
     }
 
     #[test]
-    fn list_rows_counts_two_line_items_inside_the_chrome() {
+    fn sizes_count_two_line_items_and_the_detail_text_area() {
         // 24 rows − header − status bar − 2 border rows = 20 rows = 10 items.
-        assert_eq!(list_rows(Rect::new(0, 0, 100, 24)), 10);
-        assert_eq!(list_rows(Rect::new(0, 0, 100, 3)), 1);
+        let s = sizes(Rect::new(0, 0, 100, 24));
+        assert_eq!(s.list_rows, 10);
+        // The detail pane is 55 of 100 columns, minus borders and padding.
+        assert_eq!((s.detail_width, s.detail_rows), (51, 20));
+        assert_eq!(sizes(Rect::new(0, 0, 100, 3)).list_rows, 1);
     }
 
     #[test]
@@ -441,5 +470,61 @@ mod tests {
         press(&mut app, "f");
 
         insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    fn with_detail(app: &mut App) {
+        let gid = app.selected_task_gid().unwrap().to_owned();
+        let read = |name: &str| -> serde_json::Value {
+            serde_json::from_str(
+                &std::fs::read_to_string(format!("tests/fixtures/{name}")).unwrap(),
+            )
+            .unwrap()
+        };
+        let task = serde_json::from_value(read("task_full.json")["data"].clone()).unwrap();
+        let stories: Vec<crate::api::tasks::TaskStory> =
+            serde_json::from_value(read("stories_thread.json")["data"].clone()).unwrap();
+        let (comments, activity): (Vec<_>, Vec<_>) = stories
+            .into_iter()
+            .partition(crate::api::tasks::TaskStory::is_comment);
+        let detail = crate::core::TaskDetail {
+            task,
+            comments,
+            activity_count: activity.len(),
+        };
+        app.update(Msg::DetailDue { gid: gid.clone() });
+        app.update(Msg::DetailLoaded {
+            gid,
+            result: Ok(Box::new(detail)),
+        });
+    }
+
+    #[test]
+    fn task_detail_screen() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn task_detail_scrolled_to_the_comments() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+        press(&mut app, "lG");
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn the_focused_pane_has_the_heavy_border() {
+        let theme = terminal_theme();
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "l");
+
+        let terminal = draw(&app, &theme);
+
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer[(0, 1)].symbol(), "┌", "list is no longer focused");
+        assert_eq!(buffer[(45, 1)].symbol(), "┏", "detail is focused");
     }
 }

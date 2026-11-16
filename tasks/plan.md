@@ -66,7 +66,7 @@ T0 API spike + fixtures
 - [ ] **Human review before Phase 3**
 
 ### Phase 3: Act on tasks
-- [ ] T9: Task detail (`asn task` and the detail pane)
+- [x] T9: Task detail (`asn task` and the detail pane)
 - [ ] T10: `$EDITOR` round-trip and add comment
 - [ ] T11: Edit description with rich-text and concurrency guards
 - [ ] T12: Add to project (fuzzy project picker, then section picker)
