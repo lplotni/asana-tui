@@ -43,7 +43,7 @@ T0 API spike + fixtures
 - [ ] T0: Validate Notifications API access and capture fixtures
 
 ### Phase 1: Scriptable core
-- [ ] T1: Cargo scaffold, env config, error and exit-code contract
+- [x] T1: Cargo scaffold, env config, error and exit-code contract
 - [ ] T2: API client and `asn inbox`
 - [ ] T3: `asn read` (mark read/unread, batched)
 
