@@ -216,3 +216,40 @@ async fn unknown_workspace_names_asana_workspace_and_asanas_message() {
     assert!(message.contains("ASANA_WORKSPACE"), "{message}");
     assert!(message.contains("Not a recognized ID"), "{message}");
 }
+
+#[tokio::test]
+async fn inbox_pages_skips_empty_pages_and_returns_the_next_offset() {
+    let server = MockServer::start().await;
+    serve_page(
+        &server,
+        Some("p2"),
+        page_with_next(json!({ "data": [] }), "p3"),
+    )
+    .await;
+    serve_page(
+        &server,
+        Some("p3"),
+        page_with_next(fixture("notifications_edge_cases.json"), "p4"),
+    )
+    .await;
+
+    let (found, next) = core::inbox_pages(&client(&server), WORKSPACE, 1, Some("p2"), |_| true)
+        .await
+        .unwrap();
+
+    assert_eq!(found.len(), 4);
+    assert_eq!(next.as_deref(), Some("p4"));
+}
+
+#[tokio::test]
+async fn inbox_pages_reports_the_end_with_no_next_offset() {
+    let server = MockServer::start().await;
+    serve_page(&server, None, fixture("notifications_edge_cases.json")).await;
+
+    let (found, next) = core::inbox_pages(&client(&server), WORKSPACE, 100, None, |_| true)
+        .await
+        .unwrap();
+
+    assert_eq!(found.len(), 4);
+    assert_eq!(next, None);
+}

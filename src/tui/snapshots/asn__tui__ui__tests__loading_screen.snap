@@ -2,7 +2,7 @@
 source: src/tui/ui.rs
 expression: "draw(&app, &terminal_theme()).backend()"
 ---
-" asn  Inbox                                                                                         "
+" asn  Inbox                                                                         [f] unread only "
 "┏ Inbox ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ Task ───────────────────────────────────────────────┐"
 "┃ Loading Inbox…                            ┃│                                                     │"
 "┃                                           ┃│                                                     │"
@@ -25,4 +25,4 @@ expression: "draw(&app, &terminal_theme()).backend()"
 "┃                                           ┃│                                                     │"
 "┃                                           ┃│                                                     │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└─────────────────────────────────────────────────────┘"
-" NORMAL   Loading…                                                                           q quit "
+" NORMAL   Loading…                                    e read  u unread  V visual  R refresh  q quit "

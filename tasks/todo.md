@@ -209,7 +209,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 **Estimated scope:** M
 
-### - [ ] T8: TUI read actions, visual mode, filter, polling, pagination
+### - [x] T8: TUI read actions, visual mode, filter, polling, pagination
 
 **Description:** Add the F1 behavior on top of T7:
 - `e`/`u`/`x` mark read, unread and toggle, optimistically, with rollback and an error toast on failure.
@@ -220,13 +220,13 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 - Toasts appear in the status bar.
 
 **Acceptance criteria:**
-- [ ] Marking read in unread-only mode removes the row, and the cursor lands on the next item. A failed request restores it and shows a toast (state-machine tests with fake effect results).
-- [ ] Refresh keeps the cursor on the same GID, or the nearest neighbor if that item is gone.
-- [ ] Reaching the last 10 rows triggers exactly one next-page load until it resolves.
+- [x] Marking read in unread-only mode removes the row, and the cursor lands on the next item. A failed request restores it and shows a toast (state-machine tests with fake effect results).
+- [x] Refresh keeps the cursor on the same GID, or the nearest neighbor if that item is gone.
+- [x] Reaching the last 10 rows triggers exactly one next-page load until it resolves.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: a real Inbox can be processed to empty with `j`/`k`/`e`/`V`, and the web Inbox reflects the read state
+- [x] `cargo test`
+- [ ] (Partly verified: `e`, `u`, `f`, `V` and `R` round-trip with real Asana on a single item. Processing the whole Inbox to empty is the Checkpoint B review.) Manual: a real Inbox can be processed to empty with `j`/`k`/`e`/`V`, and the web Inbox reflects the read state
 
 **Dependencies:** T3, T7
 

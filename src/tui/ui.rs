@@ -48,7 +48,22 @@ fn render_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         Span::styled(" asn ", theme.style(Role::Title)),
         Span::styled(title, theme.style(Role::Text)),
     ]);
-    frame.render_widget(Paragraph::new(line).style(theme.style(Role::Text)), area);
+    let filter = if app.unread_only {
+        "unread only"
+    } else {
+        "all"
+    };
+    let mut right = format!("[f] {filter} ");
+    if app.loading_more {
+        right.insert_str(0, "loading more…  ");
+    }
+    let right = Span::styled(right, theme.style(Role::Keyhint));
+    let [left_area, right_area] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(right.width() as u16)])
+            .areas(area);
+    let style = theme.style(Role::Text);
+    frame.render_widget(Paragraph::new(line).style(style), left_area);
+    frame.render_widget(Paragraph::new(right).style(style), right_area);
 }
 
 fn pane(title: &str, focused: bool, theme: &Theme) -> Block<'static> {
@@ -78,6 +93,8 @@ fn render_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64
         Some("The Inbox couldn't be loaded")
     } else if app.notifications.is_empty() {
         Some("Nothing in your Inbox")
+    } else if app.visible_len() == 0 {
+        Some("No unread notifications · f shows all")
     } else {
         None
     };
@@ -89,9 +106,16 @@ fn render_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64
     }
 
     let items: Vec<ListItem> = app
-        .notifications
-        .iter()
-        .map(|n| item(n, theme, now))
+        .visible()
+        .enumerate()
+        .map(|(index, n)| {
+            let item = item(n, theme, now);
+            if app.in_visual(index) {
+                item.style(theme.style(Role::VisualSelection))
+            } else {
+                item
+            }
+        })
         .collect();
     let list = List::new(items)
         .block(block)
@@ -176,12 +200,17 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    let mut left = vec![Span::styled(" NORMAL ", theme.style(Role::StatusbarMode))];
-    if !app.notifications.is_empty() {
+    let mode = if app.visual_anchor.is_some() {
+        " VISUAL "
+    } else {
+        " NORMAL "
+    };
+    let mut left = vec![Span::styled(mode, theme.style(Role::StatusbarMode))];
+    if app.visible_len() > 0 {
         left.push(Span::raw(format!(
             " {}/{}",
             app.cursor + 1,
-            app.notifications.len()
+            app.visible_len()
         )));
     }
     if let Some(pending) = app.keys.pending() {
@@ -196,7 +225,26 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             theme.style(Role::ToastError),
         ));
     }
-    let hints = Span::styled("q quit ", theme.style(Role::Keyhint));
+    if let Some(toast) = &app.toast {
+        let (icon, role) = if toast.is_error {
+            ("✗", Role::ToastError)
+        } else {
+            ("✓", Role::ToastSuccess)
+        };
+        left.push(Span::styled(
+            format!("  {icon} {}", toast.text),
+            theme.style(role),
+        ));
+    }
+    // A message gets the whole bar; hints return with the next key press.
+    let hints = if app.toast.is_some() || app.error.is_some() {
+        Span::raw("")
+    } else {
+        Span::styled(
+            "e read  u unread  V visual  R refresh  q quit ",
+            theme.style(Role::Keyhint),
+        )
+    };
     let [left_area, right_area] =
         Layout::horizontal([Constraint::Min(0), Constraint::Length(hints.width() as u16)])
             .areas(area);
@@ -227,7 +275,7 @@ mod tests {
         app.update(Msg::Resize {
             list_rows: list_rows(Rect::new(0, 0, 100, 24)),
         });
-        app.update(Msg::InboxLoaded(Ok(notifications)));
+        app.update(Msg::InboxLoaded(Ok((notifications, None))));
         app
     }
 
@@ -335,5 +383,60 @@ mod tests {
                     .is_none_or(|bg| bg == ratatui::style::Color::Reset)),
             "a cell has a color under NO_COLOR"
         );
+    }
+
+    fn press(app: &mut App, typed: &str) {
+        for c in typed.chars() {
+            app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+                ratatui::crossterm::event::KeyCode::Char(c),
+                ratatui::crossterm::event::KeyModifiers::NONE,
+            )));
+        }
+    }
+
+    #[test]
+    fn visual_mode_with_all_notifications_shown() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "fjVjj");
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn visual_rows_use_the_visual_selection_role() {
+        let theme = terminal_theme();
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "Vj");
+        let terminal = draw(&app, &theme);
+
+        // Row 2 is the first item's first line; its first cell after the
+        // border is the selection marker column.
+        let buffer = terminal.backend().buffer();
+        let cell = &buffer[(2, 2)];
+        assert_eq!(cell.bg, theme.style(Role::VisualSelection).bg.unwrap());
+    }
+
+    #[test]
+    fn error_toast_in_the_status_bar() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "e");
+        let gid = app.notifications[0].gid.clone();
+        app.update(Msg::Marked {
+            gids: vec![gid],
+            read: true,
+            result: Err("Could not reach Asana: connection failed".into()),
+        });
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn all_read_suggests_showing_all() {
+        let mut notifications = fixture("notifications_page.json");
+        for n in &mut notifications {
+            n.is_read = true;
+        }
+
+        insta::assert_snapshot!(draw(&app_with(notifications), &terminal_theme()).backend());
     }
 }

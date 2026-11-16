@@ -2,7 +2,7 @@
 source: src/tui/ui.rs
 expression: "draw(&app_with(Vec::new()), &terminal_theme()).backend()"
 ---
-" asn  Inbox · 0 unread                                                                              "
+" asn  Inbox · 0 unread                                                              [f] unread only "
 "┏ Inbox ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ Task ───────────────────────────────────────────────┐"
 "┃ Nothing in your Inbox                     ┃│                                                     │"
 "┃                                           ┃│                                                     │"
@@ -25,4 +25,4 @@ expression: "draw(&app_with(Vec::new()), &terminal_theme()).backend()"
 "┃                                           ┃│                                                     │"
 "┃                                           ┃│                                                     │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└─────────────────────────────────────────────────────┘"
-" NORMAL                                                                                      q quit "
+" NORMAL                                               e read  u unread  V visual  R refresh  q quit "

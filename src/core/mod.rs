@@ -15,23 +15,37 @@ pub async fn inbox(
     limit: usize,
     unread_only: bool,
 ) -> Result<Vec<Notification>, ApiError> {
-    let mut found = Vec::new();
-    let mut offset: Option<String> = None;
+    let (mut found, _) = inbox_pages(client, workspace, limit, None, |n| {
+        !unread_only || !n.is_read
+    })
+    .await?;
+    found.truncate(limit);
+    Ok(found)
+}
 
-    while found.len() < limit {
+/// Fetches pages starting at `offset` until at least `target` notifications
+/// matching `keep` were collected or the Inbox ends. Returns them with the
+/// offset to continue from (`None` at the end). Empty pages are skipped.
+pub async fn inbox_pages(
+    client: &Client,
+    workspace: &str,
+    target: usize,
+    offset: Option<&str>,
+    keep: impl Fn(&Notification) -> bool,
+) -> Result<(Vec<Notification>, Option<String>), ApiError> {
+    let mut found = Vec::new();
+    let mut offset = offset.map(str::to_owned);
+    loop {
         let page = client
             .notifications_page(workspace, PAGE_SIZE, offset.as_deref())
             .await
             .map_err(workspace_hint)?;
-        found.extend(page.data.into_iter().filter(|n| !unread_only || !n.is_read));
-        match page.next_page {
-            Some(next) => offset = Some(next.offset),
-            None => break,
+        found.extend(page.data.into_iter().filter(|n| keep(n)));
+        offset = page.next_page.map(|next| next.offset);
+        if offset.is_none() || found.len() >= target {
+            return Ok((found, offset));
         }
     }
-
-    found.truncate(limit);
-    Ok(found)
 }
 
 /// The Inbox call is workspace-scoped, so 403/404 almost always mean a wrong

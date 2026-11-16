@@ -2,7 +2,7 @@
 source: src/tui/ui.rs
 expression: "draw(&app, &terminal_theme()).backend()"
 ---
-" asn  Inbox · 0 unread                                                                              "
+" asn  Inbox · 0 unread                                                              [f] unread only "
 "┏ Inbox ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ Task ───────────────────────────────────────────────┐"
 "┃ The Inbox couldn't be loaded              ┃│                                                     │"
 "┃                                           ┃│                                                     │"
@@ -25,4 +25,4 @@ expression: "draw(&app, &terminal_theme()).backend()"
 "┃                                           ┃│                                                     │"
 "┃                                           ┃│                                                     │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└─────────────────────────────────────────────────────┘"
-" NORMAL   ✗ Could not reach Asana: connection failed                                         q quit "
+" NORMAL   ✗ Could not reach Asana: connection failed                                                "

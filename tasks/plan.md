@@ -57,7 +57,7 @@ T0 API spike + fixtures
 - [x] T5: Terminal color query and tints
 - [x] T6: Keymap table and key parser
 - [x] T7: TUI Inbox list with navigation
-- [ ] T8: TUI read actions, visual mode, filter, polling, pagination
+- [x] T8: TUI read actions, visual mode, filter, polling, pagination
 
 ### Checkpoint B: daily triage possible
 - [ ] Open `asn` and get through a real Inbox to empty using only `j`/`k`/`e`/`V`
