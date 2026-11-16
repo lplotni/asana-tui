@@ -395,9 +395,9 @@ mod tests {
     }
 
     #[test]
-    fn visual_mode_with_all_notifications_shown() {
+    fn visual_mode() {
         let mut app = app_with(fixture("notifications_page.json"));
-        press(&mut app, "fjVjj");
+        press(&mut app, "jVjj");
 
         insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
     }
@@ -437,6 +437,9 @@ mod tests {
             n.is_read = true;
         }
 
-        insta::assert_snapshot!(draw(&app_with(notifications), &terminal_theme()).backend());
+        let mut app = app_with(notifications);
+        press(&mut app, "f");
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
     }
 }

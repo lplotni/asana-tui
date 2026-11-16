@@ -2,7 +2,7 @@
 source: src/tui/ui.rs
 expression: "draw(&app, &terminal_theme()).backend()"
 ---
-" asn  Inbox                                                                         [f] unread only "
+" asn  Inbox                                                                                 [f] all "
 "┏ Inbox ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ Task ───────────────────────────────────────────────┐"
 "┃ Loading Inbox…                            ┃│                                                     │"
 "┃                                           ┃│                                                     │"

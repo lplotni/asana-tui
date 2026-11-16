@@ -96,8 +96,8 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - Pagination loads the next page when the cursor reaches the last 10 rows. It keeps following `next_page` until it is `null`, even when a page is short or empty. If loading more fails because the offset has expired (offsets are valid for 15 minutes), it reloads from the first page and keeps the cursor on the same GID.
 - **Read state:** `e` marks the selection read (the Asana web "archive" key), `u` marks it unread (the Asana web "move to Inbox" key), and `x` toggles. Opening an item does not mark it read. Marking read is an explicit decision, just like archiving mail. In visual mode, `V` followed by `e`, `u` or `x` acts on a range, batched in groups of up to 50 GIDs.
 - **Quitting never drops a change:** after the terminal is restored, `asn` waits up to 5 s for read/unread requests still in flight. If any are still unfinished, it prints a warning to check with `asn inbox`.
-- **Archive semantics:** the API has no archive, so `e` only marks the item read. With the default unread-only filter, the item then leaves the list, which feels like archiving. In the web Inbox it stays visible, shown as read. The `?` overlay states this next to the `e` key.
-- **Filter:** `f` toggles between unread only and all items (unread only by default).
+- **Archive semantics:** the API has no archive, so `e` only marks the item read, and the item stays in the list, shown as read, the same as it does in the web Inbox. The `?` overlay states this next to the `e` key.
+- **Filter:** by default the list shows every notification the API returns, read and unread, newest first, to match the web Inbox. `f` toggles an unread-only view, where items marked read leave the list.
 - Notifications whose work object is not a task (project, goal, etc.) show compact info only (name, type, `o` opens it in the browser). No actions are available on them in the MVP.
 
 ### F2. Task detail

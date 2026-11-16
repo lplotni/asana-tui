@@ -63,7 +63,7 @@ pub struct Toast {
 pub struct App {
     /// Everything loaded, newest first.
     pub notifications: Vec<Notification>,
-    /// Show only unread notifications (the default).
+    /// Show only unread notifications. Off by default, matching the web Inbox.
     pub unread_only: bool,
     /// Indices into `notifications` that pass the filter.
     visible: Vec<usize>,
@@ -91,7 +91,6 @@ impl App {
     pub fn new() -> (App, Vec<Effect>) {
         let app = App {
             loading: true,
-            unread_only: true,
             ..App::default()
         };
         (
@@ -387,11 +386,11 @@ mod tests {
     // --- Loading -------------------------------------------------------------
 
     #[test]
-    fn starts_loading_the_first_page_with_unread_only_on() {
+    fn starts_loading_the_first_page_showing_all_like_the_web_inbox() {
         let (app, effects) = App::new();
 
         assert!(app.loading);
-        assert!(app.unread_only);
+        assert!(!app.unread_only);
         assert_eq!(
             effects,
             [Effect::LoadInbox {
@@ -401,8 +400,17 @@ mod tests {
     }
 
     #[test]
-    fn unread_only_hides_read_notifications() {
+    fn read_and_unread_notifications_are_both_shown_by_default() {
         let app = loaded_with(inbox(4, |i| i % 2 == 0), None, 10);
+
+        assert_eq!(visible_gids(&app), ["0", "1", "2", "3"]);
+    }
+
+    #[test]
+    fn unread_only_hides_read_notifications() {
+        let mut app = loaded_with(inbox(4, |i| i % 2 == 0), None, 10);
+
+        keys(&mut app, "f");
 
         assert_eq!(visible_gids(&app), ["1", "3"]);
     }
@@ -503,9 +511,28 @@ mod tests {
     // --- Read state ----------------------------------------------------------
 
     #[test]
-    fn e_marks_read_removes_the_row_and_lands_on_the_next_item() {
+    fn e_marks_read_and_keeps_the_row_like_the_web_inbox() {
         let mut app = loaded(4, 10);
         keys(&mut app, "j");
+
+        let effects = keys(&mut app, "e");
+
+        assert_eq!(
+            effects,
+            [Effect::MarkRead {
+                gids: vec!["1".into()],
+                read: true
+            }]
+        );
+        assert_eq!(visible_gids(&app), ["0", "1", "2", "3"]);
+        assert_eq!(selected_gid(&app), "1");
+        assert!(app.selected().unwrap().is_read);
+    }
+
+    #[test]
+    fn in_unread_only_mode_e_removes_the_row_and_lands_on_the_next_item() {
+        let mut app = loaded(4, 10);
+        keys(&mut app, "fj");
 
         let effects = keys(&mut app, "e");
 
@@ -523,7 +550,7 @@ mod tests {
     #[test]
     fn a_failed_mark_restores_the_row_and_shows_an_error_toast() {
         let mut app = loaded(4, 10);
-        keys(&mut app, "je");
+        keys(&mut app, "fje");
 
         app.update(Msg::Marked {
             gids: vec!["1".into()],
@@ -543,7 +570,7 @@ mod tests {
     #[test]
     fn only_the_gids_asana_could_not_update_are_restored() {
         let mut app = loaded(4, 10);
-        keys(&mut app, "Vje");
+        keys(&mut app, "fVje");
 
         app.update(Msg::Marked {
             gids: vec!["0".into(), "1".into()],
@@ -558,7 +585,6 @@ mod tests {
     #[test]
     fn u_marks_unread_and_x_toggles() {
         let mut app = loaded_with(inbox(2, |_| true), None, 10);
-        keys(&mut app, "f");
 
         assert_eq!(
             keys(&mut app, "u"),
@@ -593,7 +619,7 @@ mod tests {
     #[test]
     fn visual_mode_marks_the_whole_range_in_one_request_and_ends() {
         let mut app = loaded(5, 10);
-        keys(&mut app, "jVjj");
+        keys(&mut app, "fjVjj");
         assert!(app.in_visual(1) && app.in_visual(3) && !app.in_visual(4));
 
         let effects = keys(&mut app, "e");
@@ -625,12 +651,12 @@ mod tests {
     #[test]
     fn f_toggles_the_filter_and_keeps_the_selected_notification() {
         let mut app = loaded_with(inbox(6, |i| i % 2 == 0), None, 10);
-        keys(&mut app, "j");
+        keys(&mut app, "3j");
         assert_eq!(selected_gid(&app), "3");
 
         keys(&mut app, "f");
-        assert!(!app.unread_only);
-        assert_eq!(visible_gids(&app).len(), 6);
+        assert!(app.unread_only);
+        assert_eq!(visible_gids(&app), ["1", "3", "5"]);
         assert_eq!(selected_gid(&app), "3");
 
         keys(&mut app, "f");
