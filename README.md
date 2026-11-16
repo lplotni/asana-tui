@@ -8,6 +8,15 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 
 ## Install
 
+With Homebrew (macOS or Linux):
+
+```sh
+brew tap lplotni/asn https://github.com/lplotni/asana-tui
+brew install lplotni/asn/asn
+```
+
+Or download a binary for macOS (Apple Silicon, Intel) or Linux (x86_64, ARM) from [Releases](https://github.com/lplotni/asana-tui/releases), or build it with Rust:
+
 ```sh
 cargo install --git https://github.com/lplotni/asana-tui
 ```
@@ -76,3 +85,5 @@ These come from Asana's [Notifications API](https://forum.asana.com/t/new-notifi
 cargo test
 cargo run --example screenshot > docs/screenshot.svg   # regenerate the screenshot (made-up data)
 ```
+
+Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.
