@@ -65,6 +65,7 @@ jobs:
       - name: Update Formula/asn.rb
         run: |
           sha() { cat "asn-${GITHUB_REF_NAME}-$1.tar.gz.sha256"; }
+          mkdir -p Formula
           scripts/formula.sh "${GITHUB_REF_NAME#v}" \
             "$(sha aarch64-apple-darwin)" "$(sha x86_64-apple-darwin)" \
             "$(sha aarch64-unknown-linux-gnu)" "$(sha x86_64-unknown-linux-gnu)" > Formula/asn.rb
