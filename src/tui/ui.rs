@@ -10,12 +10,87 @@ use ratatui::widgets::{
 use super::app::{App, Detail, Focus, Sizes};
 use super::detail;
 use super::format::{describe, relative_time};
+use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
 
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
+
+/// The help overlay's lines: every binding, generated from the keymap.
+pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for (context, heading) in [
+        (Context::Normal, "Inbox and task"),
+        (Context::Input, "Text fields and pickers"),
+    ] {
+        if !lines.is_empty() {
+            lines.push(Line::default());
+        }
+        lines.push(Line::styled(heading, theme.style(Role::Title)));
+        // One entry per command, listing all of its key sequences.
+        let mut seen: Vec<Cmd> = Vec::new();
+        for binding in BINDINGS.iter().filter(|b| b.context == context) {
+            if seen.contains(&binding.cmd) {
+                continue;
+            }
+            seen.push(binding.cmd);
+            let same: Vec<_> = BINDINGS
+                .iter()
+                .filter(|b| b.context == context && b.cmd == binding.cmd)
+                .collect();
+            let keys: Vec<String> = same.iter().map(|b| sequence_label(b.keys)).collect();
+            let asana = same
+                .iter()
+                .any(|b| matches!(b.origin, Origin::Asana | Origin::VimAndAsana));
+            let mut spans = vec![
+                Span::styled(
+                    format!("{:<12} ", keys.join(", ")),
+                    theme.style(Role::PickerMatch),
+                ),
+                Span::styled(binding.help.to_owned(), theme.style(Role::Text)),
+            ];
+            if asana {
+                spans.push(Span::styled("  · Asana", theme.style(Role::TextMuted)));
+            }
+            lines.push(Line::from(spans));
+        }
+    }
+    lines
+}
+
+/// The help overlay over the whole body, in two columns.
+fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
+    let area = over;
+    let block = Block::new()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Thick)
+        .border_style(theme.style(Role::BorderFocused))
+        .title(Span::styled(" Keys ", theme.style(Role::Title)))
+        .title_bottom(Span::styled(" any key closes ", theme.style(Role::Keyhint)))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(area);
+    frame.render_widget(Clear, area);
+    frame.render_widget(block.style(theme.style(Role::Text)), area);
+
+    let lines = help_lines(theme);
+    let rows = usize::from(inner.height.max(1));
+    let columns = if inner.width >= 80 { 2 } else { 1 };
+    let [left, right] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(inner);
+    let split = if columns == 2 {
+        lines.len().div_ceil(2).min(rows)
+    } else {
+        lines.len()
+    };
+    let (first, second) = lines.split_at(split.min(lines.len()));
+    let first_area = if columns == 2 { left } else { inner };
+    frame.render_widget(Paragraph::new(first.to_vec()), first_area);
+    if columns == 2 {
+        frame.render_widget(Paragraph::new(second.to_vec()), right);
+    }
+}
 
 /// What fits in a terminal of `size`: Inbox items and the detail pane's text
 /// area. Must match the layout in [`render`].
@@ -42,7 +117,13 @@ fn split_screen(area: Rect) -> (Rect, Rect, Rect) {
     (header, body, status)
 }
 
+/// Below this width only the focused pane is shown, at full width.
+const NARROW: u16 = 100;
+
 fn split_body(body: Rect) -> (Rect, Rect) {
+    if body.width < NARROW {
+        return (body, body);
+    }
     let [list, detail] =
         Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(body);
     (list, detail)
@@ -53,9 +134,17 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
     let (list, detail) = split_body(body);
 
     render_header(frame, header, app, theme);
-    render_list(frame, list, app, theme, now);
-    render_detail(frame, detail, app, theme, now);
+    let narrow = body.width < NARROW;
+    if !narrow || app.focus == Focus::List {
+        render_list(frame, list, app, theme, now);
+    }
+    if !narrow || app.focus == Focus::Detail {
+        render_detail(frame, detail, app, theme, now);
+    }
     render_status(frame, status, app, theme);
+    if app.help {
+        render_help(frame, body, theme);
+    }
     if let Some(picker) = &app.picker {
         render_picker(frame, detail, picker, theme);
     }
@@ -693,5 +782,101 @@ mod tests {
             .map(|x| terminal.backend().buffer()[(x, 23)].symbol().to_owned())
             .collect();
         assert!(status.starts_with(" COMMAND  :read-all▏"), "{status}");
+    }
+
+    fn draw_at(app: &mut App, width: u16) -> Terminal<TestBackend> {
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, width, 24))));
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        terminal
+            .draw(|f| render(f, app, &terminal_theme(), NOW))
+            .unwrap();
+        terminal
+    }
+
+    #[test]
+    fn help_lists_every_key_binding_once_per_command() {
+        use crate::tui::keys::{BINDINGS, sequence_label};
+        let lines = help_lines(&terminal_theme());
+        let text: String = lines.iter().map(|l| detail::plain(l) + "\n").collect();
+
+        for binding in BINDINGS {
+            assert!(
+                text.contains(&sequence_label(binding.keys)),
+                "{:?} missing",
+                binding.keys
+            );
+        }
+        let mut commands: Vec<_> = BINDINGS.iter().map(|b| (b.context, b.cmd)).collect();
+        commands.dedup();
+        commands.sort_by_key(|(context, cmd)| format!("{context:?}{cmd:?}"));
+        commands.dedup();
+        let entries = lines.iter().filter(|l| l.spans.len() >= 2).count();
+        assert_eq!(entries, commands.len());
+    }
+
+    #[test]
+    fn help_marks_asana_web_keys() {
+        let text: String = help_lines(&terminal_theme())
+            .iter()
+            .map(|l| detail::plain(l) + "\n")
+            .collect();
+
+        let e_line = text
+            .lines()
+            .find(|l| l.trim_start().starts_with("e "))
+            .unwrap();
+        assert!(e_line.contains("Asana"), "{e_line}");
+    }
+
+    #[test]
+    fn help_overlay() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "?");
+
+        insta::assert_snapshot!(draw(&app, &terminal_theme()).backend());
+    }
+
+    #[test]
+    fn narrow_terminals_show_only_the_list() {
+        let mut app = app_with(fixture("notifications_page.json"));
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn narrow_terminals_show_only_the_task_when_it_has_focus() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+        press(&mut app, "l");
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn wide_terminals_show_both_panes() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+
+        insta::assert_snapshot!(draw_at(&mut app, 120).backend());
+    }
+
+    #[test]
+    fn narrow_sizes_give_the_task_the_full_width() {
+        let s = sizes(Rect::new(0, 0, 80, 24));
+
+        assert_eq!(s.detail_width, 76);
+        assert_eq!(s.list_rows, 10);
+    }
+
+    #[test]
+    fn resizing_across_the_threshold_keeps_selection_and_focus() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "jjl");
+
+        draw_at(&mut app, 80);
+        draw_at(&mut app, 120);
+
+        assert_eq!(app.cursor, 2);
+        assert_eq!(app.focus, crate::tui::app::Focus::Detail);
     }
 }

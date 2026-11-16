@@ -26,7 +26,7 @@ Everything comes from the environment. Nothing is written to disk.
 
 ## Use
 
-`asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first, and the selected task's details: status, assignee, dates, projects, tags, custom fields, description and every comment.
+`asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first, and the selected task's details: status, assignee, dates, projects, tags, custom fields, description and every comment. Below 100 columns it shows one pane at a time (`l`/`Enter` and `h`/`Esc` switch).
 
 | Keys | |
 |---|---|
@@ -41,6 +41,7 @@ Everything comes from the environment. Nothing is written to disk.
 | `R` | Refresh (also every 60 s) |
 | `/` then `n` / `N` | Filter by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
 | `:` | Commands: `:q`, `:refresh`, `:unread`, `:read-all` (marks everything loaded read) |
+| `?` | All keys (generated from the keymap) |
 | `q` / `Ctrl-c` | Back (from the task pane or visual mode), else quit / quit from anywhere |
 
 Every action is also a command for scripts:

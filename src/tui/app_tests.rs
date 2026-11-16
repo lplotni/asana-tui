@@ -1174,3 +1174,17 @@ fn esc_closes_the_command_line_without_running_it() {
     assert!(!app.should_quit);
     assert_eq!(app.command, None);
 }
+
+// --- Help -------------------------------------------------------------------
+
+#[test]
+fn question_mark_opens_the_help_and_the_next_key_only_closes_it() {
+    let mut app = loaded(3, 10);
+
+    keys(&mut app, "?");
+    assert!(app.help);
+
+    keys(&mut app, "j");
+    assert!(!app.help);
+    assert_eq!(app.cursor, 0, "the closing key did nothing else");
+}

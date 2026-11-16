@@ -157,15 +157,9 @@ pub const BINDINGS: &[Binding] = &[
         &[Char('e')],
         Cmd::MarkRead,
         Asana,
-        "mark read (\"archive\"; stays in the web Inbox as read)",
+        "mark read (stays listed)",
     ),
-    bind(
-        Normal,
-        &[Char('u')],
-        Cmd::MarkUnread,
-        Asana,
-        "mark unread (\"move to Inbox\")",
-    ),
+    bind(Normal, &[Char('u')], Cmd::MarkUnread, Asana, "mark unread"),
     bind(Normal, &[Char('x')], Cmd::ToggleRead, Asn, "toggle read"),
     bind(Normal, &[Char('c')], Cmd::Comment, Asn, "comment"),
     bind(Normal, &[Tab, Char('c')], Cmd::Comment, Asana, "comment"),
@@ -243,6 +237,26 @@ pub const BINDINGS: &[Binding] = &[
     bind(Input, &[Ctrl('p')], Cmd::Prev, Asn, "previous item"),
     bind(Input, &[Up], Cmd::Prev, Asn, "previous item"),
 ];
+
+/// How a key sequence is written in the help: `gg`, `Tab c`, `Ctrl-w l`.
+pub fn sequence_label(keys: &[Key]) -> String {
+    let mut label = String::new();
+    let mut previous_was_char = false;
+    for key in keys {
+        let (text, is_char) = match key {
+            Key::Char(c) => (c.to_string(), true),
+            Key::Ctrl(c) => (format!("Ctrl-{c}"), false),
+            Key::Tab => ("Tab".to_owned(), false),
+            other => (other.label(), false),
+        };
+        if !label.is_empty() && !(previous_was_char && is_char) {
+            label.push(' ');
+        }
+        label.push_str(&text);
+        previous_was_char = is_char;
+    }
+    label
+}
 
 /// A complete command, with the count typed before it (`5j`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

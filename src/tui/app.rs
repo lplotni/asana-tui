@@ -199,6 +199,8 @@ pub struct App {
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
     pub error: Option<String>,
     pub toast: Option<Toast>,
+    /// The `?` help overlay is open.
+    pub help: bool,
     /// The `/` filter, when active.
     pub search: Option<Search>,
     /// The `:` command line being typed, when open.
@@ -257,6 +259,11 @@ impl App {
 
     fn handle(&mut self, msg: Msg) -> Vec<Effect> {
         match msg {
+            Msg::Key(_) if self.help => {
+                // Any key closes the help and does nothing else.
+                self.help = false;
+                Vec::new()
+            }
             Msg::Key(event) => {
                 self.toast = None;
                 if self.picker.is_some() {
@@ -544,6 +551,11 @@ impl App {
                 self.move_to((self.cursor + step) % len);
             }
             Cmd::CommandLine => self.command = Some(String::new()),
+            Cmd::Help => self.help = true,
+            Cmd::GoToInbox => {
+                self.focus = Focus::List;
+                self.move_to(0);
+            }
             Cmd::Back | Cmd::FocusLeft => self.focus = Focus::List,
             Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
             Cmd::OpenInBrowser => return self.open_in_browser(),

@@ -375,17 +375,17 @@ Add `asn project add <task> <project> [--section GID]`.
 
 **Estimated scope:** M
 
-### - [ ] T14: `?` help overlay and the narrow (<100 cols) layout
+### - [x] T14: `?` help overlay and the narrow (<100 cols) layout
 
 **Description:** `?` shows an overlay generated from the `keys.rs` table, grouped by context, with an Asana column marking the web aliases and the note that `e` doesn't archive in the web app. Below 100 columns, the panes stack: only one is visible, `Enter` and `Esc` switch between them, and resizing switches layouts live.
 
 **Acceptance criteria:**
-- [ ] Every keymap entry appears in the overlay, generated from the table rather than listed by hand (test: count of entries equals table length).
-- [ ] Snapshots at 80 and 120 columns. Resizing across 100 columns keeps the selection and focus.
+- [x] Every keymap entry appears in the overlay, generated from the table rather than listed by hand (test: count of entries equals table length).
+- [x] Snapshots at 80 and 120 columns. Resizing across 100 columns keeps the selection and focus.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: resize a Rex pane live
+- [x] `cargo test`
+- [x] Manual: narrow Rex pane shows one pane at a time and switches with l/Esc (live resizing is covered by a unit test; rex can't resize to a given width)
 
 **Dependencies:** T9
 
