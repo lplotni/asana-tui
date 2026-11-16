@@ -1,6 +1,9 @@
 use std::process::ExitCode;
 
+use asn::api::{ASANA_API_URL, Client};
+use asn::cli::inbox;
 use asn::config::Config;
+use asn::core;
 use clap::{Parser, Subcommand};
 
 /// Asana Inbox in your terminal. Runs the TUI when no subcommand is given.
@@ -87,26 +90,50 @@ enum ProjectCommand {
     },
 }
 
-fn main() -> ExitCode {
+/// Default for `asn inbox --limit`.
+const DEFAULT_INBOX_LIMIT: u32 = 50;
+
+#[tokio::main]
+async fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let _config = match Config::from_env(|key| std::env::var(key).ok()) {
+    let config = match Config::from_env(|key| std::env::var(key).ok()) {
         Ok(config) => config,
-        Err(err) => {
-            eprintln!("{err}");
-            return ExitCode::from(err.exit_code() as u8);
-        }
+        Err(err) => return fail(&err, err.exit_code()),
     };
+    let client = Client::new(&config.token, ASANA_API_URL);
 
-    let what = match cli.command {
-        None => "the TUI",
-        Some(Command::Inbox { .. }) => "`asn inbox`",
-        Some(Command::Read { .. }) => "`asn read`",
-        Some(Command::Task { .. }) => "`asn task`",
-        Some(Command::Comment { .. }) => "`asn comment`",
-        Some(Command::Desc { .. }) => "`asn desc`",
-        Some(Command::Project { .. }) => "`asn project`",
-    };
-    eprintln!("{what} is not implemented yet");
-    ExitCode::FAILURE
+    match cli.command {
+        Some(Command::Inbox {
+            unread,
+            limit,
+            json,
+        }) => {
+            let limit = limit.unwrap_or(DEFAULT_INBOX_LIMIT) as usize;
+            match core::inbox(&client, &config.workspace, limit, unread).await {
+                Ok(notifications) if json => println!("{}", inbox::render_json(&notifications)),
+                Ok(notifications) => print!("{}", inbox::render_text(&notifications)),
+                Err(err) => return fail(&err, err.exit_code()),
+            }
+            ExitCode::SUCCESS
+        }
+        other => {
+            let what = match other {
+                None => "the TUI",
+                Some(Command::Read { .. }) => "`asn read`",
+                Some(Command::Task { .. }) => "`asn task`",
+                Some(Command::Comment { .. }) => "`asn comment`",
+                Some(Command::Desc { .. }) => "`asn desc`",
+                Some(Command::Project { .. }) => "`asn project`",
+                Some(Command::Inbox { .. }) => unreachable!(),
+            };
+            eprintln!("{what} is not implemented yet");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn fail(err: &dyn std::fmt::Display, code: i32) -> ExitCode {
+    eprintln!("{err}");
+    ExitCode::from(code as u8)
 }

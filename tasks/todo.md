@@ -67,7 +67,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC.md`](../docs/SPEC.md). Featu
 
 **Estimated scope:** S
 
-### - [ ] T2: API client and `asn inbox`
+### - [x] T2: API client and `asn inbox`
 
 **Description:** Build `api::Client`, a reqwest client with bearer auth, base URL injection (for wiremock), and typed errors:
 - 401 → auth error
@@ -77,13 +77,13 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC.md`](../docs/SPEC.md). Featu
 Add the `Notification` types: unknown enum values stay as strings, and nullable `story` and `created_by` are handled. Add `core::inbox(limit, offset, unread_only)` and the `asn inbox [--unread] [--limit N] [--json]` command. Text output is one line per notification. `--json` prints the `data` array exactly as Asana returned it.
 
 **Acceptance criteria:**
-- [ ] `asn inbox --json` output equals the fixture's `data` (round-trip test).
-- [ ] An unknown `story_resource_subtype`, a `null` story or actor, and non-task `work_objects` all parse without error.
-- [ ] 429 with `Retry-After: 1` is retried once and then succeeds. A second 429 surfaces as an error (wiremock tests).
+- [x] `asn inbox --json` output equals the fixture's `data` (round-trip test).
+- [x] An unknown `story_resource_subtype`, a `null` story or actor, and non-task `work_objects` all parse without error.
+- [x] 429 with `Retry-After: 1` is retried once and then succeeds. A second 429 surfaces as an error (wiremock tests).
 
 **Verification:**
-- [ ] `cargo test` (wiremock integration tests in `tests/api_inbox.rs`)
-- [ ] Manual: `asn inbox --unread` against real Asana lists the same items as the web Inbox
+- [x] `cargo test` (wiremock integration tests in `tests/api_inbox.rs`)
+- [x] Manual: `asn inbox --unread` against real Asana lists the same items as the web Inbox
 
 **Dependencies:** T0 (fixtures), T1
 

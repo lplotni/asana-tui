@@ -9,6 +9,10 @@ const PAT_URL: &str = "https://app.asana.com/0/my-apps";
 pub struct Token(String);
 
 impl Token {
+    pub fn new(token: impl Into<String>) -> Self {
+        Self(token.into())
+    }
+
     pub fn expose(&self) -> &str {
         &self.0
     }

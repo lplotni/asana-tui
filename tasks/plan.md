@@ -44,7 +44,7 @@ T0 API spike + fixtures
 
 ### Phase 1: Scriptable core
 - [x] T1: Cargo scaffold, env config, error and exit-code contract
-- [ ] T2: API client and `asn inbox`
+- [x] T2: API client and `asn inbox`
 - [ ] T3: `asn read` (mark read/unread, batched)
 
 ### Checkpoint A: core works against real Asana
