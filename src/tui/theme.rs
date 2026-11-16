@@ -8,6 +8,8 @@ use std::str::FromStr;
 
 use ratatui::style::{Color, Modifier, Style};
 use toml::Spanned;
+
+use super::tint::{self, Rgb, TINTS};
 use toml::de::{DeTable, DeValue};
 
 macro_rules! roles {
@@ -75,6 +77,9 @@ impl std::error::Error for ThemeError {}
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     styles: HashMap<Role, Style>,
+    /// Roles that terminal tints may replace: the tint roles of a
+    /// `terminal`-based theme that the user's file doesn't set itself.
+    tintable: Vec<Role>,
 }
 
 impl Theme {
@@ -103,8 +108,14 @@ impl Theme {
     pub fn builtin(name: &str) -> Option<Theme> {
         let (_, text) = BUILTINS.iter().find(|(n, _)| *n == name)?;
         let file = parse(name, text).expect("built-in themes are valid (tested)");
+        let tintable = if name == DEFAULT_BASE {
+            TINTS.iter().map(|(role, _)| *role).collect()
+        } else {
+            Vec::new()
+        };
         Some(Theme {
             styles: file.styles,
+            tintable,
         })
     }
 
@@ -126,6 +137,9 @@ impl Theme {
                 )
             })?,
         };
+        theme
+            .tintable
+            .retain(|role| !file.styles.contains_key(role));
         theme.styles.extend(file.styles);
         Ok(theme)
     }
@@ -134,6 +148,7 @@ impl Theme {
     /// and focus stay visible through modifiers.
     pub fn no_color() -> Theme {
         let mut theme = Theme::builtin(DEFAULT_BASE).expect("built-in theme");
+        theme.tintable.clear();
         for style in theme.styles.values_mut() {
             *style = Style::new().add_modifier(style.add_modifier);
         }
@@ -152,6 +167,34 @@ impl Theme {
         set(Role::BorderFocused, Modifier::BOLD);
         set(Role::StatusbarMode, Modifier::REVERSED | Modifier::BOLD);
         theme
+    }
+
+    /// Whether this theme has roles that terminal tints would replace.
+    pub fn wants_tints(&self) -> bool {
+        !self.tintable.is_empty()
+    }
+
+    /// Replaces the tintable roles with shades of the terminal's `fg`/`bg`.
+    pub fn apply_tints(&mut self, fg: Rgb, bg: Rgb) {
+        for (role, amount) in TINTS {
+            if self.tintable.contains(role) {
+                self.styles
+                    .insert(*role, tint::tinted_style(*role, fg, bg, *amount));
+            }
+        }
+    }
+
+    /// [`Theme::resolve`], then tints from the terminal's real colors when the
+    /// theme wants them and the terminal answers. Call before entering raw
+    /// mode; without an answer the palette-only theme is used.
+    pub fn load(env: impl Fn(&str) -> Option<String>) -> Result<Theme, ThemeError> {
+        let mut theme = Theme::resolve(env)?;
+        if theme.wants_tints()
+            && let Some((fg, bg)) = tint::query_terminal_colors()
+        {
+            theme.apply_tints(fg, bg);
+        }
+        Ok(theme)
     }
 
     pub fn style(&self, role: Role) -> Style {
@@ -545,5 +588,65 @@ mod tests {
         let theme = Theme::resolve(|k| (k == "NO_COLOR").then(String::new)).unwrap();
 
         assert_eq!(theme, Theme::builtin("terminal").unwrap());
+    }
+
+    #[test]
+    fn tints_replace_tint_roles_of_the_terminal_theme() {
+        let (fg, bg) = ((0xcd, 0xd6, 0xf4), (0x1e, 0x1e, 0x2e));
+        let mut theme = Theme::builtin("terminal").unwrap();
+
+        theme.apply_tints(fg, bg);
+
+        for (role, amount) in crate::tui::tint::TINTS {
+            assert_eq!(
+                theme.style(*role),
+                crate::tui::tint::tinted_style(*role, fg, bg, *amount),
+                "{}",
+                role.name()
+            );
+        }
+        assert_eq!(
+            theme.style(Role::Title),
+            Theme::builtin("terminal").unwrap().style(Role::Title)
+        );
+    }
+
+    #[test]
+    fn tints_keep_roles_a_user_theme_sets_itself() {
+        let mut theme = Theme::from_toml("theme.toml", "[selection]\nbg = \"red\"\n").unwrap();
+
+        theme.apply_tints((0xcd, 0xd6, 0xf4), (0x1e, 0x1e, 0x2e));
+
+        assert_eq!(theme.style(Role::Selection), Style::new().bg(Color::Red));
+        assert_ne!(
+            theme.style(Role::Statusbar),
+            Theme::builtin("terminal").unwrap().style(Role::Statusbar)
+        );
+    }
+
+    #[test]
+    fn fixed_themes_and_no_color_are_never_tinted() {
+        for mut theme in [
+            Theme::builtin("dark").unwrap(),
+            Theme::from_toml("theme.toml", "base = \"light\"\n").unwrap(),
+            Theme::no_color(),
+        ] {
+            let before = theme.clone();
+            assert!(!theme.wants_tints());
+
+            theme.apply_tints((0xcd, 0xd6, 0xf4), (0x1e, 0x1e, 0x2e));
+
+            assert_eq!(theme, before);
+        }
+    }
+
+    #[test]
+    fn terminal_based_themes_want_tints() {
+        assert!(Theme::builtin("terminal").unwrap().wants_tints());
+        assert!(
+            Theme::from_toml("theme.toml", "[title]\nfg = \"red\"\n")
+                .unwrap()
+                .wants_tints()
+        );
     }
 }

@@ -37,4 +37,7 @@ Real Asana API responses captured on 2026-11-16 (T0), then anonymized. Every GID
 ## Not checked yet (needs the user)
 
 - Whether `U` moves an item back to the Inbox in the Asana web app.
-- Whether Rex answers the OSC 11 color query.
+
+## Terminal color query (checked in T5)
+
+- Rex answers OSC 10/11 in under 1 ms, so the `terminal` theme gets tints. Ghostty is not checked yet.

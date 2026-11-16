@@ -142,7 +142,7 @@ The built-in `terminal` theme uses only ANSI colors and `reset` (tints come in T
 
 **Estimated scope:** M
 
-### - [ ] T5: Terminal color query and tints
+### - [x] T5: Terminal color query and tints
 
 **Description:** At startup, before entering the alternate screen, query the terminal's fg and bg with `terminal-colorsaurus` (100 ms timeout). Use the pure function `tints(fg, bg)` to blend the background toward the foreground:
 - `selection` 12%
@@ -153,13 +153,13 @@ The built-in `terminal` theme uses only ANSI colors and `reset` (tints come in T
 Apply the tints to the `terminal` theme, and to user themes based on it, only for roles the user hasn't set. If there's no reply, keep the palette-only theme. The query is skipped under `NO_COLOR` and with any non-`terminal` base.
 
 **Acceptance criteria:**
-- [ ] `tints()` gives the expected RGB for one dark pair and one light pair (unit test).
-- [ ] A user theme that sets `selection` keeps its own value. Unset tint roles get the derived values.
-- [ ] With no reply (stdin not a TTY in tests, or a timeout), startup continues with the palette-only theme and adds no visible delay beyond the 100 ms budget.
+- [x] `tints()` gives the expected RGB for one dark pair and one light pair (unit test).
+- [x] A user theme that sets `selection` keeps its own value. Unset tint roles get the derived values.
+- [x] With no reply (stdin not a TTY in tests, or a timeout), startup continues with the palette-only theme and adds no visible delay beyond the 100 ms budget.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual in Rex: selection and status bar shading match the terminal theme. After switching the Rex theme between light and dark and restarting `asn`, it still looks right.
+- [x] `cargo test`
+- [ ] (Deferred to Checkpoint B, which needs the T7 UI. The query itself is confirmed working in Rex.) Manual in Rex: selection and status bar shading match the terminal theme. After switching the Rex theme between light and dark and restarting `asn`, it still looks right.
 
 **Dependencies:** T4
 

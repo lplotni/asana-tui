@@ -225,7 +225,7 @@ asn project add <task-gid> <project-gid> [--section GID]
 - [ ] **Explicit mark-read is what people want.** Test: dogfood. The alternative is to auto-mark on open.
 - [x] **Archive is `E` in the web app** (confirmed by the user). `e` is therefore the mark-read alias, and editing the description moved to `Tab e`.
 - [ ] **`U` moves an item back to the Inbox in the web app.** Test: try it in the web Inbox during T0.
-- [ ] **Our terminals answer color queries.** Test: in Rex (and Ghostty), run `printf '\e]11;?\e\\'; read -rs -t1 -d '\' r; printf '%q\n' "$r"`. A reply like `rgb:1e1e/1e1e/2e2e` means tints will work. If there's no reply, everyone on that terminal gets the palette-only fallback.
+- [x] **Our terminals answer color queries.** Rex: yes, in under 1 ms (checked in T5). Ghostty: not checked yet. Test: in Rex (and Ghostty), run `printf '\e]11;?\e\\'; read -rs -t1 -d '\' r; printf '%q\n' "$r"`. A reply like `rgb:1e1e/1e1e/2e2e` means tints will work. If there's no reply, everyone on that terminal gets the palette-only fallback.
 - [ ] **60 s polling is fresh enough.** Test: ask the dogfooders. The API has no push option.
 
 ## MVP Scope
