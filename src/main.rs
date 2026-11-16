@@ -95,7 +95,18 @@ const DEFAULT_INBOX_LIMIT: u32 = 50;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        // Exit 2 is reserved for auth problems, so usage errors exit 1.
+        Err(err) => {
+            let _ = err.print();
+            return if err.use_stderr() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            };
+        }
+    };
 
     let config = match Config::from_env(|key| std::env::var(key).ok()) {
         Ok(config) => config,
@@ -117,15 +128,26 @@ async fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        Some(Command::Read { gids, unread }) => {
+            match core::mark_read(&client, &config.workspace, &gids, !unread).await {
+                Ok(failed) if failed.is_empty() => ExitCode::SUCCESS,
+                Ok(failed) => {
+                    for gid in failed {
+                        eprintln!("Asana could not update notification {gid}");
+                    }
+                    ExitCode::FAILURE
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
+        }
         other => {
             let what = match other {
                 None => "the TUI",
-                Some(Command::Read { .. }) => "`asn read`",
                 Some(Command::Task { .. }) => "`asn task`",
                 Some(Command::Comment { .. }) => "`asn comment`",
                 Some(Command::Desc { .. }) => "`asn desc`",
                 Some(Command::Project { .. }) => "`asn project`",
-                Some(Command::Inbox { .. }) => unreachable!(),
+                Some(Command::Inbox { .. } | Command::Read { .. }) => unreachable!(),
             };
             eprintln!("{what} is not implemented yet");
             ExitCode::FAILURE

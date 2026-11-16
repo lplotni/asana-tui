@@ -75,20 +75,36 @@ impl Client {
         }
     }
 
-    /// GET `path` and decode the JSON body. A 429 is retried once after
-    /// `Retry-After`; a second 429 is `RateLimited`.
+    /// GET `path` and decode the JSON body.
     pub(crate) async fn get<T: DeserializeOwned>(
         &self,
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, ApiError> {
+        let url = format!("{}{path}", self.base_url);
+        self.send(|| self.http.get(&url).query(query)).await
+    }
+
+    /// POST `body` as JSON to `path` and decode the JSON response.
+    pub(crate) async fn post<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<T, ApiError> {
+        let url = format!("{}{path}", self.base_url);
+        self.send(|| self.http.post(&url).json(body)).await
+    }
+
+    /// Sends the request built by `request` with auth. A 429 is retried once
+    /// after `Retry-After`; a second 429 is `RateLimited`.
+    async fn send<T: DeserializeOwned>(
+        &self,
+        request: impl Fn() -> reqwest::RequestBuilder,
+    ) -> Result<T, ApiError> {
         let mut retried = false;
         loop {
-            let response = self
-                .http
-                .get(format!("{}{path}", self.base_url))
+            let response = request()
                 .bearer_auth(&self.token)
-                .query(query)
                 .send()
                 .await
                 .map_err(network)?;

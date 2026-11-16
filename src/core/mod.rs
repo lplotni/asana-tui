@@ -1,6 +1,6 @@
 //! Operations shared by the CLI and the TUI.
 
-use crate::api::notifications::Notification;
+use crate::api::notifications::{MARK_BATCH, Notification};
 use crate::api::{ApiError, Client};
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
@@ -47,4 +47,23 @@ fn workspace_hint(err: ApiError) -> ApiError {
         },
         other => other,
     }
+}
+
+/// Marks notifications read (or unread) in batches of [`MARK_BATCH`].
+/// Returns every GID Asana could not update. No GIDs means no requests.
+pub async fn mark_read(
+    client: &Client,
+    workspace: &str,
+    gids: &[String],
+    read: bool,
+) -> Result<Vec<String>, ApiError> {
+    let mut failed = Vec::new();
+    for batch in gids.chunks(MARK_BATCH) {
+        let batch_failed = client
+            .mark_notifications(workspace, batch, read)
+            .await
+            .map_err(workspace_hint)?;
+        failed.extend(batch_failed);
+    }
+    Ok(failed)
 }

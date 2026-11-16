@@ -71,3 +71,11 @@ fn failing_token_cmd_exits_2_without_echoing_its_stdout() {
     assert!(!stderr(&output).contains("leaked-token"));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("leaked-token"));
 }
+
+#[test]
+fn usage_errors_exit_1_not_the_auth_code_2() {
+    let output = asn(&["read"], &[]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("NOTIFICATION_GID"));
+}

@@ -66,3 +66,35 @@ impl Client {
         self.get("/users/me/notifications", &query).await
     }
 }
+
+/// At most this many GIDs per `markRead`/`markUnread` call (API limit).
+pub const MARK_BATCH: usize = 50;
+
+impl Client {
+    /// Marks up to [`MARK_BATCH`] notifications read (or unread). Returns the
+    /// GIDs Asana could not update.
+    pub async fn mark_notifications(
+        &self,
+        workspace: &str,
+        gids: &[String],
+        read: bool,
+    ) -> Result<Vec<String>, ApiError> {
+        #[derive(Deserialize)]
+        struct Response {
+            data: MarkResult,
+        }
+        #[derive(Deserialize)]
+        struct MarkResult {
+            failed_gids: Vec<String>,
+        }
+
+        let endpoint = if read { "markRead" } else { "markUnread" };
+        let body = serde_json::json!({
+            "data": { "workspace": workspace, "notification_gids": gids }
+        });
+        let response: Response = self
+            .post(&format!("/users/me/notifications/{endpoint}"), &body)
+            .await?;
+        Ok(response.data.failed_gids)
+    }
+}

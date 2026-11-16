@@ -45,12 +45,12 @@ T0 API spike + fixtures
 ### Phase 1: Scriptable core
 - [x] T1: Cargo scaffold, env config, error and exit-code contract
 - [x] T2: API client and `asn inbox`
-- [ ] T3: `asn read` (mark read/unread, batched)
+- [x] T3: `asn read` (mark read/unread, batched)
 
 ### Checkpoint A: core works against real Asana
-- [ ] `asn inbox --unread --json | jq '.[].work_objects[0].name'` lists real items
-- [ ] `asn read <gid>` shows as read in the web Inbox, and `--unread` reverts it
-- [ ] `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` are clean
+- [x] `asn inbox --unread --json | jq '.[].work_objects[0].name'` lists real items
+- [x] `asn read <gid>` shows as read in the web Inbox, and `--unread` reverts it
+- [x] `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` are clean
 
 ### Phase 2: TUI foundation
 - [ ] T4: Theme loader (roles, built-ins, user file, NO_COLOR)

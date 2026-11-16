@@ -91,18 +91,18 @@ Add the `Notification` types: unknown enum values stay as strings, and nullable 
 
 **Estimated scope:** M
 
-### - [ ] T3: `asn read` (mark read/unread, batched)
+### - [x] T3: `asn read` (mark read/unread, batched)
 
 **Description:** Add `core::mark_read(gids, read: bool)`, which splits the GIDs into batches of up to 50 and calls `markRead` or `markUnread`, collecting `failed_gids`. Add the `asn read <gid>... [--unread]` command. It exits 1 and lists the failed GIDs on stderr if any fail.
 
 **Acceptance criteria:**
-- [ ] 120 GIDs result in 3 requests of 50, 50 and 20 (wiremock asserts the request bodies).
-- [ ] `failed_gids` from any batch are reported, and the exit code is 1.
-- [ ] Passing zero GIDs is a usage error, and no request is made.
+- [x] 120 GIDs result in 3 requests of 50, 50 and 20 (wiremock asserts the request bodies).
+- [x] `failed_gids` from any batch are reported, and the exit code is 1.
+- [x] Passing zero GIDs is a usage error, and no request is made.
 
 **Verification:**
-- [ ] `cargo test`
-- [ ] Manual: `asn read <gid>` makes the item show as read in the web Inbox, and `--unread` reverts it
+- [x] `cargo test`
+- [x] Manual: `asn read <gid>` makes the item show as read in the web Inbox, and `--unread` reverts it
 
 **Dependencies:** T2
 
@@ -111,8 +111,8 @@ Add the `Notification` types: unknown enum values stay as strings, and nullable 
 **Estimated scope:** S
 
 ## Checkpoint A: core works against real Asana
-- [ ] `asn inbox --unread --json | jq` works on real data. `asn read` round-trips with the web Inbox.
-- [ ] fmt, clippy and tests are clean.
+- [x] `asn inbox --unread --json | jq` works on real data. `asn read` round-trips with the web Inbox.
+- [x] fmt, clippy and tests are clean.
 
 ---
 
