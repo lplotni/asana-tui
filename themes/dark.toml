@@ -1,0 +1,70 @@
+# Fixed dark theme (warm, gruvbox-like). Ignores the terminal's palette.
+
+[text]
+fg = "#ebdbb2"
+bg = "#282828"
+
+[text_muted]
+fg = "#928374"
+
+[border]
+fg = "#504945"
+
+[border_focused]
+fg = "#83a598"
+modifiers = ["bold"]
+
+[title]
+fg = "#83a598"
+modifiers = ["bold"]
+
+[selection]
+bg = "#3c3836"
+modifiers = ["bold"]
+
+[visual_selection]
+bg = "#504945"
+
+[unread_marker]
+fg = "#83a598"
+modifiers = ["bold"]
+
+[unread_text]
+fg = "#fbf1c7"
+modifiers = ["bold"]
+
+[actor]
+fg = "#8ec07c"
+
+[timestamp]
+fg = "#928374"
+
+[task_meta]
+fg = "#fabd2f"
+
+[comment_author]
+fg = "#8ec07c"
+modifiers = ["bold"]
+
+[statusbar]
+fg = "#d5c4a1"
+bg = "#32302f"
+
+[statusbar_mode]
+fg = "#282828"
+bg = "#83a598"
+modifiers = ["bold"]
+
+[keyhint]
+fg = "#928374"
+
+[toast_success]
+fg = "#b8bb26"
+
+[toast_error]
+fg = "#fb4934"
+modifiers = ["bold"]
+
+[picker_match]
+fg = "#fabd2f"
+modifiers = ["bold"]

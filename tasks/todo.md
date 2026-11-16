@@ -118,7 +118,7 @@ Add the `Notification` types: unknown enum values stay as strings, and nullable 
 
 ## Phase 2: TUI foundation
 
-### - [ ] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
+### - [x] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
 
 **Description:** Implement `Theme` as a map from the fixed `Role` enum (the F8 list) to a ratatui `Style`, with color parsing done by ratatui's `Color::from_str`. Add three built-in TOMLs embedded with `include_str!`. Resolution order:
 1. `NO_COLOR` wins.
@@ -129,12 +129,12 @@ Add the `Notification` types: unknown enum values stay as strings, and nullable 
 The built-in `terminal` theme uses only ANSI colors and `reset` (tints come in T5).
 
 **Acceptance criteria:**
-- [ ] Each built-in parses and defines every `Role` (the test iterates all variants).
-- [ ] A partial user file falls back to its `base`, and an unknown role or color errors with `file:line`.
-- [ ] Under `NO_COLOR`, no style has a fg or bg color, `selection` is `reversed`, and unread is `bold`.
+- [x] Each built-in parses and defines every `Role` (the test iterates all variants).
+- [x] A partial user file falls back to its `base`, and an unknown role or color errors with `file:line`.
+- [x] Under `NO_COLOR`, no style has a fg or bg color, `selection` is `reversed`, and unread is `bold`.
 
 **Verification:**
-- [ ] `cargo test` (unit tests in `theme.rs`, user files written to a temp dir)
+- [x] `cargo test` (unit tests in `theme.rs`, user files written to a temp dir)
 
 **Dependencies:** T1
 

@@ -1,0 +1,70 @@
+# Fixed light theme (soft paper tones). Ignores the terminal's palette.
+
+[text]
+fg = "#3c3836"
+bg = "#fbf8ef"
+
+[text_muted]
+fg = "#7c6f64"
+
+[border]
+fg = "#d5c4a1"
+
+[border_focused]
+fg = "#076678"
+modifiers = ["bold"]
+
+[title]
+fg = "#076678"
+modifiers = ["bold"]
+
+[selection]
+bg = "#ebdbb2"
+modifiers = ["bold"]
+
+[visual_selection]
+bg = "#d5c4a1"
+
+[unread_marker]
+fg = "#076678"
+modifiers = ["bold"]
+
+[unread_text]
+fg = "#282828"
+modifiers = ["bold"]
+
+[actor]
+fg = "#427b58"
+
+[timestamp]
+fg = "#7c6f64"
+
+[task_meta]
+fg = "#b57614"
+
+[comment_author]
+fg = "#427b58"
+modifiers = ["bold"]
+
+[statusbar]
+fg = "#504945"
+bg = "#f2e5bc"
+
+[statusbar_mode]
+fg = "#fbf8ef"
+bg = "#076678"
+modifiers = ["bold"]
+
+[keyhint]
+fg = "#7c6f64"
+
+[toast_success]
+fg = "#79740e"
+
+[toast_error]
+fg = "#9d0006"
+modifiers = ["bold"]
+
+[picker_match]
+fg = "#b57614"
+modifiers = ["bold"]

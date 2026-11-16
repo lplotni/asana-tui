@@ -1,0 +1,67 @@
+# Default theme: only the terminal's own colors (default fg/bg + 16 ANSI
+# colors), so asn matches whatever terminal theme you use. Copy this file and
+# point ASN_THEME at it to customize. Unlisted roles fall back to `base`.
+
+[text]
+
+[text_muted]
+fg = "dark-gray"
+
+[border]
+fg = "dark-gray"
+
+[border_focused]
+fg = "blue"
+modifiers = ["bold"]
+
+[title]
+fg = "blue"
+modifiers = ["bold"]
+
+[selection]
+modifiers = ["reversed"]
+
+[visual_selection]
+fg = "black"
+bg = "cyan"
+
+[unread_marker]
+fg = "blue"
+modifiers = ["bold"]
+
+[unread_text]
+modifiers = ["bold"]
+
+[actor]
+fg = "cyan"
+
+[timestamp]
+fg = "dark-gray"
+
+[task_meta]
+fg = "yellow"
+
+[comment_author]
+fg = "cyan"
+modifiers = ["bold"]
+
+[statusbar]
+
+[statusbar_mode]
+fg = "black"
+bg = "blue"
+modifiers = ["bold"]
+
+[keyhint]
+fg = "dark-gray"
+
+[toast_success]
+fg = "green"
+
+[toast_error]
+fg = "red"
+modifiers = ["bold"]
+
+[picker_match]
+fg = "yellow"
+modifiers = ["bold"]

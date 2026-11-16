@@ -53,7 +53,7 @@ T0 API spike + fixtures
 - [x] `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` are clean
 
 ### Phase 2: TUI foundation
-- [ ] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
+- [x] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
 - [ ] T5: Terminal color query and tints
 - [ ] T6: Keymap table and key parser
 - [ ] T7: TUI Inbox list with navigation
