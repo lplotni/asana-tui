@@ -86,8 +86,8 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - Two-pane layout: the Inbox list on the left, a detail pane for the selected item on the right. Below 100 columns, the panes stack and `Enter` switches between them.
 - Each row shows an unread dot, relative time, actor (`created_by.name` or "Asana"), what happened (`story_resource_subtype`, humanized), and the work object's name.
 - Pagination loads the next page when the cursor reaches the last 10 rows.
-- **Read state:** `i` marks the selection read (the Asana web "archive" key), `u` marks it unread (the Asana web "move to Inbox" key), and `x` toggles. Opening an item does not mark it read. Marking read is an explicit decision, just like archiving mail. In visual mode, `V` followed by `i`, `u` or `x` acts on a range, batched in groups of up to 50 GIDs.
-- **Archive semantics:** the API has no archive, so `i` only marks the item read. With the default unread-only filter, the item then leaves the list, which feels like archiving. In the web Inbox it stays visible, shown as read. The `?` overlay states this next to the `i` key.
+- **Read state:** `e` marks the selection read (the Asana web "archive" key), `u` marks it unread (the Asana web "move to Inbox" key), and `x` toggles. Opening an item does not mark it read. Marking read is an explicit decision, just like archiving mail. In visual mode, `V` followed by `e`, `u` or `x` acts on a range, batched in groups of up to 50 GIDs.
+- **Archive semantics:** the API has no archive, so `e` only marks the item read. With the default unread-only filter, the item then leaves the list, which feels like archiving. In the web Inbox it stays visible, shown as read. The `?` overlay states this next to the `e` key.
 - **Filter:** `f` toggles between unread only and all items (unread only by default).
 - Notifications whose work object is not a task (project, goal, etc.) show compact info only (name, type, `o` opens it in the browser). No actions are available on them in the MVP.
 
@@ -103,7 +103,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 
 ### F4. Edit description
 
-- `e` opens `$EDITOR` pre-filled with the current `notes`. If the content changed after save and quit, it's sent with `PUT notes`.
+- `Tab e` opens `$EDITOR` pre-filled with the current `notes`. If the content changed after save and quit, it's sent with `PUT notes`.
 - **Rich-text guard:** writing `notes` replaces `html_notes` and drops all formatting. If `html_notes` contains anything beyond plain paragraphs (links, lists, bold, mentions), the user must confirm in the TUI with `This will remove formatting. Continue? (y/N)` before saving.
 - **Concurrency guard:** before writing, re-fetch `modified_at`. If it changed while the editor was open, abort and show a "task changed remotely" toast, keeping the edited text in the temp file so nothing is lost.
 
@@ -127,11 +127,11 @@ Vim is the primary keymap. Asana web Inbox shortcuts are aliases that are always
 | `Esc` | back: close overlay → leave detail → (root) nothing | vim and Asana ("collapse pane") |
 | `/`, `n` / `N` | filter-search the current list, next / previous match | vim |
 | `V` | visual line mode (range selection) | vim |
-| `i` | mark read ("archive") | Asana |
+| `e` | mark read ("archive") | Asana |
 | `u` | mark unread ("move to Inbox") | Asana |
 | `x` | toggle read | asn |
 | `c`, `Tab c` | comment | asn, Asana |
-| `e` | edit description in `$EDITOR` | asn |
+| `Tab e` | edit description in `$EDITOR` | asn |
 | `p`, `Tab p` | add to project | asn, Asana |
 | `Tab i` | go to Inbox (home) | Asana |
 | `o` | open in browser | asn |
@@ -215,7 +215,8 @@ asn project add <task-gid> <project-gid> [--section GID]
 - [ ] **Plain-text descriptions are acceptable.** Test: in the same dump, fetch tasks and count how many `html_notes` contain formatting. If most do, the guard fires constantly and F4 needs HTML↔Markdown conversion (a substantial addition to scope).
 - [ ] **`$EDITOR` round-trips feel fast enough for comments.** Test: dogfood for a week. If short replies feel heavy, add a single-line inline prompt (`C`) in v0.2.
 - [ ] **Explicit mark-read is what people want.** Test: dogfood. The alternative is to auto-mark on open.
-- [ ] **The Asana alias keys match the current web app.** Third-party lists disagree (Archive is `I` or `E`; the Archive tab is `S` or `D`), and the official page couldn't be checked. Test: try `i`, `e` and `u` in the web Inbox before step 2 and adjust the table.
+- [x] **Archive is `E` in the web app** (confirmed by the user). `e` is therefore the mark-read alias, and editing the description moved to `Tab e`.
+- [ ] **`U` moves an item back to the Inbox in the web app.** Test: try it in the web Inbox during T0.
 - [ ] **Our terminals answer color queries.** Test: in Rex (and Ghostty), run `printf '\e]11;?\e\\'; read -rs -t1 -d '\' r; printf '%q\n' "$r"`. A reply like `rgb:1e1e/1e1e/2e2e` means tints will work. If there's no reply, everyone on that terminal gets the palette-only fallback.
 - [ ] **60 s polling is fresh enough.** Test: ask the dogfooders. The API has no push option.
 
@@ -258,6 +259,5 @@ One `TestBackend` render snapshot per screen with the `terminal` theme, plus one
 
 ## Open Questions
 
-1. **Publishing name:** the binary is `asn` (decided). Check crates.io and Homebrew for a free package name before the first release. The package name can differ from the binary name.
-2. **`e` conflict:** if your Asana uses `E` (not `I`) for archive, `e` clashes with edit description. The spec keeps `e` for editing and `i` for archive. If `E` is what your fingers know, edit would move to `Tab e`.
-3. **Should a mutation mark the notification read?** For example, should commenting on a task mark its notification read? The spec says no (explicit only). Confirm while dogfooding.
+1. **Publishing name:** the binary is `asn` and the repo lives under GitHub user `lplotni` (both decided). Check crates.io and Homebrew for a free package name before the first release. The package name can differ from the binary name.
+2. **Should a mutation mark the notification read?** For example, should commenting on a task mark its notification read? The spec says no (explicit only). Confirm while dogfooding.
