@@ -8,12 +8,12 @@ use ratatui::widgets::{
 };
 
 use super::app::{App, Detail, Focus, Sizes};
-use super::detail;
-use super::format::{describe, relative_time};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
+use crate::present::detail;
+use crate::present::format::{describe, relative_time};
 
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
@@ -90,6 +90,21 @@ fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
     if columns == 2 {
         frame.render_widget(Paragraph::new(second.to_vec()), right);
     }
+}
+
+/// Colors role-tagged lines with `theme`.
+fn styled(lines: Vec<detail::TextLine>, theme: &Theme) -> Vec<Line<'static>> {
+    lines
+        .into_iter()
+        .map(|segments| {
+            Line::from(
+                segments
+                    .into_iter()
+                    .map(|s| Span::styled(s.text, theme.style(s.role)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect()
 }
 
 /// The keys that work right now, as (keys, what they do), most useful first.
@@ -469,7 +484,7 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
     let name = n.work_objects.first().map_or("-", |o| o.name.as_str());
     let title = || Line::styled(name.to_owned(), theme.style(Role::Title));
     let lines = match (app.selected_task_gid(), app.selected_detail()) {
-        (Some(_), Some(Detail::Loaded(detail))) => detail::lines(detail, theme, width, now),
+        (Some(_), Some(Detail::Loaded(detail))) => styled(detail::lines(detail, width, now), theme),
         (Some(_), Some(Detail::Failed(message))) => vec![
             title(),
             Line::default(),
@@ -580,6 +595,10 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
     use crate::tui::app::Msg;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -922,7 +941,7 @@ mod tests {
     fn help_lists_every_key_binding_once_per_command() {
         use crate::tui::keys::{BINDINGS, sequence_label};
         let lines = help_lines(&terminal_theme());
-        let text: String = lines.iter().map(|l| detail::plain(l) + "\n").collect();
+        let text: String = lines.iter().map(|l| line_text(l) + "\n").collect();
 
         for binding in BINDINGS {
             assert!(
@@ -943,7 +962,7 @@ mod tests {
     fn help_marks_asana_web_keys() {
         let text: String = help_lines(&terminal_theme())
             .iter()
-            .map(|l| detail::plain(l) + "\n")
+            .map(|l| line_text(l) + "\n")
             .collect();
 
         let e_line = text

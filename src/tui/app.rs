@@ -3,13 +3,10 @@
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
-use super::detail;
-use super::format;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
-use super::theme::Theme;
+use crate::present::{detail, format};
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 use crate::api::notifications::Notification;
 use crate::api::tasks::{Membership, Named, TaskStory};
@@ -702,11 +699,9 @@ impl App {
 
     /// The last scroll position that still fills the detail pane.
     fn detail_max_scroll(&self) -> usize {
-        static COUNTING_THEME: OnceLock<Theme> = OnceLock::new();
         match self.selected_detail() {
             Some(Detail::Loaded(detail)) => {
-                let theme = COUNTING_THEME.get_or_init(Theme::no_color);
-                detail::lines(detail, theme, self.sizes.detail_width, self.now)
+                detail::lines(detail, self.sizes.detail_width, self.now)
                     .len()
                     .saturating_sub(self.sizes.detail_rows)
             }

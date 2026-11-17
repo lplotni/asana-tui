@@ -2,8 +2,6 @@
 //! in [`app`], drawing in [`ui`].
 
 pub mod app;
-pub mod detail;
-pub mod format;
 pub mod keys;
 pub mod picker;
 pub mod theme;

@@ -2,15 +2,13 @@
 
 use super::terminal_safe;
 use crate::core::TaskDetail;
-use crate::tui::detail;
-use crate::tui::theme::Theme;
+use crate::present::detail;
 
 /// Width used for text output.
 const TEXT_WIDTH: usize = 80;
 
 pub fn render_text(detail: &TaskDetail, now: i64) -> String {
-    let theme = Theme::no_color();
-    detail::lines(detail, &theme, TEXT_WIDTH, now)
+    detail::lines(detail, TEXT_WIDTH, now)
         .iter()
         .map(|line| terminal_safe(&detail::plain(line)) + "\n")
         .collect()

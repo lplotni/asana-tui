@@ -17,7 +17,7 @@ fn inbox(n: usize, read: impl Fn(usize) -> bool) -> Vec<Notification> {
             };
             n.work_objects[0].gid = format!("t{i}");
             // Newest first, one minute apart.
-            n.created_at = crate::tui::format::timestamp(1_794_834_000 - 60 * i as i64);
+            n.created_at = crate::present::format::timestamp(1_794_834_000 - 60 * i as i64);
             n
         })
         .collect()
@@ -390,7 +390,7 @@ fn a_refresh_merges_with_the_older_notifications_already_loaded() {
         .collect();
     let mut newest = fresh[0].clone();
     newest.gid = "new".into();
-    newest.created_at = crate::tui::format::timestamp(1_794_834_000 + 60);
+    newest.created_at = crate::present::format::timestamp(1_794_834_000 + 60);
     fresh.insert(0, newest);
 
     app.update(Msg::InboxLoaded(Ok((fresh, Some("fresh-offset".into())))));
@@ -716,13 +716,7 @@ fn capital_g_scrolls_the_detail_to_its_last_page() {
     let mut app = loaded(3, 10);
     loaded_detail(&mut app, "t0");
     keys(&mut app, "l");
-    let total = crate::tui::detail::lines(
-        &task_detail(),
-        &crate::tui::theme::Theme::no_color(),
-        60,
-        app.now,
-    )
-    .len();
+    let total = crate::present::detail::lines(&task_detail(), 60, app.now).len();
 
     keys(&mut app, "G");
 

@@ -12,48 +12,7 @@ use toml::Spanned;
 use super::tint::{self, Rgb, TINTS};
 use toml::de::{DeTable, DeValue};
 
-macro_rules! roles {
-    ($($variant:ident => $name:literal),* $(,)?) => {
-        /// Every styled element of the UI.
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub enum Role { $($variant),* }
-
-        impl Role {
-            pub const ALL: &[Role] = &[$(Role::$variant),*];
-
-            /// The role's key in theme files.
-            pub fn name(self) -> &'static str {
-                match self { $(Role::$variant => $name),* }
-            }
-
-            fn from_name(name: &str) -> Option<Role> {
-                match name { $($name => Some(Role::$variant),)* _ => None }
-            }
-        }
-    };
-}
-
-roles! {
-    Text => "text",
-    TextMuted => "text_muted",
-    Border => "border",
-    BorderFocused => "border_focused",
-    Title => "title",
-    Selection => "selection",
-    VisualSelection => "visual_selection",
-    UnreadMarker => "unread_marker",
-    UnreadText => "unread_text",
-    Actor => "actor",
-    Timestamp => "timestamp",
-    TaskMeta => "task_meta",
-    CommentAuthor => "comment_author",
-    Statusbar => "statusbar",
-    StatusbarMode => "statusbar_mode",
-    Keyhint => "keyhint",
-    ToastSuccess => "toast_success",
-    ToastError => "toast_error",
-    PickerMatch => "picker_match",
-}
+pub use crate::present::Role;
 
 /// A theme file problem, reported as `source:line: message`.
 #[derive(Debug, PartialEq, Eq)]

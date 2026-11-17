@@ -1,27 +1,45 @@
-//! The task detail pane's content: everything the web task pane shows that
-//! the API gives us, as wrapped, styled lines. `asn task` prints the same
-//! lines without styles.
+//! The task view's content: everything the web task pane shows that the API
+//! gives us, as wrapped lines of role-tagged text. The TUI colors them;
+//! `asn task` prints them as plain text.
 
-use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
+use super::Role;
 use super::format::{is_before_today, relative_time, short_date};
-use super::theme::{Role, Theme};
 use crate::core::TaskDetail;
 
+/// A run of text with one role.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Segment {
+    pub text: String,
+    pub role: Role,
+}
+
+impl Segment {
+    pub fn new(text: impl Into<String>, role: Role) -> Segment {
+        Segment {
+            text: text.into(),
+            role,
+        }
+    }
+}
+
+/// One display line.
+pub type TextLine = Vec<Segment>;
+
 /// The detail pane for `detail`, wrapped to `width` columns.
-pub fn lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> Vec<Line<'static>> {
+pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
     let task = &detail.task;
     let width = width.max(10);
-    let mut out: Vec<Line<'static>> = Vec::new();
-    let push = |text: &str, role: Role, out: &mut Vec<Line<'static>>| {
+    let mut out: Vec<TextLine> = Vec::new();
+    let push = |text: &str, role: Role, out: &mut Vec<TextLine>| {
         for line in wrap(text, width) {
-            out.push(Line::styled(line, theme.style(role)));
+            out.push(vec![Segment::new(line, role)]);
         }
     };
 
     push(&task.name, Role::Title, &mut out);
-    out.extend(status_lines(detail, theme, width, now));
+    out.extend(status_lines(detail, width, now));
     for membership in &task.memberships {
         let place = match &membership.section {
             Some(section) => format!("{} › {}", membership.project.name, section.name),
@@ -53,7 +71,7 @@ pub fn lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> Vec<
         push(&format!("{}: {value}", field.name), Role::Text, &mut out);
     }
 
-    out.push(Line::default());
+    out.push(Vec::new());
     push("Description", Role::Title, &mut out);
     if task.notes.trim().is_empty() {
         push("No description", Role::TextMuted, &mut out);
@@ -61,34 +79,34 @@ pub fn lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> Vec<
         push(task.notes.trim_end(), Role::Text, &mut out);
     }
 
-    out.push(Line::default());
-    let mut header = vec![Span::styled(
+    out.push(Vec::new());
+    let mut header = vec![Segment::new(
         format!("Comments ({})", detail.comments.len()),
-        theme.style(Role::Title),
+        Role::Title,
     )];
     if detail.activity_count > 0 {
-        header.push(Span::styled(
+        header.push(Segment::new(
             format!(" · {} updates not shown", detail.activity_count),
-            theme.style(Role::TextMuted),
+            Role::TextMuted,
         ));
     }
-    out.push(Line::from(header));
+    out.push(header);
     for comment in &detail.comments {
-        out.push(Line::default());
+        out.push(Vec::new());
         let author = comment
             .created_by
             .as_ref()
             .map_or("Asana", |a| a.name.as_str());
-        out.push(Line::from(vec![
-            Span::styled(author.to_owned(), theme.style(Role::CommentAuthor)),
-            Span::styled(
+        out.push(vec![
+            Segment::new(author.to_owned(), Role::CommentAuthor),
+            Segment::new(
                 format!(" · {}", relative_time(&comment.created_at, now)),
-                theme.style(Role::Timestamp),
+                Role::Timestamp,
             ),
-        ]));
+        ]);
         let text = comment.text.as_deref().unwrap_or("").trim_end();
         for line in wrap(text, width.saturating_sub(2)) {
-            out.push(Line::styled(format!("  {line}"), theme.style(Role::Text)));
+            out.push(vec![Segment::new(format!("  {line}"), Role::Text)]);
         }
     }
     out
@@ -96,19 +114,18 @@ pub fn lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> Vec<
 
 /// "☐ Incomplete · Ada · Due Wed 4 Nov (overdue)", breaking between the
 /// `·`-separated parts when it doesn't fit in `width`.
-fn status_lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> Vec<Line<'static>> {
+fn status_lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
     let task = &detail.task;
-    let meta = theme.style(Role::TaskMeta);
-    let mut parts: Vec<Vec<Span<'static>>> = vec![vec![if task.completed {
-        Span::styled("✓ Completed", theme.style(Role::ToastSuccess))
+    let mut parts: Vec<Vec<Segment>> = vec![vec![if task.completed {
+        Segment::new("✓ Completed", Role::ToastSuccess)
     } else {
-        Span::styled("☐ Incomplete", meta)
+        Segment::new("☐ Incomplete", Role::TaskMeta)
     }]];
     let assignee = task
         .assignee
         .as_ref()
         .map_or("Unassigned", |a| a.name.as_str());
-    parts.push(vec![Span::styled(assignee.to_owned(), meta)]);
+    parts.push(vec![Segment::new(assignee.to_owned(), Role::TaskMeta)]);
 
     let due = task.due_at.as_deref().or(task.due_on.as_deref());
     let due_text = due.map(|d| {
@@ -126,28 +143,28 @@ fn status_lines(detail: &TaskDetail, theme: &Theme, width: usize, now: i64) -> V
         (None, None) => None,
     };
     if let Some(dates) = dates {
-        let mut part = vec![Span::styled(dates, meta)];
+        let mut part = vec![Segment::new(dates, Role::TaskMeta)];
         if !task.completed && due.is_some_and(|d| is_before_today(d, now)) {
-            part.push(Span::styled(" (overdue)", theme.style(Role::ToastError)));
+            part.push(Segment::new(" (overdue)", Role::ToastError));
         }
         parts.push(part);
     }
 
-    let mut lines: Vec<Vec<Span<'static>>> = vec![Vec::new()];
+    let mut lines: Vec<Vec<Segment>> = vec![Vec::new()];
     for part in parts {
-        let part_width: usize = part.iter().map(|s| s.content.width()).sum();
+        let part_width: usize = part.iter().map(|s| s.text.width()).sum();
         let current = lines.last_mut().expect("at least one line");
-        let current_width: usize = current.iter().map(|s| s.content.width()).sum();
+        let current_width: usize = current.iter().map(|s| s.text.width()).sum();
         if current.is_empty() {
             current.extend(part);
         } else if current_width + 3 + part_width <= width {
-            current.push(Span::styled(" · ", meta));
+            current.push(Segment::new(" · ", Role::TaskMeta));
             current.extend(part);
         } else {
             lines.push(part);
         }
     }
-    lines.into_iter().map(Line::from).collect()
+    lines
 }
 
 /// Word-wraps `text` to `width` columns, keeping blank lines. Words longer
@@ -196,15 +213,15 @@ fn split_long(word: &str, width: usize) -> Vec<String> {
 }
 
 /// A line's text without styles.
-pub fn plain(line: &Line<'_>) -> String {
-    line.spans.iter().map(|s| s.content.as_ref()).collect()
+pub fn plain(line: &TextLine) -> String {
+    line.iter().map(|s| s.text.as_str()).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::api::tasks::{Task, TaskStory};
-    use crate::tui::format::parse_timestamp;
+    use crate::present::format::parse_timestamp;
 
     fn now() -> i64 {
         parse_timestamp("2026-11-16T13:00:00.000Z").unwrap()
@@ -229,10 +246,7 @@ mod tests {
     }
 
     fn text(detail: &TaskDetail, width: usize) -> Vec<String> {
-        lines(detail, &Theme::builtin("terminal").unwrap(), width, now())
-            .iter()
-            .map(plain)
-            .collect()
+        lines(detail, width, now()).iter().map(plain).collect()
     }
 
     #[test]
