@@ -2,7 +2,7 @@
 
 Rust, one crate (library plus the `asn` binary). The TUI (ratatui) and a scriptable CLI share one core. Public repo: `lplotni/asana-tui`, MIT.
 
-Read first: [README](README.md) (usage), [docs/SPEC.md](docs/SPEC.md) (v0.1, F1–F8), [docs/SPEC-board.md](docs/SPEC-board.md) (v0.2, F9–F17), [docs/decisions/](docs/decisions/README.md) (ADRs: why it's built this way), and [tasks/plan.md](tasks/plan.md) / [tasks/todo.md](tasks/todo.md) (current plan; v0.1's is in `tasks/v0.1/`).
+Read first: [README](README.md) (usage), [docs/SPEC.md](docs/SPEC.md) (v0.1, F1–F8), [docs/SPEC-board.md](docs/SPEC-board.md) (v0.2, F9–F17, F22–F23), [docs/SPEC-skill.md](docs/SPEC-skill.md) (Claude Code skill, F18–F21), [docs/decisions/](docs/decisions/README.md) (ADRs: why it's built this way), and [tasks/plan.md](tasks/plan.md) / [tasks/todo.md](tasks/todo.md) (current plan; v0.1's is in `tasks/v0.1/`).
 
 ## Commands
 

@@ -153,6 +153,8 @@ Added after F15 at the user's request. `Tab a` is Asana's own shortcut, reserved
 - **CLI:** `asn task assign <task-gid> <user-gid | me | none>`.
 - **CLI layout:** `asn task <gid> [--json]` keeps working unchanged. `assign` and `done` are subcommands next to it, and task GIDs are numeric, so they can't clash.
 
+F18–F21 (asn in Claude Code) are specified in [SPEC-skill.md](SPEC-skill.md).
+
 ## Feature Spec — Config file and completion animation (F22–F23)
 
 Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with [ADR-010](decisions/ADR-010-config-file-without-secrets.md).

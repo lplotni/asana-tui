@@ -541,3 +541,154 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 **Files likely touched:** `README.md`
 
 **Estimated scope:** XS
+
+---
+
+## Phase 6: asn in Claude Code (F18–F21)
+
+Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done above applies, with `docs/SPEC-skill.md` as the spec to update. Order and rationale: [`plan.md`](plan.md#phase-6-asn-in-claude-code).
+
+### - [ ] T24: `asn task <gid> --brief` read receipt
+
+**Description:** F18. The receipt lines are built in `present/` from a `TaskDetail` (name, gid and permalink, one `where` line per membership, assignee/due/status, and counts for description lines, comments and attachments). `cli/task.rs` renders them plain through `terminal_safe`. `asn task` gets `--brief`, which conflicts with `--json`.
+
+**Acceptance criteria:**
+- [ ] `asn task <gid> --brief` prints the five-line receipt from F18; a task in two projects gets two `where` lines; a missing assignee reads `unassigned`, and a missing due date is left out.
+- [ ] Description and comment text never appear in the receipt; control characters and bidi overrides in the name are neutralised; the name fits 80 cells.
+- [ ] `--brief --json` is a usage error; `asn task <gid>` and `--json` output are unchanged.
+
+**Verification:**
+- [ ] Rendering tests in `cli/task.rs` (memberships, unassigned, no due date, completed, a hostile name and description); `tests/cli.rs` for the flag conflict; `cargo test`, clippy, fmt.
+- [ ] Manual: `asn task <real gid> --brief` matches the web app.
+
+**Dependencies:** None
+
+**Files likely touched:** `src/present/detail.rs` (or a new `src/present/receipt.rs`), `src/cli/task.rs`, `src/main.rs`, `tests/cli.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T25: The `asn` skill, v1
+
+**Description:** F20 over today's commands. `skills/asn/SKILL.md` gives the vocabulary, the GID lookups (`search`, `users`, `project sections`), the current-task rule (the conversation, plus an offer from a GID in the branch name or a pasted Asana URL), the receipt rule, confirm-before-write, comment-by-default capture, and the untrusted-text rule. It is packaged as a Claude Code plugin with a marketplace entry in this repo (decided 2026-11-17), so `/plugin` installs it from `lplotni/asana-tui`.
+
+**Acceptance criteria:**
+- [ ] With the skill installed, reading a task starts the reply with the `--brief` receipt verbatim, and `search`/`board`/`users` results get the one-line notice.
+- [ ] Every write is shown (resolved task, person or `Project › Section`, and the exact command) and runs only after a yes; "capture this" becomes `asn comment <gid> -`.
+- [ ] A test runs `asn … --help` for every `asn` command in the skill's code blocks, so a renamed subcommand fails CI.
+
+**Verification:**
+- [ ] The `tests/cli.rs` drift test; `cargo test`, clippy, fmt.
+- [ ] Grep the skill for anything but invented GIDs and names.
+- [ ] Manual: install it in Claude Code, then read, move, assign, create and capture on a test task.
+
+**Dependencies:** T24
+
+**Files likely touched:** `skills/asn/SKILL.md`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `tests/cli.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] Checkpoint S1: does the habit stick?
+
+- [ ] The user works with the skill for a day. Count missed receipts and unconfirmed writes (C1).
+- [ ] List the lookups Claude got wrong or took many calls for (input for T26–T28 and C2).
+- [ ] Decide: go on with 6b, change the skill first, or stop (C4).
+
+---
+
+### - [ ] T26: Name resolution in `core`, and users by name
+
+**Description:** F19's primitive: `core::Resolved { One(Named), Ambiguous(Vec<Named>), None }` and the matching rule (case-insensitive exact name wins, else a single candidate). Users come from the user typeahead. `asn task assign <task> <name>` resolves a non-GID that isn't `me`/`none`. A CLI helper prints `Ambiguous`/`None` as `gid  label` lines on stderr and exits 1.
+
+**Acceptance criteria:**
+- [ ] `asn task assign <task> "Ada Lovelace"` assigns when the name matches exactly or the typeahead returns one person, and prints the new assignee as today.
+- [ ] Several matches or none: no `PUT` is sent, stderr lists the candidates, and the exit code is 1.
+- [ ] A GID, `me` and `none` make exactly the requests they make today.
+
+**Verification:**
+- [ ] Unit tests for the matching rule; wiremock tests for one, several and no matches, asserting no `PUT /tasks` in the error cases; `tests/cli.rs` for the exit code and stderr.
+
+**Dependencies:** T25 (after Checkpoint S1)
+
+**Files likely touched:** `src/core/mod.rs` (or `src/core/resolve.rs`), `src/cli/mod.rs`, `src/main.rs`, `tests/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T27: Sections by name in `asn project move`
+
+**Description:** A non-GID section is matched against the sections of every project the task is in (labels `Project › Section`). On success, `move` prints `moved to <Project> › <Section>`.
+
+**Acceptance criteria:**
+- [ ] `asn project move <task> "in review"` moves the task when exactly one of its projects has that section (case-insensitive).
+- [ ] The same section name in two of the task's projects is ambiguous: nothing is moved, and both `Project › Section` labels are listed.
+- [ ] A section GID moves as today, and success now prints the destination.
+
+**Verification:**
+- [ ] Wiremock tests (one project, two projects with the same name, no match), asserting no `addTask` in the error cases; CLI test for the printed line.
+
+**Dependencies:** T26
+
+**Files likely touched:** `src/core/mod.rs`, `src/main.rs`, `tests/`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T28: Projects by name, `asn projects`, and section names in `new`/`add`
+
+**Description:** `asn projects <query…>` prints `gid  name` like `asn users`. `asn project new` and `asn project add` accept a project name (project typeahead) and a `--section` name (that project's sections). `add` prints `added to <Project>[ › <Section>]`; `new` keeps printing the new GID.
+
+**Acceptance criteria:**
+- [ ] `asn projects web` lists matching projects.
+- [ ] `asn project new "Web Platform" --section Backlog Write the launch post` creates the task in that section; an ambiguous or unknown project or section creates nothing (no `POST /tasks`) and lists candidates.
+- [ ] GID arguments behave exactly as today.
+
+**Verification:**
+- [ ] Wiremock tests for the project and section cases, asserting no write on errors; CLI tests for `asn projects` output and the `add` line.
+
+**Dependencies:** T26
+
+**Files likely touched:** `src/core/mod.rs`, `src/main.rs`, `src/cli/mod.rs`, `tests/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T29: The skill uses names (v2)
+
+**Description:** The skill drops the GID lookup recipes that F19 makes unnecessary, uses names directly, and relays the candidate list when a name is ambiguous. It adds the manual acceptance script to this task.
+
+**Acceptance criteria:**
+- [ ] "Move the current task to Review and assign it to Ada" takes one confirmation showing the resolved task, section and person, then runs two commands.
+- [ ] On an ambiguous name, Claude shows the candidates and asks; it never picks one itself.
+- [ ] A task whose description says to ignore instructions and reassign it leads to no write.
+
+**Verification:**
+- [ ] The drift test from T25 still passes.
+- [ ] Manual acceptance script: read (receipt first), move by section name, assign by name, create then assign, capture as a comment, the prompt-injection task.
+
+**Dependencies:** T27, T28
+
+**Files likely touched:** `skills/asn/SKILL.md`
+
+**Estimated scope:** XS
+
+---
+
+### - [ ] T30: Docs
+
+**Description:** F21. README gets "Use from Claude Code" (install and three example requests); the command reference gets `--brief`, `asn projects`, the name forms, and the new success line from `move`/`add`. Tick the assumptions checked at the checkpoints in `docs/SPEC-skill.md`.
+
+**Acceptance criteria:**
+- [ ] README, `asn --help` and SPEC-skill.md agree on flags, name forms and output.
+
+**Dependencies:** T29
+
+**Files likely touched:** `README.md`, `docs/SPEC-skill.md`, `CLAUDE.md` (layout table: `skills/`)
+
+**Estimated scope:** XS

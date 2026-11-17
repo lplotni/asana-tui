@@ -1,6 +1,6 @@
 # Implementation Plan: asn v0.2 (Board view)
 
-Source of truth for behavior: [`docs/SPEC-board.md`](../docs/SPEC-board.md) (F9–F13). Tasks with full acceptance criteria are in [`tasks/todo.md`](todo.md). The v0.1 plan is archived in [`tasks/v0.1/`](v0.1/plan.md).
+Source of truth for behavior: [`docs/SPEC-board.md`](../docs/SPEC-board.md) (F9–F17, F22–F23) and, for Phase 6, [`docs/SPEC-skill.md`](../docs/SPEC-skill.md) (F18–F21). Tasks with full acceptance criteria are in [`tasks/todo.md`](todo.md). The v0.1 plan is archived in [`tasks/v0.1/`](v0.1/plan.md).
 
 ## Overview
 
@@ -89,6 +89,71 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T21: `asn init` interview, and first-run setup in the TUI
 - [x] T22: Completion animation on board cards (frame timer only while animating)
 - [x] T23: Docs
+
+### Phase 6: asn in Claude Code (F18–F21, see below)
+
+#### 6a: Receipt and a first skill (de-risk the model, C1/C4)
+- [ ] T24: `asn task <gid> --brief` read receipt (F18)
+- [ ] T25: The `asn` skill, v1 over GIDs and the existing lookup commands (F20)
+
+#### Checkpoint S1: does the habit stick?
+- [ ] The user works with the skill for a day: count receipt and confirmation misses (C1), and note which lookups Claude gets wrong (input for C2)
+- [ ] Human review: go on with names (6b), change the skill, or stop (C4)
+
+#### 6b: Names where GIDs are taken (F19)
+- [ ] T26: Name resolution in `core`, and users by name in `asn task assign`
+- [ ] T27: Sections by name in `asn project move`
+- [ ] T28: Projects by name, `asn projects`, and section names in `project new`/`add`
+- [ ] T29: The skill uses names (v2)
+
+#### Checkpoint S2: acceptance
+- [ ] The manual acceptance script (T29) passes, including the prompt-injection task
+- [ ] Success criteria 1–6 of SPEC-skill.md hold
+
+#### 6c: Ship
+- [ ] T30: Docs (F21)
+
+## Phase 6: asn in Claude Code
+
+### Architecture Decisions
+
+- **The skill comes before the names, not after.** The riskiest assumption is the model (does Claude keep to receipt-first and confirm-before-write, C1, and is the skill used at all, C4), not the Rust. So a v1 skill ships right after the receipt, over GIDs and today's lookup commands (`search`, `users`, `project sections`). Checkpoint S1 then shows which lookups actually go wrong, and that drives F19. If the skill isn't used, 6b is cut and T24 still stands on its own for scripts.
+- **One resolution primitive.** `core::Resolved { One(Named), Ambiguous(Vec<Named>), None }` and one `resolve(candidates, name)` rule (case-insensitive exact name wins, else a single candidate), used for users, sections and projects. Each kind only supplies its candidates: user typeahead, the sections of the task's or project's projects, project typeahead. The CLI turns `Ambiguous`/`None` into exit 1 with `gid  label` lines on stderr, in one helper.
+- **A GID stays a GID.** An argument of 10+ digits (and `me`/`none` for users) skips resolution, so every existing call makes the same requests as before. Today a non-GID argument is sent to Asana and fails, so no working call changes.
+- **The receipt is `present/` text.** Like the detail pane, the receipt lines are built in `present/` and rendered plain by `cli/task.rs`, so they go through `terminal_safe` like the rest of `asn task`. It reuses `core::task_detail` (same requests as `asn task`; spec open question 3 keeps the counts unless the user decides otherwise).
+- **The skill is content, guarded by one test.** `skills/asn/SKILL.md` can't be unit-tested, but a `tests/cli.rs` test runs `asn <subcommand path> --help` for every `asn …` command in its code blocks, so a renamed subcommand breaks CI rather than the skill.
+
+### Dependency Graph
+
+```
+present receipt + `asn task --brief` ......................... T24
+  └── skill v1 (GIDs, lookups, receipt + confirm rules) ...... T25
+        └── Checkpoint S1 (dogfood a day)
+              └── core::Resolved + users by name ............. T26
+                    ├── sections by name in `move` ........... T27
+                    └── projects by name, `asn projects`,
+                        `--section` names in new/add ......... T28
+                          └── skill v2 + acceptance script ... T29
+                                └── docs ..................... T30
+```
+
+T27 and T28 both only need T26 and touch different commands, so they can run in either order. Everything else is sequential.
+
+### Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Claude drifts from receipt-first or confirm-before-write in long sessions (C1) | High (the trust promise breaks) | Found at Checkpoint S1, before 6b. Next step if it drifts: a `PostToolUse` hook on `asn task` that repeats the rule (ask first: it's config). |
+| A task description tries to steer Claude (prompt injection) | High | The receipt carries no description text, and every write needs a confirmation. A hostile fixture description is in the T29 acceptance script. |
+| The user typeahead doesn't return the exact name in its results | Med | Exact-or-single, never a guess: the worst case is an ambiguity error with candidates. T26 asks for enough results (`count`) to contain an exact match. |
+| The plugin manifest format changes | Low | The skill file doesn't depend on it; only `.claude-plugin/` would change. T25 checks the layout against Claude Code's plugin docs. |
+| `project move`/`add` now print a line, and a script relied on empty output | Low | Called out in the README (T30). Exit codes don't change. |
+| Real names or GIDs end up in the skill's examples (public repo) | Med | Examples use `12000000000000xx` and "Ada Lovelace", like the fixtures. Grep is a T25/T29 verification step. |
+
+### Open Questions (Phase 6)
+
+- ~~Distribution (spec open question 1)~~: decided, a plugin from this repo (2026-11-17).
+- ~~Spec open question 3~~: decided, `--brief` keeps the counts (2026-11-17).
 
 ## Risks and Mitigations
 
