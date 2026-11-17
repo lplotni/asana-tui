@@ -58,6 +58,8 @@ pub enum Cmd {
     SwitchProject,
     /// Open the board of the selected task's project, on that task.
     OpenTaskBoard,
+    /// Name a new task in the selected board column.
+    NewTask,
     OpenInBrowser,
     ToggleFilter,
     Refresh,
@@ -238,6 +240,13 @@ pub const BINDINGS: &[Binding] = &[
         Cmd::OpenTaskBoard,
         Asn,
         "open the task's board",
+    ),
+    bind(
+        Normal,
+        &[Tab, Char('q')],
+        Cmd::NewTask,
+        Asana,
+        "new task on the board",
     ),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),

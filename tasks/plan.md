@@ -66,7 +66,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 3b: New task (F14, added after Checkpoint C)
 - [x] T11: `asn project new` (create in project, then section)
-- [ ] T12: `Tab q` on the board (name prompt, reload, select the new card)
+- [x] T12: `Tab q` on the board (name prompt, reload, select the new card)
 
 ### Phase 4: Ship
 - [x] T9: Help, README and spec updates

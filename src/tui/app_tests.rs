@@ -3068,3 +3068,202 @@ fn the_editor_wraps_long_lines_instead_of_scrolling_sideways() {
         Some(ratatui_textarea::WrapMode::WordOrGlyph)
     );
 }
+
+// --- Tab q: a new task on the board ----------------------------------------
+
+fn tab_q(app: &mut App) -> Vec<Effect> {
+    key(app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(app, "q")
+}
+
+fn created(name: &str, gid: &str, section_error: Option<&str>) -> Msg {
+    Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: Some(named("s1", "Section 1")),
+        name: name.into(),
+        result: Ok((gid.into(), section_error.map(Into::into))),
+    }
+}
+
+/// Project "42"'s board with a new card `gid` at the top of column 1.
+fn board_with_new_card(gid: &str) -> crate::core::Board {
+    let mut board = project_board(&[1, 1]);
+    let mut card = board.columns[1].tasks[0].clone();
+    card.gid = gid.into();
+    board.columns[1].tasks.insert(0, card);
+    board
+}
+
+#[test]
+fn tab_q_names_a_new_task_for_the_selected_column() {
+    let mut app = on_board(&[1, 1]);
+    keys(&mut app, "l");
+
+    tab_q(&mut app);
+    keys(&mut app, "Ship it");
+    let effects = enter(&mut app);
+
+    assert_eq!(
+        effects,
+        vec![Effect::CreateTask {
+            project_gid: "42".into(),
+            section: Some(named("s1", "Section 1")),
+            name: "Ship it".into(),
+        }]
+    );
+    assert!(app.new_task.is_none());
+}
+
+#[test]
+fn typing_a_task_name_does_not_move_on_the_board() {
+    let mut app = on_board(&[2, 2]);
+
+    tab_q(&mut app);
+    keys(&mut app, "jl");
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    assert_eq!(app.new_task.as_ref().map(|t| t.name.as_str()), Some("jl"));
+}
+
+#[test]
+fn esc_or_an_empty_name_creates_no_task() {
+    let mut app = on_board(&[1]);
+
+    tab_q(&mut app);
+    keys(&mut app, "Draft");
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(app.new_task.is_none());
+
+    tab_q(&mut app);
+    keys(&mut app, "  ");
+    let effects = enter(&mut app);
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(app.new_task.is_none());
+}
+
+#[test]
+fn tab_q_does_nothing_in_the_inbox_or_in_an_open_card() {
+    let mut inbox = loaded(3, 10);
+    tab_q(&mut inbox);
+    assert!(inbox.new_task.is_none());
+
+    let mut app = on_board(&[1]);
+    enter(&mut app);
+    tab_q(&mut app);
+    assert!(app.new_task.is_none());
+}
+
+#[test]
+fn a_created_task_reloads_the_board_and_is_selected() {
+    let mut app = on_board(&[1, 1]);
+
+    let effects = app.update(created("Ship it", "new-1", None));
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_new_card("new-1")),
+    });
+
+    assert_eq!(board_loads(&effects), 1);
+    assert_eq!(selected_card(&app), Some("new-1"));
+}
+
+#[test]
+fn a_task_created_during_a_reload_is_found_by_the_reload_after_it() {
+    let mut app = on_board(&[1, 1]);
+    keys(&mut app, "R");
+
+    let during = app.update(created("Ship it", "new-1", None));
+    let stale = app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[1, 1])),
+    });
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_new_card("new-1")),
+    });
+
+    assert_eq!(board_loads(&during), 0, "no overlapping loads");
+    assert_eq!(board_loads(&stale), 1, "the queued reload follows");
+    assert_eq!(selected_card(&app), Some("new-1"));
+    assert!(
+        !app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("isn't on this board")),
+        "{:?}",
+        app.toast
+    );
+}
+
+#[test]
+fn a_move_during_a_reload_is_shown_by_the_reload_after_it() {
+    let mut app = on_board(&[1, 1]);
+    keys(&mut app, "R");
+    app.update(Msg::MovedToSection {
+        task_gid: "c0-0".into(),
+        project_gid: "42".into(),
+        section: named("s1", "Section 1"),
+        previous: Some(named("s0", "Section 0")),
+        result: Ok(()),
+    });
+
+    let effects = app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[1, 1])),
+    });
+
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn a_task_created_outside_the_section_says_it_was_created() {
+    let mut app = on_board(&[1, 1]);
+
+    let effects = app.update(created("Ship it", "new-1", Some("Forbidden")));
+
+    assert_eq!(board_loads(&effects), 1);
+    assert!(
+        app.toast.as_ref().is_some_and(|t| t.is_error
+            && t.text.contains("Created, but not in Section 1")
+            && t.text.contains("Forbidden")),
+        "{:?}",
+        app.toast
+    );
+}
+
+#[test]
+fn a_failed_create_keeps_the_name_for_the_next_try() {
+    let mut app = on_board(&[1]);
+
+    app.update(Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: None,
+        name: "Ship it".into(),
+        result: Err("Could not reach Asana: timed out".into()),
+    });
+    tab_q(&mut app);
+
+    assert!(app.toast.is_none() || app.new_task.is_some());
+    assert_eq!(
+        app.new_task.as_ref().map(|t| t.name.as_str()),
+        Some("Ship it")
+    );
+}
+
+#[test]
+fn a_failed_create_says_so() {
+    let mut app = on_board(&[1]);
+
+    app.update(Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: None,
+        name: "Ship it".into(),
+        result: Err("Could not reach Asana: timed out".into()),
+    });
+
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.is_error && t.text.contains("timed out"))
+    );
+}

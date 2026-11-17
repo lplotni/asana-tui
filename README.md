@@ -84,6 +84,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `h` / `l` | Previous / next column |
 | `Enter` | Open the card's task full-width (`h`/`Esc`/`q` back) |
 | `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
+| `Tab q` | New task in this column: type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
 | `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
 | `P` | Open another board; with nothing typed, `Enter` goes back to the last one |
 | `Tab i` | Back to the Inbox, where you left it (boards keep their place too) |

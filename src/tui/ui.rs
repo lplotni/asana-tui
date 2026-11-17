@@ -197,6 +197,13 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         ];
     }
     let moves = pair(normal(Cmd::MoveDown), normal(Cmd::MoveUp));
+    if app.new_task.is_some() {
+        return vec![
+            (lit("type"), "the task's name"),
+            (input(Cmd::Submit), "create"),
+            (input(Cmd::Cancel), "cancel"),
+        ];
+    }
     if app.screen == Screen::Board && app.board_search.as_ref().is_some_and(|s| s.editing) {
         return vec![
             (lit("type"), "to find a card"),
@@ -232,6 +239,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
                 "column",
             ),
             (normal(Cmd::SwitchProject), "projects"),
+            (normal(Cmd::NewTask), "new task"),
             (normal(Cmd::Search), "find"),
             (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
             (normal(Cmd::Refresh), "refresh"),
@@ -881,6 +889,13 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         Screen::Inbox => &app.search,
     };
     let input = match (&app.command, search) {
+        _ if app.new_task.is_some() => app.new_task.as_ref().map(|task| {
+            let section = task
+                .section
+                .as_ref()
+                .map_or("(no section)", |s| s.name.as_str());
+            (" NEW TASK ", format!("Name in {section}: {}", task.name))
+        }),
         (Some(command), _) => Some((" COMMAND ", format!(":{command}"))),
         (None, Some(search)) if search.editing => Some((" SEARCH ", format!("/{}", search.query))),
         _ => None,
@@ -1015,6 +1030,29 @@ mod tests {
             .unwrap();
 
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn the_help_overlay_shows_every_binding_on_a_100_by_24_terminal() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        app.help = true;
+
+        let terminal = draw_at(&mut app, 100);
+        let screen: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect();
+
+        for binding in BINDINGS {
+            assert!(
+                screen.contains(binding.help),
+                "`{}` is cut off the help overlay",
+                binding.help
+            );
+        }
     }
 
     #[test]
@@ -1432,6 +1470,31 @@ mod tests {
     }
 
     #[test]
+    fn naming_a_new_task_shows_its_column_in_the_status_bar() {
+        let mut app = board_app();
+        press(&mut app, "l");
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Tab,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+        press(&mut app, "qShip it");
+
+        let terminal = draw_at(&mut app, 100);
+        let buffer = terminal.backend().buffer();
+        let status: String = (0..100)
+            .map(|x| buffer[(x, 22)].symbol().to_owned())
+            .collect();
+
+        assert!(status.contains("NEW TASK"), "{status:?}");
+        assert!(
+            status.contains("Name in In progress: Ship it"),
+            "{status:?}"
+        );
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+        assert_eq!(labels, ["the task's name", "create", "cancel"]);
+    }
+
+    #[test]
     fn the_board_hint_line_offers_columns_not_inbox_actions() {
         let app = board_app();
 
@@ -1440,6 +1503,7 @@ mod tests {
         assert!(labels.contains(&"column"), "{labels:?}");
         assert!(labels.contains(&"refresh"), "{labels:?}");
         assert!(labels.contains(&"projects"), "{labels:?}");
+        assert!(labels.contains(&"new task"), "{labels:?}");
         assert!(!labels.contains(&"read"), "{labels:?}");
     }
 

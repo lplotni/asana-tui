@@ -246,17 +246,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T12: `Tab q` on the board
+### - [x] T12: `Tab q` on the board
 
 **Description:** `Tab q` on the board (card not open) starts the name prompt for the selected column. `Enter` emits `CreateTask`, and the result reloads the board with the new card selected, queuing a reload if one is running. Failures follow F14: a toast, and the name kept as a draft. The prompt shows in the status bar, the hint line has a "new task" context, and `Tab q` appears in the help overlay and README.
 
 **Acceptance criteria:**
-- [ ] `Tab q`, type, `Enter` creates the task in the selected column's section, and the new card is then selected.
-- [ ] `Esc` or an empty name creates nothing. A failed create keeps the name for the next `Tab q`. A section failure says the task was created.
-- [ ] A reload requested while one is running happens after it, for `Tab q` and also for `m`/`p`.
+- [x] `Tab q`, type, `Enter` creates the task in the selected column's section, and the new card is then selected.
+- [x] `Esc` or an empty name creates nothing. A failed create keeps the name for the next `Tab q`. A section failure says the task was created.
+- [x] A reload requested while one is running happens after it, for `Tab q` and also for `m`/`p`.
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` for each criterion. A status-bar test for the prompt. The key collision test and the help overlay snapshot.
+- [x] Tests: `app_tests.rs` for each criterion. A status-bar test for the prompt. The key collision test and the help overlay snapshot.
 - [ ] Manual: create a task on a real board.
 
 **Dependencies:** T11

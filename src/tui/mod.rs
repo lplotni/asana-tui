@@ -207,6 +207,7 @@ fn run_effects(
         let is_write = matches!(
             effect,
             Effect::MarkRead { .. }
+                | Effect::CreateTask { .. }
                 | Effect::PostComment { .. }
                 | Effect::AddToProject { .. }
                 | Effect::MoveToSection { .. }
@@ -225,6 +226,26 @@ fn run_effects(
                         .map_err(|e| e.to_string());
                     Msg::BoardLoaded {
                         project_gid,
+                        result,
+                    }
+                }
+                Effect::CreateTask {
+                    project_gid,
+                    section,
+                    name,
+                } => {
+                    let section_gid = section.as_ref().map(|s| s.gid.as_str());
+                    let result = core::create_task(&client, &project_gid, section_gid, &name)
+                        .await
+                        .map(|created| {
+                            let error = created.section_error.map(|e| e.to_string());
+                            (created.task.gid, error)
+                        })
+                        .map_err(|e| e.to_string());
+                    Msg::TaskCreated {
+                        project_gid,
+                        section,
+                        name,
                         result,
                     }
                 }

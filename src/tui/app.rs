@@ -40,6 +40,14 @@ pub enum Msg {
     Key(KeyEvent),
     /// How much fits on screen (sent on start and resize).
     Resize(Sizes),
+    /// A task created on a board: its GID and, if it couldn't be put in
+    /// `section`, why; or why it wasn't created.
+    TaskCreated {
+        project_gid: String,
+        section: Option<Named>,
+        name: String,
+        result: Result<(String, Option<String>), String>,
+    },
     /// A project's board, or why it couldn't be loaded.
     BoardLoaded {
         project_gid: String,
@@ -125,6 +133,13 @@ pub enum Effect {
     /// Load a project's board, then send [`Msg::BoardLoaded`].
     LoadBoard {
         project_gid: String,
+    },
+    /// Create an unassigned task in the project (and `section`), then send
+    /// [`Msg::TaskCreated`].
+    CreateTask {
+        project_gid: String,
+        section: Option<Named>,
+        name: String,
     },
     /// Load notifications after `offset`.
     LoadMore {
@@ -321,6 +336,17 @@ pub struct BoardSlot {
     reloading: bool,
     /// The task to select once the board has loaded.
     select_task: Option<String>,
+    /// A reload was asked for while one was running: it follows that one.
+    reload_queued: bool,
+}
+
+/// A task being named on the board (`Tab q`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewTask {
+    pub project_gid: String,
+    /// The selected column's section; `None` for "(no section)".
+    pub section: Option<Named>,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -399,6 +425,10 @@ pub struct App {
     pub search: Option<Search>,
     /// The `/` search on the board: it jumps between cards, filters nothing.
     pub board_search: Option<Search>,
+    /// The task being named on the board, while its prompt is open.
+    pub new_task: Option<NewTask>,
+    /// The name of a task that couldn't be created, offered by the next `Tab q`.
+    new_task_draft: Option<String>,
     /// The `:` command line being typed, when open.
     pub command: Option<String>,
     /// The "add to project" picker, when open.
@@ -507,6 +537,10 @@ impl App {
                     let outcome = self.keys.feed(Context::Input, event);
                     return self.command_key(outcome);
                 }
+                if self.new_task.is_some() {
+                    let outcome = self.keys.feed(Context::Input, event);
+                    return self.new_task_key(outcome);
+                }
                 if self.screen == Screen::Board
                     && self.board_search.as_ref().is_some_and(|s| s.editing)
                 {
@@ -544,10 +578,13 @@ impl App {
             Msg::BoardLoaded {
                 project_gid,
                 result,
-            } => {
-                self.board_loaded(&project_gid, result);
-                Vec::new()
-            }
+            } => self.board_loaded(&project_gid, result),
+            Msg::TaskCreated {
+                project_gid,
+                section,
+                name,
+                result,
+            } => self.task_created(&project_gid, section, name, result),
             Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
                 self.recovering = false;
@@ -996,6 +1033,7 @@ impl App {
         }
         match cmd {
             Cmd::Open if self.selected_card().is_some() => self.set_focus(Focus::Detail),
+            Cmd::NewTask if self.focus == Focus::List => self.start_new_task(),
             Cmd::Search => {
                 self.board_search = Some(Search {
                     query: String::new(),
@@ -1069,9 +1107,13 @@ impl App {
         if self.screen != Screen::Board {
             return Vec::new();
         }
-        let Some(slot) = self.boards.first_mut().filter(|slot| !slot.reloading) else {
+        let Some(slot) = self.boards.first_mut() else {
             return Vec::new();
         };
+        if slot.reloading {
+            slot.reload_queued = true;
+            return Vec::new();
+        }
         slot.reloading = true;
         vec![Effect::LoadBoard {
             project_gid: slot.project.gid.clone(),
@@ -1092,6 +1134,7 @@ impl App {
                 state: BoardState::Loading,
                 reloading: false,
                 select_task: None,
+                reload_queued: false,
             },
         };
         self.boards.insert(0, slot);
@@ -1194,20 +1237,25 @@ impl App {
 
     /// Shows a loaded board, keeping the selection of the one shown before.
     /// A failure replaces a board only if none is shown yet.
-    fn board_loaded(&mut self, project_gid: &str, result: Result<Board, String>) {
+    fn board_loaded(&mut self, project_gid: &str, result: Result<Board, String>) -> Vec<Effect> {
         let sizes = self.sizes;
         let Some(slot) = self
             .boards
             .iter_mut()
             .find(|slot| slot.project.gid == project_gid)
         else {
-            return;
+            return Vec::new();
         };
         slot.reloading = false;
         if let Ok(board) = &result {
             slot.project = board.project.clone();
         }
-        let select = result.is_ok().then(|| slot.select_task.take()).flatten();
+        // A queued reload means this result may predate what's waiting to be
+        // selected; select it from the next one.
+        let queued = std::mem::take(&mut slot.reload_queued);
+        let select = (result.is_ok() && !queued)
+            .then(|| slot.select_task.take())
+            .flatten();
         match (&mut slot.state, result) {
             (BoardState::Loaded(view), Ok(board)) => view.replace(board),
             (_, Ok(board)) => {
@@ -1225,6 +1273,103 @@ impl App {
         {
             self.toast = Some(Toast::info(NOT_ON_BOARD));
         }
+        if !queued {
+            return Vec::new();
+        }
+        slot.reloading = true;
+        vec![Effect::LoadBoard {
+            project_gid: project_gid.to_owned(),
+        }]
+    }
+
+    /// `Tab q`: opens the name prompt for a task in the selected column.
+    fn start_new_task(&mut self) {
+        let Some(view) = self.board_view() else {
+            self.toast = Some(Toast::info("Wait for the board to load"));
+            return;
+        };
+        let section = view
+            .columns()
+            .get(view.column())
+            .and_then(|c| c.section.clone());
+        let project_gid = view.project().gid.clone();
+        self.new_task = Some(NewTask {
+            project_gid,
+            section,
+            name: self.new_task_draft.take().unwrap_or_default(),
+        });
+    }
+
+    /// A key while naming a new task: Enter creates it (unless the name is
+    /// blank), Esc cancels.
+    fn new_task_key(&mut self, outcome: Outcome) -> Vec<Effect> {
+        let Some(task) = &mut self.new_task else {
+            return Vec::new();
+        };
+        match outcome {
+            Outcome::Insert(c) => task.name.push(c),
+            Outcome::Action(Action {
+                cmd: Cmd::DeleteChar,
+                ..
+            }) => {
+                task.name.pop();
+            }
+            Outcome::Action(Action {
+                cmd: Cmd::Cancel, ..
+            }) => self.new_task = None,
+            Outcome::Action(Action {
+                cmd: Cmd::Submit, ..
+            }) => {
+                let task = self.new_task.take().expect("checked above");
+                let name = task.name.trim().to_owned();
+                if !name.is_empty() {
+                    return vec![Effect::CreateTask {
+                        project_gid: task.project_gid,
+                        section: task.section,
+                        name,
+                    }];
+                }
+            }
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    /// A task was created (maybe outside its section) or not: says so, and
+    /// shows it selected on its board.
+    fn task_created(
+        &mut self,
+        project_gid: &str,
+        section: Option<Named>,
+        name: String,
+        result: Result<(String, Option<String>), String>,
+    ) -> Vec<Effect> {
+        let (gid, section_error) = match result {
+            Ok(created) => created,
+            Err(message) => {
+                self.toast = Some(Toast::error(format!("Task not created: {message}")));
+                self.new_task_draft = Some(name);
+                return Vec::new();
+            }
+        };
+        self.toast = Some(match (section_error, section) {
+            (Some(message), Some(section)) => {
+                Toast::error(format!("Created, but not in {}: {message}", section.name))
+            }
+            (Some(message), None) => Toast::error(format!("Created, but: {message}")),
+            (None, _) => Toast::info(format!("Created \"{name}\"")),
+        });
+        if let Some(slot) = self
+            .boards
+            .iter_mut()
+            .find(|b| b.project.gid == project_gid)
+        {
+            slot.select_task = Some(gid);
+        }
+        if self.board().is_some_and(|b| b.project.gid == project_gid) {
+            return self.reload_board();
+        }
+        Vec::new()
     }
 
     /// Scrolls the detail pane for a motion command. Returns false for
