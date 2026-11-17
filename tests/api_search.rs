@@ -126,3 +126,40 @@ async fn people_are_found_with_the_user_typeahead() {
     assert_eq!(people.len(), 1);
     assert_eq!(people[0].name, "Ada Lovelace");
 }
+
+#[tokio::test]
+async fn mention_targets_are_people_then_projects_then_tasks() {
+    let server = MockServer::start().await;
+    for (kind, gid, name) in [
+        ("user", "11", "Ada Lovelace"),
+        ("project", "42", "Ada's roadmap"),
+        ("task", "31", "Thank Ada"),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(format!("/workspaces/{WS}/typeahead")))
+            .and(query_param("resource_type", kind))
+            .and(query_param("query", "ada"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": [{ "gid": gid, "name": name }]
+            })))
+            .mount(&server)
+            .await;
+    }
+
+    let targets = core::search_mentions(&client(&server), WS, "ada")
+        .await
+        .unwrap();
+
+    let found: Vec<(&str, &str, &str)> = targets
+        .iter()
+        .map(|t| (t.kind, t.gid.as_str(), t.name.as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("person", "11", "Ada Lovelace"),
+            ("project", "42", "Ada's roadmap"),
+            ("task", "31", "Thank Ada"),
+        ]
+    );
+}

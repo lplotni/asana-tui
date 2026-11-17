@@ -125,7 +125,7 @@ Added after F14 at the user's request. It applies to both screens, because the e
   - Text without mentions saves exactly as before, as plain `text` or `notes`.
   - A remembered `@Name` that was edited away is plain text.
   - Comment drafts keep their mentions, and `Ctrl-o` (`$EDITOR`) keeps them as long as the `@Name` text is left intact.
-- **Descriptions:** the formatting guard (F4) and the concurrency guard are unchanged. A description saved with a mention is written as `html_notes`, which replaces formatting just as a plain save does.
+- **Descriptions:** the concurrency guard is unchanged. The formatting guard (F4) no longer counts mentions as formatting, because they are now kept: the editor shows them as `@Name`, remembers them, and saves them back as mentions. A description saved with a mention is written as `html_notes`, which replaces formatting just as a plain save does.
 - **Reading:** Asana's plain `text`/`notes` show a mention as a URL (`https://app.asana.com/…/profile/<gid>` for a person, or a task/project URL). The task view (both screens and `asn task`) shows its label instead: `@Ada Lovelace` for a person, the name for a task or project.
   - The label comes from the matching mention link in `html_text`/`html_notes`, so no extra requests are made.
   - URLs that aren't mentions, and mentions without a label, stay as they are.

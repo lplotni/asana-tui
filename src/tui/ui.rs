@@ -160,13 +160,6 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
     if app.help {
         return vec![(lit("any key"), "close")];
     }
-    if let Some(editor) = &app.editor {
-        return vec![
-            (lit("Ctrl-s"), editor.kind.verb()),
-            (lit("Esc"), "cancel"),
-            (lit("Ctrl-o"), "open in $EDITOR"),
-        ];
-    }
     if app.confirm.is_some() {
         return vec![(lit("y"), "yes"), (lit("any other key"), "no")];
     }
@@ -181,6 +174,13 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (input(Cmd::Cancel), "cancel"),
         ]);
         return hints;
+    }
+    if let Some(editor) = &app.editor {
+        return vec![
+            (lit("Ctrl-s"), editor.kind.verb()),
+            (lit("Esc"), "cancel"),
+            (lit("Ctrl-o"), "open in $EDITOR"),
+        ];
     }
     if app.command.is_some() {
         return vec![
@@ -436,11 +436,12 @@ fn render_overlays(frame: &mut Frame, app: &App, theme: &Theme) {
     if app.help {
         render_help(frame, screen, theme);
     }
-    if let Some(picker) = &app.picker {
-        render_picker(frame, screen, picker, theme);
-    }
     if let Some(editor) = &app.editor {
         render_editor(frame, screen, editor, app, theme);
+    }
+    // After the editor: the mention picker opens on top of it.
+    if let Some(picker) = &app.picker {
+        render_picker(frame, screen, picker, theme);
     }
 }
 
@@ -612,6 +613,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::MoveSection { project, .. } => format!(" Move to a section of {} ", project.name),
         Stage::Board => " Open a project's board ".to_owned(),
         Stage::TaskBoard => " Open which project's board? ".to_owned(),
+        Stage::Mention => " Mention someone ".to_owned(),
     };
     let mut lines = Vec::new();
     if picker.has_query() {
@@ -627,9 +629,15 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         lines.push(Line::styled("Searching…", muted));
     } else if picker.stage == Stage::Task && picker.query.trim().is_empty() {
         lines.push(Line::styled("Type to search tasks", muted));
+    } else if picker.stage == Stage::Mention && picker.query.trim().is_empty() {
+        lines.push(Line::styled(
+            "Type a name: people, projects or tasks (Esc types @)",
+            muted,
+        ));
     } else if picker.items.is_empty() {
         let message = match picker.stage {
             Stage::Task => "No matching tasks",
+            Stage::Mention => "Nobody matches",
             Stage::MoveSection { .. } => "This project has no sections",
             _ => "No matching projects",
         };
@@ -646,7 +654,11 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         };
         let marker = if index == picker.selected { "▌" } else { " " };
         let done = if item.checked { "✓ " } else { "" };
-        lines.push(Line::styled(format!("{marker}{done}{}", item.name), style));
+        let mut line = Line::styled(format!("{marker}{done}{}", item.name), style);
+        if let Some(note) = item.note {
+            line.push_span(Span::styled(format!(" · {note}"), muted));
+        }
+        lines.push(line);
     }
     let inner = draw_overlay(frame, area, &title, None, theme);
     frame.render_widget(Paragraph::new(lines), inner);
@@ -1065,6 +1077,34 @@ mod tests {
                 binding.help
             );
         }
+    }
+
+    #[test]
+    fn the_mention_picker_opens_over_the_editor() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 100, 24))));
+        press(&mut app, "cThanks @ada");
+        let seq = app.picker.as_ref().unwrap().search_seq;
+        app.update(Msg::SearchDue { seq });
+        app.update(Msg::MentionsFound {
+            seq,
+            result: Ok(vec![
+                crate::core::mention::Target {
+                    kind: "person",
+                    gid: "11".into(),
+                    name: "Ada Lovelace".into(),
+                },
+                crate::core::mention::Target {
+                    kind: "project",
+                    gid: "42".into(),
+                    name: "Ada's roadmap".into(),
+                },
+            ]),
+        });
+
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+        assert_eq!(labels, ["to search", "move", "choose", "cancel"]);
+        insta::assert_snapshot!(draw_at(&mut app, 100).backend());
     }
 
     #[test]

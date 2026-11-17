@@ -14,6 +14,7 @@ use std::sync::Arc;
 use crate::api::notifications::Notification;
 use crate::api::search::FoundTask;
 use crate::api::tasks::{Membership, Named, TaskStory};
+use crate::core::mention::{self, Mention, Target};
 use crate::core::{Board, TaskDetail};
 
 /// Notifications fetched on start. Asana returns ~10 per page, so this is a
@@ -40,6 +41,11 @@ pub enum Msg {
     Key(KeyEvent),
     /// How much fits on screen (sent on start and resize).
     Resize(Sizes),
+    /// People, projects and tasks found for mention search `seq`.
+    MentionsFound {
+        seq: u64,
+        result: Result<Vec<Target>, String>,
+    },
     /// A task created on a board: its GID and, if it couldn't be put in
     /// `section`, why; or why it wasn't created.
     TaskCreated {
@@ -175,11 +181,13 @@ pub enum Effect {
         task_gid: String,
         local_gid: String,
         text: String,
+        mentions: Vec<Mention>,
     },
     /// Save the description unless the task changed since `expected_modified_at`.
     SaveNotes {
         task_gid: String,
         text: String,
+        mentions: Vec<Mention>,
         expected_modified_at: Option<String>,
     },
     /// Send [`Msg::SearchDue`] for `seq` after [`picker::SEARCH_DEBOUNCE`].
@@ -187,6 +195,12 @@ pub enum Effect {
         seq: u64,
     },
     SearchProjects {
+        query: String,
+        seq: u64,
+    },
+    /// Find people, projects and tasks to mention, then send
+    /// [`Msg::MentionsFound`].
+    SearchMentions {
         query: String,
         seq: u64,
     },
@@ -268,6 +282,9 @@ pub struct Editor {
     pub kind: EditorKind,
     pub task_gid: String,
     pub textarea: TextArea<'static>,
+    /// The `@Label`s inserted (or already in the description) and whom
+    /// they mention.
+    pub mentions: Vec<Mention>,
 }
 
 impl Editor {
@@ -287,7 +304,13 @@ impl Editor {
             kind,
             task_gid,
             textarea,
+            mentions: Vec::new(),
         }
+    }
+
+    fn with_mentions(mut self, mentions: Vec<Mention>) -> Editor {
+        self.mentions = mentions;
+        self
     }
 
     pub fn text(&self) -> String {
@@ -369,6 +392,7 @@ pub struct Confirm {
     pub question: String,
     task_gid: String,
     initial: String,
+    mentions: Vec<Mention>,
 }
 
 /// The `/` filter: the list shows only notifications matching `query`.
@@ -434,12 +458,14 @@ pub struct App {
     /// The "add to project" picker, when open.
     pub picker: Option<Picker>,
     /// Comment text whose post failed, by task, offered again on `c`.
-    drafts: HashMap<String, String>,
+    drafts: HashMap<String, (String, Vec<Mention>)>,
+    /// The editor's mentions while its text is in `$EDITOR`.
+    external_mentions: Vec<Mention>,
     /// Numbers comments shown before Asana confirms them.
     next_local_id: u64,
     /// Text of comments being posted, by local GID (kept as a draft if the
     /// post fails).
-    posting: HashMap<String, String>,
+    posting: HashMap<String, (String, Vec<Mention>)>,
     /// Read state set locally but not yet confirmed by Asana, by GID.
     pending_marks: HashMap<String, bool>,
     /// Task details by task GID (several notifications can share a task).
@@ -512,15 +538,19 @@ impl App {
                 self.help = false;
                 Vec::new()
             }
+            // The mention picker sits on the editor and takes the keys.
+            Msg::Key(event) if self.editor.is_some() && self.picker.is_some() => {
+                let outcome = self.keys.feed(Context::Input, event);
+                self.picker_key(outcome)
+            }
             Msg::Key(event) if self.editor.is_some() => self.editor_key(event),
             Msg::Key(event) if self.confirm.is_some() => {
                 let confirm = self.confirm.take().expect("checked above");
                 if matches!(event.code, KeyCode::Char('y' | 'Y')) {
-                    self.editor = Some(Editor::new(
-                        EditorKind::Description,
-                        confirm.task_gid,
-                        &confirm.initial,
-                    ));
+                    self.editor = Some(
+                        Editor::new(EditorKind::Description, confirm.task_gid, &confirm.initial)
+                            .with_mentions(confirm.mentions),
+                    );
                     Vec::new()
                 } else {
                     self.toast = Some(Toast::info("Description not edited"));
@@ -671,14 +701,31 @@ impl App {
                 kind,
                 task_gid,
                 text: Some(text),
-            } => self.finish_editing(kind, task_gid, text),
-            Msg::Written { text: None, .. } => Vec::new(),
+            } => {
+                let mentions = std::mem::take(&mut self.external_mentions);
+                self.finish_editing(kind, task_gid, text, mentions)
+            }
+            Msg::Written { text: None, .. } => {
+                self.external_mentions.clear();
+                Vec::new()
+            }
+            Msg::MentionsFound { seq, result } => {
+                match result {
+                    Ok(targets) => {
+                        if let Some(p) = &mut self.picker {
+                            p.accept_mentions(seq, targets);
+                        }
+                    }
+                    Err(message) => self.search_failed(seq, "Mention", &message),
+                }
+                Vec::new()
+            }
             Msg::CommentPosted {
                 task_gid,
                 local_gid,
                 result,
             } => {
-                let text = self.posting.remove(&local_gid).unwrap_or_default();
+                let (text, mentions) = self.posting.remove(&local_gid).unwrap_or_default();
                 let comments = match self.details.get_mut(&task_gid) {
                     Some(Detail::Loaded(detail)) => Some(&mut detail.comments),
                     _ => None,
@@ -698,7 +745,7 @@ impl App {
                         if let Some(comments) = comments {
                             comments.retain(|c| c.gid != local_gid);
                         }
-                        self.drafts.insert(task_gid, text);
+                        self.drafts.insert(task_gid, (text, mentions));
                         self.toast = Some(Toast::error(format!(
                             "Comment not posted: {message} (c reopens your text)"
                         )));
@@ -746,6 +793,11 @@ impl App {
                         return Vec::new();
                     }
                     picker::Stage::Board => Effect::SearchProjects { query, seq },
+                    picker::Stage::Mention if query.trim().is_empty() => {
+                        p.accept_mentions(seq, Vec::new());
+                        return Vec::new();
+                    }
+                    picker::Stage::Mention => Effect::SearchMentions { query, seq },
                     // A blank query finds nothing; don't ask Asana.
                     picker::Stage::Task if query.trim().is_empty() => {
                         p.accept_tasks(seq, Vec::new());
@@ -1710,7 +1762,12 @@ impl App {
                     Vec::new()
                 }
                 Cmd::Cancel => {
+                    let mentioning = picker.stage == picker::Stage::Mention;
                     self.picker = None;
+                    // Not mentioning anyone: the @ was meant as text.
+                    if mentioning && let Some(editor) = &mut self.editor {
+                        editor.textarea.insert_char('@');
+                    }
                     Vec::new()
                 }
                 Cmd::Submit => self.picker_submit(),
@@ -1765,6 +1822,17 @@ impl App {
                 self.picker = None;
                 self.open_board(item.into_named())
             }
+            picker::Stage::Mention => {
+                self.picker = None;
+                if let (Some(editor), Some(gid)) = (&mut self.editor, item.gid) {
+                    let label = format!("@{}", item.name);
+                    editor.textarea.insert_str(&label);
+                    if !editor.mentions.iter().any(|m| m.label == label) {
+                        editor.mentions.push(Mention { label, gid });
+                    }
+                }
+                Vec::new()
+            }
             picker::Stage::TaskBoard => {
                 let task_gid = picker.task_gid.clone();
                 self.picker = None;
@@ -1805,7 +1873,9 @@ impl App {
         else {
             return Vec::new();
         };
-        let initial = detail.task.notes.clone();
+        // Mentions show as @Names and are written back as mentions.
+        let (initial, mentions) =
+            mention::editable(&detail.task.notes, detail.task.html_notes.as_deref());
         if detail
             .task
             .html_notes
@@ -1816,20 +1886,28 @@ impl App {
                 question: "This will remove formatting. Continue? (y/N)".into(),
                 task_gid,
                 initial,
+                mentions,
             });
             return Vec::new();
         }
-        self.editor = Some(Editor::new(EditorKind::Description, task_gid, &initial));
+        self.editor =
+            Some(Editor::new(EditorKind::Description, task_gid, &initial).with_mentions(mentions));
         Vec::new()
     }
 
     /// Shows the new description right away and saves it, remembering the old
     /// one in case saving fails. Unchanged text isn't saved.
-    fn show_and_save_description(&mut self, task_gid: String, text: String) -> Vec<Effect> {
+    fn show_and_save_description(
+        &mut self,
+        task_gid: String,
+        text: String,
+        mentions: Vec<Mention>,
+    ) -> Vec<Effect> {
         let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) else {
             return Vec::new();
         };
-        if text.trim_end() == detail.task.notes.trim_end() {
+        let shown = mention::readable(&detail.task.notes, detail.task.html_notes.as_deref());
+        if text.trim_end() == shown.trim_end() {
             self.toast = Some(Toast::info("No changes"));
             return Vec::new();
         }
@@ -1839,6 +1917,7 @@ impl App {
         vec![Effect::SaveNotes {
             task_gid,
             text,
+            mentions,
             expected_modified_at,
         }]
     }
@@ -1868,8 +1947,9 @@ impl App {
             self.toast = Some(Toast::info("Comments work on tasks only"));
             return Vec::new();
         };
-        let initial = self.drafts.remove(&task_gid).unwrap_or_default();
-        self.editor = Some(Editor::new(EditorKind::Comment, task_gid, &initial));
+        let (initial, mentions) = self.drafts.remove(&task_gid).unwrap_or_default();
+        self.editor =
+            Some(Editor::new(EditorKind::Comment, task_gid, &initial).with_mentions(mentions));
         Vec::new()
     }
 
@@ -1884,6 +1964,15 @@ impl App {
         let ctrl = |c: char| {
             event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char(c)
         };
+        // `@` asks whom to mention; Esc there types the `@` after all.
+        let plain_at = event.code == KeyCode::Char('@')
+            && !event
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if plain_at {
+            self.picker = Some(Picker::mentions());
+            return Vec::new();
+        }
         let exit = if ctrl('s') {
             EditorExit::Save
         } else if ctrl('o') {
@@ -1900,16 +1989,20 @@ impl App {
             return Vec::new();
         };
         let (kind, task_gid, text) = (editor.kind, editor.task_gid.clone(), editor.text());
+        let mentions = editor.mentions;
         match exit {
-            EditorExit::Save => self.finish_editing(kind, task_gid, text),
-            EditorExit::External => vec![Effect::EditExternal {
-                kind,
-                task_gid,
-                initial: text,
-            }],
+            EditorExit::Save => self.finish_editing(kind, task_gid, text, mentions),
+            EditorExit::External => {
+                self.external_mentions = mentions;
+                vec![Effect::EditExternal {
+                    kind,
+                    task_gid,
+                    initial: text,
+                }]
+            }
             EditorExit::Cancel => {
                 if kind == EditorKind::Comment && !text.trim().is_empty() {
-                    self.drafts.insert(task_gid, text);
+                    self.drafts.insert(task_gid, (text, mentions));
                 }
                 Vec::new()
             }
@@ -1917,19 +2010,30 @@ impl App {
     }
 
     /// Posts the comment or saves the description written in either editor.
-    fn finish_editing(&mut self, kind: EditorKind, task_gid: String, text: String) -> Vec<Effect> {
+    fn finish_editing(
+        &mut self,
+        kind: EditorKind,
+        task_gid: String,
+        text: String,
+        mentions: Vec<Mention>,
+    ) -> Vec<Effect> {
         match kind {
             EditorKind::Comment if text.trim().is_empty() => {
                 self.toast = Some(Toast::info("Empty comment; nothing posted"));
                 Vec::new()
             }
-            EditorKind::Comment => self.show_and_post_comment(task_gid, text),
-            EditorKind::Description => self.show_and_save_description(task_gid, text),
+            EditorKind::Comment => self.show_and_post_comment(task_gid, text, mentions),
+            EditorKind::Description => self.show_and_save_description(task_gid, text, mentions),
         }
     }
 
     /// Shows the comment right away (if the task is on screen) and posts it.
-    fn show_and_post_comment(&mut self, task_gid: String, text: String) -> Vec<Effect> {
+    fn show_and_post_comment(
+        &mut self,
+        task_gid: String,
+        text: String,
+        mentions: Vec<Mention>,
+    ) -> Vec<Effect> {
         self.next_local_id += 1;
         let local_gid = format!("local-{}", self.next_local_id);
         if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
@@ -1947,11 +2051,13 @@ impl App {
                 reaction_summary: Vec::new(),
             });
         }
-        self.posting.insert(local_gid.clone(), text.clone());
+        self.posting
+            .insert(local_gid.clone(), (text.clone(), mentions.clone()));
         vec![Effect::PostComment {
             task_gid,
             local_gid,
             text,
+            mentions,
         }]
     }
 

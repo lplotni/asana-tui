@@ -240,8 +240,12 @@ fn rich_text_is_detected_from_html_notes() {
     ));
     assert!(core::has_formatting("<body><ul><li>one</li></ul></body>"));
     assert!(core::has_formatting("<body><strong>bold</strong></body>"));
-    assert!(core::has_formatting(
+    // Mentions are kept when saving (F15), so they aren't formatting to lose.
+    assert!(!core::has_formatting(
         "<body>hi <a data-asana-gid=\"1\" data-asana-type=\"user\">@Ada</a></body>"
+    ));
+    assert!(core::has_formatting(
+        "<body><a data-asana-gid=\"1\">@Ada</a> see <a href=\"https://x\">this</a></body>"
     ));
     assert!(!core::has_formatting(
         "<body>Line one\nLine two &amp; more</body>"

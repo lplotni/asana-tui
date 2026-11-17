@@ -109,6 +109,32 @@ pub async fn comment(
     }
 }
 
+/// People, projects and tasks matching `query`, in that order, to
+/// @-mention: three typeahead searches at the same time.
+pub async fn search_mentions(
+    client: &Client,
+    workspace: &str,
+    query: &str,
+) -> Result<Vec<mention::Target>, ApiError> {
+    let (people, projects, tasks) = tokio::try_join!(
+        client.typeahead_users(workspace, query),
+        client.typeahead_projects(workspace, query),
+        client.typeahead_tasks(workspace, query),
+    )?;
+    let target =
+        |kind: &'static str, gid: String, name: String| mention::Target { kind, gid, name };
+    Ok(people
+        .into_iter()
+        .map(|p| target("person", p.gid, p.name))
+        .chain(
+            projects
+                .into_iter()
+                .map(|p| target("project", p.gid, p.name)),
+        )
+        .chain(tasks.into_iter().map(|t| target("task", t.gid, t.name)))
+        .collect())
+}
+
 /// People in the workspace whose name matches `query` (Asana's typeahead).
 pub async fn search_users(
     client: &Client,
@@ -293,14 +319,18 @@ pub enum SaveNotesError {
 
 /// Whether Asana's `html_notes` has anything beyond plain paragraphs (links,
 /// lists, bold, mentions, …) that saving plain `notes` would remove.
+/// Mentions (`<a data-asana-gid=…>`) don't count: saving keeps them.
 pub fn has_formatting(html_notes: &str) -> bool {
     html_notes.split('<').skip(1).any(|tag| {
+        let closing = tag.starts_with('/');
         let name: String = tag
             .trim_start_matches('/')
             .chars()
             .take_while(char::is_ascii_alphanumeric)
             .collect();
-        !name.is_empty() && name != "body"
+        // A `</a>` closes an `<a`, which counted already unless a mention.
+        let mention = name == "a" && (closing || tag.contains("data-asana-gid="));
+        !name.is_empty() && name != "body" && !mention
     })
 }
 

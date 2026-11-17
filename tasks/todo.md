@@ -314,7 +314,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T14: `@` in the editor
+### - [x] T14: `@` in the editor
 
 **Description:**
 - Typing `@` in the comment or description editor opens a mention picker over it. Three typeahead searches run at once (people, projects, tasks), and the results are merged with labels.
@@ -322,12 +322,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - Saving passes the mentions to the core. Drafts keep them.
 
 **Acceptance criteria:**
-- [ ] `@`, `ada`, `Enter` inserts `@Ada Lovelace`, and posting sends a mention of her GID.
-- [ ] `Esc` inserts `@`. Results arrive for the latest query only. A failed search says so.
-- [ ] A failed comment's draft keeps its mentions.
+- [x] `@`, `ada`, `Enter` inserts `@Ada Lovelace`, and posting sends a mention of her GID.
+- [x] `Esc` inserts `@`. Results arrive for the latest query only. A failed search says so.
+- [x] A failed comment's draft keeps its mentions.
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` for each criterion. A snapshot of the picker over the editor.
+- [x] Tests: `app_tests.rs` for each criterion. A snapshot of the picker over the editor.
 - [ ] Manual: mention someone in a real comment and description.
 
 **Dependencies:** T13 and Checkpoint M1

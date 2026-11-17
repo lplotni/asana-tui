@@ -16,6 +16,8 @@ pub struct Item {
     pub name: String,
     /// Drawn with ✓: a completed task, or the section a task is in.
     pub checked: bool,
+    /// What it is, drawn after the name: "person", "project" or "task".
+    pub note: Option<&'static str>,
 }
 
 impl From<Named> for Item {
@@ -24,6 +26,7 @@ impl From<Named> for Item {
             gid: Some(named.gid),
             name: named.name,
             checked: false,
+            note: None,
         }
     }
 }
@@ -60,6 +63,8 @@ pub enum Stage {
     Board,
     /// Choosing which of the task's projects to open as a board, on it.
     TaskBoard,
+    /// Choosing whom (or which project or task) to @-mention in the editor.
+    Mention,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +108,39 @@ impl Picker {
         };
         picker.show_recents();
         picker
+    }
+
+    /// @-mentioning in the editor: waits for the first letters of a name.
+    pub fn mentions() -> Picker {
+        Picker {
+            stage: Stage::Mention,
+            loading: false,
+            ..Picker::new(String::new(), Vec::new())
+        }
+    }
+
+    /// Takes the people, projects and tasks found by search `seq`, unless a
+    /// newer one was started.
+    pub fn accept_mentions(
+        &mut self,
+        seq: u64,
+        targets: Vec<crate::core::mention::Target>,
+    ) -> bool {
+        if self.stage != Stage::Mention || seq != self.search_seq {
+            return false;
+        }
+        self.items = targets
+            .into_iter()
+            .map(|t| Item {
+                gid: Some(t.gid),
+                name: t.name,
+                checked: false,
+                note: Some(t.kind),
+            })
+            .collect();
+        self.selected = 0;
+        self.loading = false;
+        true
     }
 
     /// Opening the board of `task_gid`: choose among `projects` (its own).
@@ -157,7 +195,10 @@ impl Picker {
 
     /// Whether the query is typed (rather than a list chosen from).
     pub fn has_query(&self) -> bool {
-        matches!(self.stage, Stage::Project | Stage::Task | Stage::Board)
+        matches!(
+            self.stage,
+            Stage::Project | Stage::Task | Stage::Board | Stage::Mention
+        )
     }
 
     /// Changes the query; returns the new search number to schedule.
@@ -193,6 +234,7 @@ impl Picker {
                 gid: Some(t.gid),
                 name: t.name,
                 checked: t.completed,
+                note: None,
             })
             .collect();
         self.selected = 0;
@@ -220,6 +262,7 @@ impl Picker {
                         checked: current.as_ref() == Some(&s.gid),
                         gid: Some(s.gid),
                         name: s.name,
+                        note: None,
                     })
                     .collect();
                 self.selected = 0;
@@ -232,6 +275,7 @@ impl Picker {
             gid: None,
             name: "No section".into(),
             checked: false,
+            note: None,
         })
         .chain(sections.into_iter().map(Item::from))
         .collect();
@@ -465,6 +509,7 @@ mod tests {
                 gid: None,
                 name: "No section".into(),
                 checked: false,
+                note: None,
             }
         );
         assert_eq!(items[1].gid.as_deref(), Some("43"));

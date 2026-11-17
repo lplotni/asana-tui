@@ -56,8 +56,8 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move (with counts: `5j`, `12G`) |
 | `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
 | `o` | Open the task in the browser |
-| `c` (or `Tab c`) | Comment on the task in an editor overlay: `Ctrl-s` posts, `Esc` cancels (the text is kept for the next `c`), `Ctrl-o` continues in your `$EDITOR`; posting marks the task's notifications read |
-| `Tab e` | Edit the description as plain text in the same overlay (`Ctrl-s` saves); asks first if it has formatting, which plain text removes |
+| `c` (or `Tab c`) | Comment on the task in an editor overlay: `Ctrl-s` posts, `Esc` cancels (the text is kept for the next `c`), `Ctrl-o` continues in your `$EDITOR`; posting marks the task's notifications read. Typing `@` mentions someone: type part of a name, `Enter` inserts it (people, projects and tasks; `Esc` types a plain `@`) |
+| `Tab e` | Edit the description as plain text in the same overlay (`Ctrl-s` saves), with `@` mentions as in comments; mentions already in it show as names and are kept. Asks first if it has other formatting (links, lists, bold), which plain text removes |
 | `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
 | `m` | Move the task to another section: pick the project if it's in several, then the section (its current one is marked ✓; `j`/`k` or `Ctrl-n`/`Ctrl-p` move) |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
@@ -139,7 +139,7 @@ These come from Asana's public API (most from the [Notifications API](https://fo
 - **No archive.** The API can only mark notifications read or unread. `e` marks an item read, and it stays in the list, unlike `E` in the web Inbox, which removes it. Archive in the web app if you want an item gone: archived items disappear from `asn` at its next refresh.
 - **No grouping.** The web Inbox can bundle several notifications about one task into one card; `asn` lists them one by one.
 - **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R` or every 60 s).
-- **Descriptions are edited as plain text.** Saving replaces Asana's formatting (links, lists, bold, mentions); `asn` asks first when a description has any. Edit formatted descriptions on the web.
+- **Descriptions are edited as plain text.** Saving keeps @-mentions but replaces other formatting (links, lists, bold); `asn` asks first when a description has any. Edit formatted descriptions on the web.
 - **Mentions look like comments.** The API doesn't mark @mentions separately.
 - **Some tasks' comments can't be loaded.** For some tasks (likely those with replies to comments), Asana refuses the comment list with "unsupported parent in the public API: CommentStory". `asn` still shows the rest of the task and says why the comments are missing; read them on the web.
 - **Task search needs a paid plan.** On other plans Asana answers 402; set `ASN_SEARCH=typeahead` to search task names instead. Results are the 50 most relevant, and new or renamed tasks can take up to a minute to become searchable.

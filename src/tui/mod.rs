@@ -294,8 +294,9 @@ fn run_effects(
                     task_gid,
                     local_gid,
                     text,
+                    mentions,
                 } => {
-                    let result = core::comment(&client, &task_gid, &text, &[])
+                    let result = core::comment(&client, &task_gid, &text, &mentions)
                         .await
                         .map(Box::new)
                         .map_err(|e| e.to_string());
@@ -310,13 +311,14 @@ fn run_effects(
                 Effect::SaveNotes {
                     task_gid,
                     text,
+                    mentions,
                     expected_modified_at,
                 } => {
                     let result = core::set_notes(
                         &client,
                         &task_gid,
                         &text,
-                        &[],
+                        &mentions,
                         expected_modified_at.as_deref(),
                     )
                     .await
@@ -333,6 +335,12 @@ fn run_effects(
                     tokio::time::sleep(picker::SEARCH_DEBOUNCE).await;
                     Msg::SearchDue { seq }
                 }
+                Effect::SearchMentions { query, seq } => Msg::MentionsFound {
+                    seq,
+                    result: core::search_mentions(&client, &workspace, &query)
+                        .await
+                        .map_err(|e| e.to_string()),
+                },
                 Effect::SearchProjects { query, seq } => Msg::ProjectsFound {
                     seq,
                     result: core::search_projects(&client, &workspace, &query)

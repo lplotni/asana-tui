@@ -81,9 +81,16 @@ const ASANA_URL: &str = "https://app.asana.com/";
 /// and `html` (the matching `html_text` or `html_notes`) names it. URLs that
 /// aren't mentions stay; without `html` the text is unchanged.
 pub fn readable(text: &str, html: Option<&str>) -> String {
+    editable(text, html).0
+}
+
+/// Like [`readable`], plus the mentions behind the names it shows, so
+/// saving the text unchanged writes the same mentions again.
+pub fn editable(text: &str, html: Option<&str>) -> (String, Vec<Mention>) {
     let labels = html.map(mention_labels).unwrap_or_default();
+    let mut used: Vec<Mention> = Vec::new();
     if labels.is_empty() {
-        return text.to_owned();
+        return (text.to_owned(), used);
     }
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -101,17 +108,32 @@ pub fn readable(text: &str, html: Option<&str>) -> String {
             .iter()
             .find(|m| m.href.as_deref() == Some(link))
             .or_else(|| last_gid(link).and_then(|gid| labels.iter().find(|m| m.gid == gid)));
-        match mention.map(|m| &m.label) {
-            Some(label) => {
-                out.push_str(label);
+        match mention {
+            Some(m) => {
+                out.push_str(&m.label);
                 out.push_str(&url[link.len()..]);
+                if !used.iter().any(|u| u.label == m.label) {
+                    used.push(Mention {
+                        label: m.label.clone(),
+                        gid: m.gid.clone(),
+                    });
+                }
             }
             None => out.push_str(url),
         }
         rest = &rest[at + url.len()..];
     }
     out.push_str(rest);
-    out
+    (out, used)
+}
+
+/// Something that can be @-mentioned: a person, project or task.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Target {
+    /// "person", "project" or "task".
+    pub kind: &'static str,
+    pub gid: String,
+    pub name: String,
 }
 
 /// The last all-digit path segment of an Asana URL: the object it links to.
@@ -314,6 +336,27 @@ mod tests {
         let text = "Thanks https://app.asana.com/0/profile/1200000000000011";
 
         assert_eq!(readable(text, None), text);
+    }
+
+    #[test]
+    fn editable_text_shows_names_and_knows_what_they_mention() {
+        let html = r#"<body>Owner: <a href="https://app.asana.com/1/1/profile/99" data-asana-gid="11" data-asana-type="user">@Ada Lovelace</a></body>"#;
+
+        let (text, mentions) = editable("Owner: https://app.asana.com/1/1/profile/99", Some(html));
+
+        assert_eq!(text, "Owner: @Ada Lovelace");
+        assert_eq!(mentions, [mention("@Ada Lovelace", "11")]);
+    }
+
+    #[test]
+    fn editable_text_saved_unchanged_writes_the_same_mention() {
+        let html = r#"<body>Owner: <a href="https://app.asana.com/1/1/profile/99" data-asana-gid="11" data-asana-type="user">@Ada Lovelace</a></body>"#;
+        let (text, mentions) = editable("Owner: https://app.asana.com/1/1/profile/99", Some(html));
+
+        assert_eq!(
+            rich_text(&text, &mentions),
+            Some(r#"<body>Owner: <a data-asana-gid="11"/></body>"#.into())
+        );
     }
 
     #[test]

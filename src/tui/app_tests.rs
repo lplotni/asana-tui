@@ -976,7 +976,8 @@ fn ctrl_s_posts_the_comment_and_closes_the_editor() {
         [Effect::PostComment {
             task_gid: "t0".into(),
             local_gid: "local-1".into(),
-            text: "Hi".into()
+            text: "Hi".into(),
+            mentions: vec![],
         }]
     );
     assert!(app.editor.is_none());
@@ -1080,7 +1081,8 @@ fn a_written_comment_appears_at_once_and_is_posted() {
         [Effect::PostComment {
             task_gid: "t0".into(),
             local_gid: "local-1".into(),
-            text: "Ship it\n".into()
+            text: "Ship it\n".into(),
+            mentions: vec![],
         }]
     );
     let comments = comments_of(&app, "t0");
@@ -1157,7 +1159,8 @@ fn commenting_works_before_the_details_have_loaded() {
         [Effect::PostComment {
             task_gid: "t0".into(),
             local_gid: "local-1".into(),
-            text: "Hi".into()
+            text: "Hi".into(),
+            mentions: vec![],
         }]
     );
 }
@@ -1499,6 +1502,7 @@ fn a_changed_description_shows_at_once_and_is_saved_with_a_conflict_check() {
             task_gid: "t0".into(),
             text: "New text\n".into(),
             expected_modified_at: Some("2026-11-16T10:00:00.000Z".into()),
+            mentions: vec![],
         }]
     );
     assert_eq!(notes_of(&app), "New text\n");
@@ -3265,5 +3269,186 @@ fn a_failed_create_says_so() {
         app.toast
             .as_ref()
             .is_some_and(|t| t.is_error && t.text.contains("timed out"))
+    );
+}
+
+// --- @-mentions in the editor (F15) ----------------------------------------
+
+fn ada_target() -> crate::core::mention::Target {
+    crate::core::mention::Target {
+        kind: "person",
+        gid: "1200000000000011".into(),
+        name: "Ada Lovelace".into(),
+    }
+}
+
+fn ada_mention() -> crate::core::mention::Mention {
+    crate::core::mention::Mention {
+        label: "@Ada Lovelace".into(),
+        gid: "1200000000000011".into(),
+    }
+}
+
+/// A comment editor on "t0" with "Hi " typed and the mention picker open on
+/// "ada", its results in.
+fn mentioning_ada(app: &mut App) {
+    keys(app, "c");
+    keys(app, "Hi @");
+    keys(app, "ada");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::SearchDue { seq });
+    app.update(Msg::MentionsFound {
+        seq,
+        result: Ok(vec![ada_target()]),
+    });
+}
+
+#[test]
+fn at_in_the_editor_opens_the_mention_picker() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+
+    keys(&mut app, "Hi @");
+
+    assert_eq!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(&picker::Stage::Mention)
+    );
+    assert_eq!(editing(&app).unwrap().2, "Hi ");
+}
+
+#[test]
+fn the_mention_picker_searches_people_projects_and_tasks() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+    keys(&mut app, "@ada");
+
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    let effects = app.update(Msg::SearchDue { seq });
+
+    assert_eq!(
+        effects,
+        vec![Effect::SearchMentions {
+            query: "ada".into(),
+            seq
+        }]
+    );
+}
+
+#[test]
+fn enter_inserts_the_mention_and_remembers_who_it_is() {
+    let mut app = loaded(3, 10);
+    mentioning_ada(&mut app);
+
+    enter(&mut app);
+
+    assert!(app.picker.is_none());
+    assert_eq!(editing(&app).unwrap().2, "Hi @Ada Lovelace");
+    assert_eq!(app.editor.as_ref().unwrap().mentions, [ada_mention()]);
+}
+
+#[test]
+fn esc_in_the_mention_picker_types_a_plain_at_sign() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+    keys(&mut app, "mail me @");
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+
+    assert!(app.picker.is_none());
+    assert_eq!(editing(&app).unwrap().2, "mail me @");
+}
+
+#[test]
+fn a_posted_comment_carries_its_mentions() {
+    let mut app = loaded(3, 10);
+    mentioning_ada(&mut app);
+    enter(&mut app);
+
+    let effects = ctrl(&mut app, 's');
+
+    assert_eq!(
+        effects,
+        [Effect::PostComment {
+            task_gid: "t0".into(),
+            local_gid: "local-1".into(),
+            text: "Hi @Ada Lovelace".into(),
+            mentions: vec![ada_mention()],
+        }]
+    );
+}
+
+#[test]
+fn a_comment_that_failed_to_post_keeps_its_mentions() {
+    let mut app = loaded(3, 10);
+    mentioning_ada(&mut app);
+    enter(&mut app);
+    ctrl(&mut app, 's');
+
+    app.update(Msg::CommentPosted {
+        task_gid: "t0".into(),
+        local_gid: "local-1".into(),
+        result: Err("timed out".into()),
+    });
+    keys(&mut app, "c");
+
+    assert_eq!(app.editor.as_ref().unwrap().mentions, [ada_mention()]);
+}
+
+#[test]
+fn a_cancelled_comment_draft_keeps_its_mentions() {
+    let mut app = loaded(3, 10);
+    mentioning_ada(&mut app);
+    enter(&mut app);
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    keys(&mut app, "c");
+
+    assert_eq!(editing(&app).unwrap().2, "Hi @Ada Lovelace");
+    assert_eq!(app.editor.as_ref().unwrap().mentions, [ada_mention()]);
+}
+
+#[test]
+fn mentions_survive_a_trip_to_the_external_editor() {
+    let mut app = loaded(3, 10);
+    mentioning_ada(&mut app);
+    enter(&mut app);
+    ctrl(&mut app, 'o');
+
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Comment,
+        task_gid: "t0".into(),
+        text: Some("Hi @Ada Lovelace, thanks".into()),
+    });
+
+    assert!(
+        matches!(&effects[..], [Effect::PostComment { mentions, .. }] if *mentions == [ada_mention()]),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn a_description_with_mentions_is_edited_with_names_and_saved_with_them() {
+    let mut app = loaded(3, 10);
+    let mut detail = task_detail();
+    detail.task.notes = "Owner: https://app.asana.com/1/1/profile/99".into();
+    detail.task.html_notes = Some(
+        r#"<body>Owner: <a href="https://app.asana.com/1/1/profile/99" data-asana-gid="1200000000000011" data-asana-type="user">@Ada Lovelace</a></body>"#
+            .into(),
+    );
+    load_task(&mut app, "t0", detail);
+
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "e");
+    assert!(app.confirm.is_none(), "mentions alone aren't formatting");
+    assert_eq!(editing(&app).unwrap().2, "Owner: @Ada Lovelace");
+    // The description editor starts at the top.
+    keys(&mut app, "Lead. ");
+    let effects = ctrl(&mut app, 's');
+
+    assert!(
+        matches!(&effects[..], [Effect::SaveNotes { text, mentions, .. }]
+            if text == "Lead. Owner: @Ada Lovelace" && *mentions == [ada_mention()]),
+        "{effects:?}"
     );
 }
