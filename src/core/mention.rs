@@ -95,8 +95,14 @@ pub fn readable(text: &str, html: Option<&str>) -> String {
             .unwrap_or_default();
         // Sentence punctuation after a link isn't part of it.
         let link = url.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '"', '\'']);
-        match last_gid(link).and_then(|gid| labels.iter().find(|(g, _)| g == gid)) {
-            Some((_, label)) => {
+        // A link's `href` is the URL in the plain text. Its GID is no help
+        // for people: a profile URL ends in the profile's id, not the user's.
+        let mention = labels
+            .iter()
+            .find(|m| m.href.as_deref() == Some(link))
+            .or_else(|| last_gid(link).and_then(|gid| labels.iter().find(|m| m.gid == gid)));
+        match mention.map(|m| &m.label) {
+            Some(label) => {
                 out.push_str(label);
                 out.push_str(&url[link.len()..]);
             }
@@ -116,9 +122,16 @@ fn last_gid(url: &str) -> Option<&str> {
         .find(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))
 }
 
-/// (gid, label) of every mention link (`<a … data-asana-gid="…">label</a>`)
-/// in Asana rich text. A person's label always starts with `@`.
-fn mention_labels(html: &str) -> Vec<(String, String)> {
+/// A mention link in Asana rich text.
+struct Linked {
+    href: Option<String>,
+    gid: String,
+    label: String,
+}
+
+/// Every mention link (`<a … data-asana-gid="…">label</a>`) in Asana rich
+/// text. A person's label always starts with `@`.
+fn mention_labels(html: &str) -> Vec<Linked> {
     let mut labels = Vec::new();
     let mut rest = html;
     while let Some(start) = rest.find("<a ") {
@@ -140,7 +153,11 @@ fn mention_labels(html: &str) -> Vec<(String, String)> {
         if attribute(tag, "data-asana-type") == Some("user") && !label.starts_with('@') {
             label.insert(0, '@');
         }
-        labels.push((gid.to_owned(), label));
+        labels.push(Linked {
+            href: attribute(tag, "href").map(unescape),
+            gid: gid.to_owned(),
+            label,
+        });
     }
     labels
 }
@@ -239,6 +256,27 @@ mod tests {
         let text = "Thanks https://app.asana.com/1/1200000000000001/profile/1200000000000011!";
 
         assert_eq!(readable(text, Some(ADA_HTML)), "Thanks @Ada Lovelace!");
+    }
+
+    /// As Asana returns it: the profile URL's id is not the user's GID, so
+    /// only the link's `href` ties the plain text to the mention.
+    #[test]
+    fn a_profile_url_whose_id_is_not_the_user_gid_reads_as_the_name() {
+        let html = r#"<body>So we stop? <a href="https://app.asana.com/1/1200000000000001/profile/1200000000000099" data-asana-gid="1200000000000011" data-asana-accessible="true" data-asana-type="user" data-asana-dynamic="true">@Frédéric Ünal</a></body>"#;
+        let text = "So we stop? https://app.asana.com/1/1200000000000001/profile/1200000000000099";
+
+        assert_eq!(readable(text, Some(html)), "So we stop? @Frédéric Ünal");
+    }
+
+    #[test]
+    fn several_mentions_in_parentheses_all_read_as_names() {
+        let html = r#"<body>(<a href="https://app.asana.com/1/1/profile/91" data-asana-gid="11" data-asana-type="user">@Ada Lovelace</a> will check) and I (<a href="https://app.asana.com/1/1/profile/92" data-asana-gid="12" data-asana-type="user">@Grace Hopper</a>).</body>"#;
+        let text = "(https://app.asana.com/1/1/profile/91 will check) and I (https://app.asana.com/1/1/profile/92).";
+
+        assert_eq!(
+            readable(text, Some(html)),
+            "(@Ada Lovelace will check) and I (@Grace Hopper)."
+        );
     }
 
     #[test]
