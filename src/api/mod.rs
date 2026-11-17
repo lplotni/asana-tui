@@ -46,6 +46,8 @@ pub enum ApiError {
     Status { status: u16, message: String },
     #[error("Could not reach Asana: {0}")]
     Network(String),
+    #[error("the file is larger than {0} bytes")]
+    TooLarge(usize),
 }
 
 impl ApiError {

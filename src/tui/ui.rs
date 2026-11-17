@@ -7,7 +7,7 @@ use ratatui::widgets::{
     Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
-use super::app::{App, Detail, Focus, Sizes};
+use super::app::{App, Detail, Focus, IMAGE_ROWS, ImageState, Sizes};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -271,7 +271,16 @@ fn split_body(body: Rect) -> (Rect, Rect) {
     (list, detail)
 }
 
-pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
+/// An image attachment fully in view: where the image layer should draw it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownImage {
+    pub attachment_gid: String,
+    pub area: Rect,
+}
+
+/// Draws the screen. Returns the loaded images that are fully in view and
+/// not covered by an overlay; drawing them is up to [`super::images`].
+pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<ShownImage> {
     let (header, body, status, hint_line) = split_screen(frame.area());
     let (list, detail) = split_body(body);
 
@@ -280,8 +289,9 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
     if !narrow || app.focus == Focus::List {
         render_list(frame, list, app, theme, now);
     }
+    let mut images = Vec::new();
     if !narrow || app.focus == Focus::Detail {
-        render_detail(frame, detail, app, theme, now);
+        images = render_detail(frame, detail, app, theme, now);
     }
     render_status(frame, status, app, theme);
     render_hints(frame, hint_line, app, theme);
@@ -291,6 +301,10 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
     if let Some(picker) = &app.picker {
         render_picker(frame, detail, picker, theme);
     }
+    if app.help || app.picker.is_some() {
+        images.clear();
+    }
+    images
 }
 
 /// The project/section picker, drawn over the task pane.
@@ -473,18 +487,30 @@ fn item<'a>(n: &'a Notification, theme: &Theme, now: i64) -> ListItem<'a> {
 
 /// The selected notification's task: its details once loaded, otherwise
 /// what's known so far.
-fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
+fn render_detail(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    theme: &Theme,
+    now: i64,
+) -> Vec<ShownImage> {
     let block = pane("Task", app.focus == Focus::Detail, theme).padding(Padding::horizontal(1));
+    let inner = block.inner(area);
     let width = usize::from(area.width.saturating_sub(4));
     let muted = theme.style(Role::TextMuted);
     let Some(n) = app.selected() else {
         frame.render_widget(block, area);
-        return;
+        return Vec::new();
     };
+    let mut slots = Vec::new();
     let name = n.work_objects.first().map_or("-", |o| o.name.as_str());
     let title = || Line::styled(name.to_owned(), theme.style(Role::Title));
     let lines = match (app.selected_task_gid(), app.selected_detail()) {
-        (Some(_), Some(Detail::Loaded(detail))) => styled(detail::lines(detail, width, now), theme),
+        (Some(_), Some(Detail::Loaded(detail))) => {
+            let (lines, image_slots) = detail::lines_with_images(detail, width, now, IMAGE_ROWS);
+            slots = image_slots;
+            styled(lines, theme)
+        }
         (Some(_), Some(Detail::Failed(message))) => vec![
             title(),
             Line::default(),
@@ -515,6 +541,49 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i
     };
     let scroll = u16::try_from(app.detail_scroll).unwrap_or(u16::MAX);
     frame.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), area);
+    image_areas(frame, inner, app, &slots, theme)
+}
+
+/// For each image slot in view: the area to draw a loaded image in, or a
+/// note in the slot's first visible row (loading, failed, cut off).
+fn image_areas(
+    frame: &mut Frame,
+    inner: Rect,
+    app: &App,
+    slots: &[detail::ImageSlot],
+    theme: &Theme,
+) -> Vec<ShownImage> {
+    let (top, height) = (app.detail_scroll, usize::from(inner.height));
+    let mut shown = Vec::new();
+    for slot in slots {
+        let (start, end) = (slot.line, slot.line + IMAGE_ROWS);
+        if end <= top || start >= top + height {
+            continue;
+        }
+        let first_row = inner.y + u16::try_from(start.saturating_sub(top)).unwrap_or(0);
+        let fully_visible = start >= top && end <= top + height;
+        let note = match app.images.get(&slot.attachment_gid) {
+            Some(ImageState::Loaded(_)) if fully_visible => {
+                shown.push(ShownImage {
+                    attachment_gid: slot.attachment_gid.clone(),
+                    area: Rect::new(inner.x, first_row, inner.width, IMAGE_ROWS as u16),
+                });
+                continue;
+            }
+            Some(ImageState::Loaded(_)) => {
+                ("Scroll to see the whole image".to_owned(), Role::TextMuted)
+            }
+            Some(ImageState::Loading) => ("Loading image…".to_owned(), Role::TextMuted),
+            Some(ImageState::Failed(message)) => (
+                format!("Couldn't load the image: {message}"),
+                Role::ToastError,
+            ),
+            None => continue,
+        };
+        let row = Rect::new(inner.x, first_row, inner.width, 1);
+        frame.render_widget(Line::styled(note.0, theme.style(note.1)), row);
+    }
+    shown
 }
 
 fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -622,7 +691,11 @@ mod tests {
 
     fn draw(app: &App, theme: &Theme) -> Terminal<TestBackend> {
         let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
-        terminal.draw(|f| render(f, app, theme, NOW)).unwrap();
+        terminal
+            .draw(|f| {
+                render(f, app, theme, NOW);
+            })
+            .unwrap();
         terminal
     }
 
@@ -933,7 +1006,9 @@ mod tests {
         app.update(Msg::Resize(sizes(Rect::new(0, 0, width, 24))));
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         terminal
-            .draw(|f| render(f, app, &terminal_theme(), NOW))
+            .draw(|f| {
+                render(f, app, &terminal_theme(), NOW);
+            })
             .unwrap();
         terminal
     }
@@ -1219,5 +1294,126 @@ mod tests {
         };
         assert!(row(22).contains("Could not reach Asana"), "{}", row(22));
         assert!(row(23).contains("? help"), "{}", row(23));
+    }
+
+    // --- Images ---------------------------------------------------------------
+
+    const IMAGE: &str = "1200000000000301";
+
+    /// The selected task has one image attachment, scrolled so that its
+    /// space starts `offset` rows below the top of the pane.
+    fn app_with_image(state: Option<crate::tui::app::ImageState>, offset: isize) -> App {
+        let mut app = app_with(fixture("notifications_page.json"));
+        let gid = app.selected_task_gid().unwrap().to_owned();
+        let text = std::fs::read_to_string("tests/fixtures/attachments.json").unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let task = std::fs::read_to_string("tests/fixtures/task_full.json").unwrap();
+        let task: serde_json::Value = serde_json::from_str(&task).unwrap();
+        let detail = crate::core::TaskDetail {
+            task: serde_json::from_value(task["data"].clone()).unwrap(),
+            comments: Vec::new(),
+            activity_count: 0,
+            attachments: serde_json::from_value(value["data"].clone()).unwrap(),
+        };
+        app.update(Msg::DetailDue { gid: gid.clone() });
+        app.update(Msg::DetailLoaded {
+            gid,
+            result: Ok(Box::new(detail.clone())),
+        });
+        app.images.clear();
+        if let Some(state) = state {
+            app.images.insert(IMAGE.into(), state);
+        }
+        let (_, slots) = detail::lines_with_images(
+            &detail,
+            app.sizes.detail_width,
+            NOW,
+            crate::tui::app::IMAGE_ROWS,
+        );
+        app.detail_scroll = (slots[0].line as isize - offset).max(0) as usize;
+        app
+    }
+
+    fn draw_images(app: &App) -> (Terminal<TestBackend>, Vec<ShownImage>) {
+        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        let mut shown = Vec::new();
+        terminal
+            .draw(|f| shown = render(f, app, &terminal_theme(), NOW))
+            .unwrap();
+        (terminal, shown)
+    }
+
+    fn screen_text(terminal: &Terminal<TestBackend>) -> String {
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
+    }
+
+    fn loaded_image() -> crate::tui::app::ImageState {
+        crate::tui::app::ImageState::Loaded(std::sync::Arc::new(image::DynamicImage::new_rgba8(
+            4, 4,
+        )))
+    }
+
+    #[test]
+    fn a_loaded_image_in_full_view_is_handed_out_with_its_area() {
+        let app = app_with_image(Some(loaded_image()), 2);
+
+        let (_, shown) = draw_images(&app);
+
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].attachment_gid, IMAGE);
+        assert_eq!(
+            usize::from(shown[0].area.height),
+            crate::tui::app::IMAGE_ROWS
+        );
+        // Pane border + header row, then two rows of text above the image.
+        assert_eq!(shown[0].area.y, 1 + 1 + 2);
+    }
+
+    #[test]
+    fn a_partly_scrolled_out_image_is_not_drawn() {
+        let app = app_with_image(Some(loaded_image()), -1);
+
+        let (terminal, shown) = draw_images(&app);
+
+        assert!(shown.is_empty());
+        assert!(screen_text(&terminal).contains("Scroll to see the whole image"));
+    }
+
+    #[test]
+    fn an_image_being_downloaded_shows_a_placeholder() {
+        let app = app_with_image(Some(crate::tui::app::ImageState::Loading), 2);
+
+        let (terminal, shown) = draw_images(&app);
+
+        assert!(shown.is_empty());
+        assert!(screen_text(&terminal).contains("Loading image…"));
+    }
+
+    #[test]
+    fn a_failed_image_says_why() {
+        let app = app_with_image(
+            Some(crate::tui::app::ImageState::Failed("HTTP 403".into())),
+            2,
+        );
+
+        let (terminal, _) = draw_images(&app);
+
+        assert!(screen_text(&terminal).contains("Couldn't load the image: HTTP 403"));
+    }
+
+    #[test]
+    fn overlays_hide_images() {
+        let mut app = app_with_image(Some(loaded_image()), 2);
+        app.help = true;
+
+        let (_, shown) = draw_images(&app);
+
+        assert!(shown.is_empty());
     }
 }

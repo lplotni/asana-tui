@@ -6,7 +6,8 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
 use crate::present::{detail, format};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 use crate::api::notifications::Notification;
 use crate::api::tasks::{Membership, Named, TaskStory};
@@ -20,6 +21,10 @@ pub const INITIAL_LOAD: usize = 30;
 pub const REFRESH_WINDOW: usize = 30;
 /// Load the next page when the cursor is this close to the end.
 const LOAD_MORE_MARGIN: usize = 10;
+/// Rows of the task pane given to each image attachment.
+pub const IMAGE_ROWS: usize = 12;
+/// Decoded images kept in memory; older ones are downloaded again if needed.
+pub const MAX_IMAGES: usize = 16;
 
 /// Notifications plus the offset to continue from (`None` at the end).
 pub type Loaded = Result<(Vec<Notification>, Option<String>), String>;
@@ -43,6 +48,11 @@ pub enum Msg {
     DetailLoaded {
         gid: String,
         result: Result<Box<TaskDetail>, String>,
+    },
+    /// An image attachment was downloaded and decoded (or wasn't).
+    ImageLoaded {
+        attachment_gid: String,
+        result: Result<Arc<image::DynamicImage>, String>,
     },
     /// The editor closed: the comment text, or `None` if cancelled.
     CommentWritten {
@@ -113,6 +123,11 @@ pub enum Effect {
     OpenUrl {
         url: String,
     },
+    /// Download and decode an image attachment, then send [`Msg::ImageLoaded`].
+    LoadImage {
+        attachment_gid: String,
+        url: String,
+    },
     /// Hand the terminal to `$EDITOR`, starting with `initial`, then send
     /// [`Msg::CommentWritten`].
     EditComment {
@@ -169,6 +184,14 @@ pub enum Focus {
 pub enum Detail {
     Loading,
     Loaded(Box<TaskDetail>),
+    Failed(String),
+}
+
+/// An image attachment, by attachment GID.
+#[derive(Debug, Clone)]
+pub enum ImageState {
+    Loading,
+    Loaded(Arc<image::DynamicImage>),
     Failed(String),
 }
 
@@ -262,6 +285,10 @@ pub struct App {
     /// Task details by task GID (several notifications can share a task).
     pub details: HashMap<String, Detail>,
     pub focus: Focus,
+    /// Image attachments of the tasks looked at, at most [`MAX_IMAGES`].
+    pub images: HashMap<String, ImageState>,
+    /// Keys of `images`, oldest first (the next to be forgotten).
+    image_order: VecDeque<String>,
     /// First visible line of the detail pane.
     pub detail_scroll: usize,
     /// Current Unix time, set by the event loop (for line counts).
@@ -291,10 +318,12 @@ impl App {
         let after = self.selected_task_gid().map(str::to_owned);
         if after != before {
             self.detail_scroll = 0;
-            if let Some(gid) = after
-                && !self.details.contains_key(&gid)
-            {
-                effects.push(Effect::ScheduleDetail { gid });
+            if let Some(gid) = after {
+                if self.details.contains_key(&gid) {
+                    effects.extend(self.load_images(&gid));
+                } else {
+                    effects.push(Effect::ScheduleDetail { gid });
+                }
             }
         }
         effects
@@ -381,8 +410,23 @@ impl App {
                     Ok(detail) => Detail::Loaded(detail),
                     Err(message) => Detail::Failed(message),
                 };
-                self.details.insert(gid, detail);
+                self.details.insert(gid.clone(), detail);
                 self.detail_scroll = self.detail_scroll.min(self.detail_max_scroll());
+                if self.selected_task_gid() == Some(gid.as_str()) {
+                    self.load_images(&gid)
+                } else {
+                    Vec::new()
+                }
+            }
+            Msg::ImageLoaded {
+                attachment_gid,
+                result,
+            } => {
+                let state = match result {
+                    Ok(image) => ImageState::Loaded(image),
+                    Err(message) => ImageState::Failed(message),
+                };
+                self.remember_image(attachment_gid, state);
                 Vec::new()
             }
             Msg::InboxLoaded(Err(message)) => {
@@ -697,11 +741,54 @@ impl App {
         true
     }
 
+    /// Starts downloading the images of task `gid` that aren't loaded or
+    /// loading. Only `https://` links are followed.
+    fn load_images(&mut self, gid: &str) -> Vec<Effect> {
+        let Some(Detail::Loaded(detail)) = self.details.get(gid) else {
+            return Vec::new();
+        };
+        let wanted: Vec<(String, String)> = detail
+            .attachments
+            .iter()
+            .filter(|a| a.is_image())
+            .filter(|a| matches!(self.images.get(&a.gid), None | Some(ImageState::Failed(_))))
+            .filter_map(|a| {
+                let url = a.download_url.as_ref()?;
+                url.starts_with("https://")
+                    .then(|| (a.gid.clone(), url.clone()))
+            })
+            .collect();
+        wanted
+            .into_iter()
+            .map(|(attachment_gid, url)| {
+                self.remember_image(attachment_gid.clone(), ImageState::Loading);
+                Effect::LoadImage {
+                    attachment_gid,
+                    url,
+                }
+            })
+            .collect()
+    }
+
+    /// Stores an image's state, forgetting the oldest beyond [`MAX_IMAGES`].
+    fn remember_image(&mut self, attachment_gid: String, state: ImageState) {
+        self.image_order.retain(|gid| *gid != attachment_gid);
+        self.image_order.push_back(attachment_gid.clone());
+        self.images.insert(attachment_gid, state);
+        while self.images.len() > MAX_IMAGES {
+            let Some(oldest) = self.image_order.pop_front() else {
+                break;
+            };
+            self.images.remove(&oldest);
+        }
+    }
+
     /// The last scroll position that still fills the detail pane.
     fn detail_max_scroll(&self) -> usize {
         match self.selected_detail() {
             Some(Detail::Loaded(detail)) => {
-                detail::lines(detail, self.sizes.detail_width, self.now)
+                detail::lines_with_images(detail, self.sizes.detail_width, self.now, IMAGE_ROWS)
+                    .0
                     .len()
                     .saturating_sub(self.sizes.detail_rows)
             }

@@ -307,3 +307,47 @@ async fn task_detail_follows_attachment_pages() {
 
     assert_eq!(detail.attachments.len(), 6);
 }
+
+#[tokio::test]
+async fn download_fetches_the_file_without_the_asana_token() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/assets/shot.png"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![1u8, 2, 3]))
+        .mount(&server)
+        .await;
+
+    let bytes = asn::api::attachments::download(&format!("{}/assets/shot.png", server.uri()), 10)
+        .await
+        .unwrap();
+
+    assert_eq!(bytes, [1, 2, 3]);
+    let requests = server.received_requests().await.unwrap();
+    assert!(requests[0].headers.get("authorization").is_none());
+}
+
+#[tokio::test]
+async fn download_refuses_files_over_the_limit() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![0u8; 2000]))
+        .mount(&server)
+        .await;
+
+    let result = asn::api::attachments::download(&format!("{}/big.png", server.uri()), 1000).await;
+
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn download_reports_an_expired_link() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&server)
+        .await;
+
+    let result = asn::api::attachments::download(&format!("{}/old.png", server.uri()), 1000).await;
+
+    assert!(result.is_err());
+}

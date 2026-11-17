@@ -40,7 +40,9 @@ fn main() {
 
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("test backend");
     terminal
-        .draw(|frame| ui::render(frame, &app, &theme, now))
+        .draw(|frame| {
+            ui::render(frame, &app, &theme, now);
+        })
         .expect("draw");
     print!("{}", svg(terminal.backend().buffer(), &theme));
 }

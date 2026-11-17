@@ -1462,3 +1462,153 @@ fn commenting_on_an_already_read_task_sends_no_mark() {
 
     assert!(effects.is_empty());
 }
+
+// --- Images ------------------------------------------------------------------
+
+const IMAGE: &str = "1200000000000301";
+
+fn task_with_attachments() -> TaskDetail {
+    let text = std::fs::read_to_string("tests/fixtures/attachments.json").unwrap();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    TaskDetail {
+        attachments: serde_json::from_value(value["data"].clone()).unwrap(),
+        ..task_detail()
+    }
+}
+
+fn load_task(app: &mut App, gid: &str, detail: TaskDetail) -> Vec<Effect> {
+    app.update(Msg::DetailDue { gid: gid.into() });
+    app.update(Msg::DetailLoaded {
+        gid: gid.into(),
+        result: Ok(Box::new(detail)),
+    })
+}
+
+fn image_loads(effects: &[Effect]) -> Vec<&str> {
+    effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::LoadImage { attachment_gid, .. } => Some(attachment_gid.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn tiny_image() -> Arc<image::DynamicImage> {
+    Arc::new(image::DynamicImage::new_rgba8(2, 2))
+}
+
+#[test]
+fn a_loaded_task_downloads_only_its_images() {
+    let mut app = loaded(3, 10);
+
+    let effects = load_task(&mut app, "t0", task_with_attachments());
+
+    let url = task_with_attachments().attachments[0]
+        .download_url
+        .clone()
+        .unwrap();
+    assert_eq!(
+        effects,
+        [Effect::LoadImage {
+            attachment_gid: IMAGE.into(),
+            url
+        }]
+    );
+    assert!(matches!(app.images.get(IMAGE), Some(ImageState::Loading)));
+}
+
+#[test]
+fn only_https_image_links_are_downloaded() {
+    let mut app = loaded(3, 10);
+    let mut detail = task_with_attachments();
+    detail.attachments[0].download_url = Some("http://example.com/a.png".into());
+
+    let effects = load_task(&mut app, "t0", detail);
+
+    assert!(image_loads(&effects).is_empty());
+}
+
+#[test]
+fn a_downloaded_image_is_kept() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_with_attachments());
+
+    app.update(Msg::ImageLoaded {
+        attachment_gid: IMAGE.into(),
+        result: Ok(tiny_image()),
+    });
+
+    assert!(matches!(app.images.get(IMAGE), Some(ImageState::Loaded(_))));
+}
+
+#[test]
+fn a_failed_image_is_retried_when_the_task_is_reloaded() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_with_attachments());
+    app.update(Msg::ImageLoaded {
+        attachment_gid: IMAGE.into(),
+        result: Err("403".into()),
+    });
+    assert!(matches!(app.images.get(IMAGE), Some(ImageState::Failed(_))));
+
+    let effects = app.update(Msg::DetailLoaded {
+        gid: "t0".into(),
+        result: Ok(Box::new(task_with_attachments())),
+    });
+
+    assert_eq!(image_loads(&effects), [IMAGE]);
+}
+
+#[test]
+fn an_image_already_loaded_is_not_downloaded_again() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_with_attachments());
+    app.update(Msg::ImageLoaded {
+        attachment_gid: IMAGE.into(),
+        result: Ok(tiny_image()),
+    });
+
+    let effects = app.update(Msg::DetailLoaded {
+        gid: "t0".into(),
+        result: Ok(Box::new(task_with_attachments())),
+    });
+
+    assert!(image_loads(&effects).is_empty());
+}
+
+#[test]
+fn only_the_newest_images_are_kept_in_memory() {
+    let mut app = loaded(3, 10);
+    for i in 0..=MAX_IMAGES {
+        app.update(Msg::ImageLoaded {
+            attachment_gid: format!("img{i}"),
+            result: Ok(tiny_image()),
+        });
+    }
+
+    assert_eq!(app.images.len(), MAX_IMAGES);
+    assert!(!app.images.contains_key("img0"));
+    assert!(app.images.contains_key(&format!("img{MAX_IMAGES}")));
+}
+
+#[test]
+fn returning_to_a_cached_task_reloads_its_forgotten_images() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_with_attachments());
+    keys(&mut app, "j");
+    app.images.clear();
+
+    let effects = keys_all(&mut app, "k");
+
+    assert_eq!(image_loads(&effects), [IMAGE]);
+}
+
+#[test]
+fn the_detail_pane_scrolls_past_the_image_space() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_with_attachments());
+
+    let (lines, _) = detail::lines_with_images(&task_with_attachments(), 60, app.now, IMAGE_ROWS);
+    assert_eq!(app.detail_max_scroll(), lines.len() - 20);
+}

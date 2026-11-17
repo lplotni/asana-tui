@@ -2,6 +2,7 @@
 //! in [`app`], drawing in [`ui`].
 
 pub mod app;
+pub mod images;
 pub mod keys;
 pub mod picker;
 pub mod theme;
@@ -42,6 +43,11 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     // ratatui::init enters raw mode and the alternate screen, and installs a
     // panic hook that restores the terminal before the panic is printed.
     let mut terminal = ratatui::init();
+    // Ask the terminal which graphics protocol it speaks before the input
+    // reader starts, so the reader doesn't swallow the answer.
+    let picker = ratatui_image::picker::Picker::from_query_stdio()
+        .unwrap_or_else(|_| ratatui_image::picker::Picker::halfblocks());
+    let mut images = images::ImageCache::new(picker);
     let input = Arc::new(InputGate::default());
     spawn_input_reader(tx.clone(), input.clone());
     let editor = editor::editor_command(|key| std::env::var(key).ok());
@@ -52,7 +58,11 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     run_effects(effects, &client, &workspace, &tx, &mut writes);
 
     let result = loop {
-        if let Err(err) = terminal.draw(|frame| ui::render(frame, &app, &theme, now())) {
+        let drawn = terminal.draw(|frame| {
+            let shown = ui::render(frame, &app, &theme, now());
+            images.draw(frame, &app, &shown);
+        });
+        if let Err(err) = drawn {
             break Err(err.into());
         }
         let Some(msg) = rx.recv().await else {
@@ -217,6 +227,27 @@ fn run_effects(
                 Effect::OpenUrl { url } => {
                     open_in_browser(&url);
                     return;
+                }
+                Effect::LoadImage {
+                    attachment_gid,
+                    url,
+                } => {
+                    let result = match crate::api::attachments::download(
+                        &url,
+                        images::MAX_IMAGE_BYTES,
+                    )
+                    .await
+                    {
+                        Ok(bytes) => tokio::task::spawn_blocking(move || images::decode(&bytes))
+                            .await
+                            .unwrap_or_else(|e| Err(e.to_string()))
+                            .map(Arc::new),
+                        Err(err) => Err(err.to_string()),
+                    };
+                    Msg::ImageLoaded {
+                        attachment_gid,
+                        result,
+                    }
                 }
                 Effect::PostComment {
                     task_gid,

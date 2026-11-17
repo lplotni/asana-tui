@@ -28,9 +28,28 @@ impl Segment {
 /// One display line.
 pub type TextLine = Vec<Segment>;
 
+/// Where an image is drawn: blank lines starting at `line`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageSlot {
+    pub line: usize,
+    pub attachment_gid: String,
+}
+
 /// The detail pane for `detail`, wrapped to `width` columns.
 pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
+    lines_with_images(detail, width, now, 0).0
+}
+
+/// Like [`lines`], plus `image_rows` blank lines under every image that can
+/// be downloaded, and where those lines are (none when `image_rows` is 0).
+pub fn lines_with_images(
+    detail: &TaskDetail,
+    width: usize,
+    now: i64,
+    image_rows: usize,
+) -> (Vec<TextLine>, Vec<ImageSlot>) {
     let task = &detail.task;
+    let mut slots = Vec::new();
     let width = width.max(10);
     let mut out: Vec<TextLine> = Vec::new();
     let push = |text: &str, role: Role, out: &mut Vec<TextLine>| {
@@ -89,6 +108,13 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
         );
         for attachment in &detail.attachments {
             push(&attachment_line(attachment), Role::Text, &mut out);
+            if image_rows > 0 && attachment.is_image() && attachment.download_url.is_some() {
+                slots.push(ImageSlot {
+                    line: out.len(),
+                    attachment_gid: attachment.gid.clone(),
+                });
+                out.extend(std::iter::repeat_n(Vec::new(), image_rows));
+            }
         }
     }
 
@@ -134,7 +160,7 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
             );
         }
     }
-    out
+    (out, slots)
 }
 
 /// "🖼 shot.png · 121 KB", or "📎 Roadmap · Google Drive" for a link.
@@ -495,6 +521,48 @@ mod tests {
         let d = detail("task_full.json");
 
         assert!(!text(&d, 60).iter().any(|l| l.starts_with("Attachments")));
+    }
+
+    #[test]
+    fn image_rows_are_reserved_under_downloadable_images() {
+        let mut d = detail("task_full.json");
+        d.attachments = attachments();
+
+        let (lines, slots) = lines_with_images(&d, 60, now(), 5);
+
+        let text: Vec<String> = lines.iter().map(plain).collect();
+        let label = text
+            .iter()
+            .position(|l| l == "🖼 Checkout flow.png · 121 KB")
+            .unwrap();
+        assert_eq!(
+            slots,
+            [ImageSlot {
+                line: label + 1,
+                attachment_gid: "1200000000000301".into(),
+            }]
+        );
+        assert!(text[label + 1..label + 6].iter().all(String::is_empty));
+        assert_eq!(text[label + 6], "📎 Spec.pdf · 2.3 MB");
+    }
+
+    #[test]
+    fn images_without_a_download_link_get_no_space() {
+        let mut d = detail("task_full.json");
+        d.attachments = attachments();
+        d.attachments[0].download_url = None;
+
+        let (_, slots) = lines_with_images(&d, 60, now(), 5);
+
+        assert!(slots.is_empty());
+    }
+
+    #[test]
+    fn plain_lines_reserve_no_image_space() {
+        let mut d = detail("task_full.json");
+        d.attachments = attachments();
+
+        assert_eq!(lines(&d, 60, now()), lines_with_images(&d, 60, now(), 0).0);
     }
 
     #[test]

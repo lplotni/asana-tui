@@ -1,8 +1,13 @@
 //! `GET /attachments?parent={task}`.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, Client, Page};
+use super::{ApiError, CONNECT_TIMEOUT, Client, Page};
+
+/// How long a whole file download may take.
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Attachment fields shown in the task view.
 pub const ATTACHMENT_FIELDS: &str = "name,resource_subtype,size,download_url";
@@ -52,6 +57,40 @@ impl Client {
         }
         self.get("/attachments", &query).await
     }
+}
+
+/// Downloads a pre-signed `download_url`. It goes to the file host (S3),
+/// not Asana, so the request carries no token. Fails when the file is bigger
+/// than `max_bytes`, without reading the rest.
+pub async fn download(url: &str, max_bytes: usize) -> Result<Vec<u8>, ApiError> {
+    let network = |e: reqwest::Error| ApiError::Network(e.to_string());
+    let http = reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(DOWNLOAD_TIMEOUT)
+        .build()
+        .expect("static client configuration is valid");
+    let mut response = http.get(url).send().await.map_err(network)?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(ApiError::Status {
+            status: status.as_u16(),
+            message: "the attachment link didn't work (it may have expired)".into(),
+        });
+    }
+    if response
+        .content_length()
+        .is_some_and(|len| len > max_bytes as u64)
+    {
+        return Err(ApiError::TooLarge(max_bytes));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(network)? {
+        if bytes.len() + chunk.len() > max_bytes {
+            return Err(ApiError::TooLarge(max_bytes));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
