@@ -1,0 +1,11 @@
+{
+  "name": "asn",
+  "description": "Read and act on Asana tasks from Claude Code with the asn CLI: show, move, assign, create, complete, and capture notes as comments.",
+  "author": {
+    "name": "lplotni"
+  },
+  "homepage": "https://github.com/lplotni/asana-tui",
+  "repository": "https://github.com/lplotni/asana-tui",
+  "license": "MIT",
+  "skills": "./skills"
+}

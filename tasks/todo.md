@@ -576,11 +576,11 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 **Acceptance criteria:**
 - [ ] With the skill installed, reading a task starts the reply with the `--brief` receipt verbatim, and `search`/`board`/`users` results get the one-line notice.
 - [ ] Every write is shown (resolved task, person or `Project › Section`, and the exact command) and runs only after a yes; "capture this" becomes `asn comment <gid> -`.
-- [ ] A test runs `asn … --help` for every `asn` command in the skill's code blocks, so a renamed subcommand fails CI.
+- [x] A test walks every `asn` command in the skill's code blocks through the help output (subcommand path and long flags), so a renamed subcommand or flag fails CI. Checked by mutating the skill.
 
 **Verification:**
-- [ ] The `tests/cli.rs` drift test; `cargo test`, clippy, fmt.
-- [ ] Grep the skill for anything but invented GIDs and names.
+- [x] The drift test (`tests/skill.rs`); `cargo test`, clippy, fmt. `claude plugin validate .` passes (warnings: no version, by design; no icon).
+- [x] Only invented GIDs and names: `the_skill_uses_only_invented_gids` enforces the GIDs.
 - [ ] Manual: install it in Claude Code, then read, move, assign, create and capture on a test task.
 
 **Dependencies:** T24

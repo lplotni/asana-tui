@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "asn",
+  "description": "The asn skill for Claude Code: Asana tasks from your coding session.",
+  "owner": {
+    "name": "lplotni",
+    "url": "https://github.com/lplotni"
+  },
+  "plugins": [
+    {
+      "name": "asn",
+      "source": "./",
+      "description": "Read and act on Asana tasks with the asn CLI (requires asn: brew install lplotni/asn/asn).",
+      "homepage": "https://github.com/lplotni/asana-tui",
+      "license": "MIT"
+    }
+  ]
+}
