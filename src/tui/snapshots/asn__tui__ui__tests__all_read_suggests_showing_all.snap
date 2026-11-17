@@ -1,6 +1,6 @@
 ---
 source: src/tui/ui.rs
-expression: "draw(&app_with(notifications), &terminal_theme()).backend()"
+expression: "draw(&app, &terminal_theme()).backend()"
 ---
 " asn  Inbox · 0 unread                                                              [f] unread only "
 "┏ Inbox ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓┌ Task ───────────────────────────────────────────────┐"
@@ -23,6 +23,6 @@ expression: "draw(&app_with(notifications), &terminal_theme()).backend()"
 "┃                                           ┃│                                                     │"
 "┃                                           ┃│                                                     │"
 "┃                                           ┃│                                                     │"
-"┃                                           ┃│                                                     │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└─────────────────────────────────────────────────────┘"
-" NORMAL                                               e read  u unread  V visual  R refresh  q quit "
+" NORMAL                                                                                             "
+" j/k move   Enter open   e read   u unread   V select   c comment   p project   / search   ? help   "

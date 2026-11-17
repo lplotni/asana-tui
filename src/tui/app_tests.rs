@@ -1341,3 +1341,73 @@ fn a_failed_save_restores_the_old_text_and_says_where_the_new_one_is() {
         toast.text
     );
 }
+
+// --- Commenting marks the task's notifications read ---------------------------
+
+#[test]
+fn a_posted_comment_marks_the_tasks_unread_notifications_read() {
+    // Notifications "0" and "2" are about task t0; "1" is about t1.
+    let mut notifications = inbox(3, |_| false);
+    notifications[2].work_objects[0].gid = "t0".into();
+    let mut app = loaded_with(notifications, None, 10);
+    loaded_detail(&mut app, "t0");
+    app.update(Msg::CommentWritten {
+        task_gid: "t0".into(),
+        text: Some("Done".into()),
+    });
+    let mut stored = task_detail().comments[0].clone();
+    stored.gid = "999".into();
+
+    let effects = app.update(Msg::CommentPosted {
+        task_gid: "t0".into(),
+        local_gid: "local-1".into(),
+        result: Ok(Box::new(stored)),
+    });
+
+    assert_eq!(
+        effects,
+        [Effect::MarkRead {
+            gids: vec!["0".into(), "2".into()],
+            read: true
+        }]
+    );
+    let read: Vec<bool> = app.notifications.iter().map(|n| n.is_read).collect();
+    assert_eq!(read, [true, false, true]);
+}
+
+#[test]
+fn a_failed_comment_leaves_the_notifications_unread() {
+    let mut app = loaded(3, 10);
+    app.update(Msg::CommentWritten {
+        task_gid: "t0".into(),
+        text: Some("Done".into()),
+    });
+
+    let effects = app.update(Msg::CommentPosted {
+        task_gid: "t0".into(),
+        local_gid: "local-1".into(),
+        result: Err("timed out".into()),
+    });
+
+    assert!(effects.is_empty());
+    assert!(!app.notifications[0].is_read);
+}
+
+#[test]
+fn commenting_on_an_already_read_task_sends_no_mark() {
+    let mut app = loaded_with(inbox(2, |_| true), None, 10);
+    app.update(Msg::CommentWritten {
+        task_gid: "t0".into(),
+        text: Some("Done".into()),
+    });
+    let mut stored = task_detail().comments[0].clone();
+    stored.gid = "999".into();
+
+    let effects = app.update(Msg::CommentPosted {
+        task_gid: "t0".into(),
+        local_gid: "local-1".into(),
+        result: Ok(Box::new(stored)),
+    });
+
+    assert!(effects.is_empty());
+}

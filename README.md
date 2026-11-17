@@ -48,12 +48,14 @@ Everything comes from the environment. Nothing is written to disk.
 
 `asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first, and the selected task's details: status, assignee, dates, projects, tags, custom fields, description and every comment. Below 100 columns it shows one pane at a time (`l`/`Enter` and `h`/`Esc` switch).
 
+The bottom line always shows the keys that work in the current context, and `?` lists them all.
+
 | Keys | |
 |---|---|
 | `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move (with counts: `5j`, `12G`) |
 | `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
 | `o` | Open the task in the browser |
-| `c` (or `Tab c`) | Comment on the task in your `$EDITOR` (`:cq` or an empty file cancels) |
+| `c` (or `Tab c`) | Comment on the task in your `$EDITOR` (`:cq` or an empty file cancels); posting marks the task's notifications read |
 | `Tab e` | Edit the description in `$EDITOR` as plain text (asks first if it has formatting, which plain text removes) |
 | `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |

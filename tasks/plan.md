@@ -86,6 +86,10 @@ T0 API spike + fixtures
 - [x] Tagged `v0.1.0`, binaries attached, Homebrew install verified by the user (a teammate on a clean machine is still open)
 - [ ] Handed to 3 teammates for dogfooding (the spec's success metric)
 
+### After v0.1 (from use)
+- [x] Commenting marks the task's unread notifications read
+- [x] A hint line always shows the shortcuts for the current context
+
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
@@ -100,6 +104,7 @@ T0 API spike + fixtures
 
 ## Open Questions
 
-- **Should a mutation mark the notification read?** (spec Q3): the default is no, and it can be decided while dogfooding.
+- ~~Should a mutation mark the notification read?~~ **Decided:** commenting marks the task's notifications read (done 2026-11-17).
+- ~~`U` web key~~ Dropped: not needed.
 - ~~Publishing~~ **Decided:** repo `github.com/lplotni/asana-tui`; v0.1 ships as GitHub Releases (macOS arm64/x86_64, Linux) plus a Homebrew formula in the same repo (`brew tap lplotni/asn https://github.com/lplotni/asana-tui && brew install lplotni/asn/asn`). No crates.io.
 - ~~Rich descriptions~~ **Decided (T11):** edit plain text; a description with formatting asks for confirmation before it's replaced.

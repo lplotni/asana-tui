@@ -92,10 +92,135 @@ fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
     }
 }
 
+/// The keys that work right now, as (keys, what they do), most useful first.
+pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
+    let key = |context: Context, cmd: Cmd| -> String {
+        BINDINGS
+            .iter()
+            .find(|b| b.context == context && b.cmd == cmd)
+            .map(|b| sequence_label(b.keys))
+            .unwrap_or_default()
+    };
+    let normal = |cmd| key(Context::Normal, cmd);
+    let input = |cmd| key(Context::Input, cmd);
+    let pair = |a: String, b: String| format!("{a}/{b}");
+    let lit = |text: &str| text.to_owned();
+
+    if app.help {
+        return vec![(lit("any key"), "close")];
+    }
+    if app.confirm.is_some() {
+        return vec![(lit("y"), "yes"), (lit("any other key"), "no")];
+    }
+    if let Some(picker) = &app.picker {
+        let mut hints = Vec::new();
+        if picker.stage == Stage::Project {
+            hints.push((lit("type"), "to search"));
+        }
+        hints.extend([
+            (pair(input(Cmd::Next), input(Cmd::Prev)), "move"),
+            (input(Cmd::Submit), "choose"),
+            (input(Cmd::Cancel), "cancel"),
+        ]);
+        return hints;
+    }
+    if app.command.is_some() {
+        return vec![
+            (input(Cmd::Submit), "run"),
+            (input(Cmd::Cancel), "cancel"),
+            (lit("q, refresh, unread, read-all"), "commands"),
+        ];
+    }
+    if app.search.as_ref().is_some_and(|s| s.editing) {
+        return vec![
+            (lit("type"), "to filter"),
+            (input(Cmd::Submit), "keep"),
+            (input(Cmd::Cancel), "clear"),
+        ];
+    }
+    let moves = pair(normal(Cmd::MoveDown), normal(Cmd::MoveUp));
+    if app.visual_anchor.is_some() {
+        return vec![
+            (moves, "extend"),
+            (normal(Cmd::MarkRead), "read"),
+            (normal(Cmd::MarkUnread), "unread"),
+            (normal(Cmd::ToggleRead), "toggle"),
+            (normal(Cmd::Back), "cancel"),
+        ];
+    }
+    if app.focus == Focus::Detail {
+        return vec![
+            (moves, "scroll"),
+            (normal(Cmd::Back), "back"),
+            (normal(Cmd::Comment), "comment"),
+            (normal(Cmd::EditDescription), "edit description"),
+            (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::OpenInBrowser), "open in browser"),
+            (normal(Cmd::MarkRead), "read"),
+            (normal(Cmd::Help), "help"),
+        ];
+    }
+    let mut hints = vec![(moves, "move")];
+    if app.search.is_some() {
+        hints.push((
+            pair(normal(Cmd::NextMatch), normal(Cmd::PrevMatch)),
+            "next/previous match",
+        ));
+        hints.push((normal(Cmd::Back), "clear search"));
+    }
+    hints.extend([
+        (normal(Cmd::Open), "open"),
+        (normal(Cmd::MarkRead), "read"),
+        (normal(Cmd::MarkUnread), "unread"),
+        (normal(Cmd::Visual), "select"),
+        (normal(Cmd::Comment), "comment"),
+        (normal(Cmd::AddToProject), "project"),
+        (normal(Cmd::Search), "search"),
+        (normal(Cmd::ToggleFilter), "filter"),
+        (normal(Cmd::Refresh), "refresh"),
+        (normal(Cmd::Help), "help"),
+        (normal(Cmd::Quit), "quit"),
+    ]);
+    hints
+}
+
+/// The hint line: as many of the current context's hints as fit.
+/// `? help` is always kept, at the end, so every other key can be looked up.
+fn render_hints(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    let width_of = |keys: &str, label: &str| keys.chars().count() + 1 + label.chars().count() + 3;
+    let (help, others): (Vec<_>, Vec<_>) = key_hints(app)
+        .into_iter()
+        .partition(|(_, label)| *label == "help");
+    let reserved: usize = help.iter().map(|(k, l)| width_of(k, l)).sum();
+    let mut width = 1 + reserved;
+    let mut shown = Vec::new();
+    for (keys, label) in others {
+        let needed = width_of(&keys, label);
+        if width + needed > usize::from(area.width) {
+            break;
+        }
+        width += needed;
+        shown.push((keys, label));
+    }
+    shown.extend(help);
+    let mut spans = vec![Span::raw(" ")];
+    for (keys, label) in shown {
+        spans.push(Span::styled(keys, theme.style(Role::PickerMatch)));
+        spans.push(Span::styled(
+            format!(" {label}   "),
+            theme.style(Role::Keyhint),
+        ));
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(theme.style(Role::Text)),
+        area,
+    );
+}
+
 /// What fits in a terminal of `size`: Inbox items and the detail pane's text
 /// area. Must match the layout in [`render`].
 pub fn sizes(size: Rect) -> Sizes {
-    let (_, body, _) = split_screen(size);
+    let (_, body, _, _) = split_screen(size);
     let (list, detail) = split_body(body);
     // List: top and bottom border. Detail: borders plus one column of padding
     // on each side.
@@ -107,14 +232,16 @@ pub fn sizes(size: Rect) -> Sizes {
     }
 }
 
-fn split_screen(area: Rect) -> (Rect, Rect, Rect) {
-    let [header, body, status] = Layout::vertical([
+/// Header, body, status bar and the key-hint line.
+fn split_screen(area: Rect) -> (Rect, Rect, Rect, Rect) {
+    let [header, body, status, hints] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
         Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .areas(area);
-    (header, body, status)
+    (header, body, status, hints)
 }
 
 /// Below this width only the focused pane is shown, at full width.
@@ -130,7 +257,7 @@ fn split_body(body: Rect) -> (Rect, Rect) {
 }
 
 pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
-    let (header, body, status) = split_screen(frame.area());
+    let (header, body, status, hint_line) = split_screen(frame.area());
     let (list, detail) = split_body(body);
 
     render_header(frame, header, app, theme);
@@ -142,6 +269,7 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) {
         render_detail(frame, detail, app, theme, now);
     }
     render_status(frame, status, app, theme);
+    render_hints(frame, hint_line, app, theme);
     if app.help {
         render_help(frame, body, theme);
     }
@@ -164,10 +292,6 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         .border_type(ratatui::widgets::BorderType::Thick)
         .border_style(theme.style(Role::BorderFocused))
         .title(Span::styled(title, theme.style(Role::Title)))
-        .title_bottom(Span::styled(
-            " Ctrl-n/Ctrl-p move · Enter choose · Esc cancel ",
-            theme.style(Role::Keyhint),
-        ))
         .padding(Padding::horizontal(1));
 
     let mut lines = Vec::new();
@@ -449,21 +573,8 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
             theme.style(role),
         ));
     }
-    // A message gets the whole bar; hints return with the next key press.
-    let hints = if app.toast.is_some() || app.error.is_some() {
-        Span::raw("")
-    } else {
-        Span::styled(
-            "e read  u unread  V visual  R refresh  q quit ",
-            theme.style(Role::Keyhint),
-        )
-    };
-    let [left_area, right_area] =
-        Layout::horizontal([Constraint::Min(0), Constraint::Length(hints.width() as u16)])
-            .areas(area);
     let style = theme.style(Role::Statusbar);
-    frame.render_widget(Paragraph::new(Line::from(left)).style(style), left_area);
-    frame.render_widget(Paragraph::new(hints).style(style), right_area);
+    frame.render_widget(Paragraph::new(Line::from(left)).style(style), area);
 }
 
 #[cfg(test)]
@@ -521,11 +632,11 @@ mod tests {
 
     #[test]
     fn sizes_count_two_line_items_and_the_detail_text_area() {
-        // 24 rows − header − status bar − 2 border rows = 20 rows = 10 items.
+        // 24 rows − header − status bar − hint line − 2 border rows = 19 rows = 9 items.
         let s = sizes(Rect::new(0, 0, 100, 24));
-        assert_eq!(s.list_rows, 10);
+        assert_eq!(s.list_rows, 9);
         // The detail pane is 55 of 100 columns, minus borders and padding.
-        assert_eq!((s.detail_width, s.detail_rows), (51, 20));
+        assert_eq!((s.detail_width, s.detail_rows), (51, 19));
         assert_eq!(sizes(Rect::new(0, 0, 100, 3)).list_rows, 1);
     }
 
@@ -793,7 +904,7 @@ mod tests {
         let terminal = draw(&app, &terminal_theme());
 
         let status: String = (0..100)
-            .map(|x| terminal.backend().buffer()[(x, 23)].symbol().to_owned())
+            .map(|x| terminal.backend().buffer()[(x, 22)].symbol().to_owned())
             .collect();
         assert!(status.starts_with(" COMMAND  :read-all▏"), "{status}");
     }
@@ -879,7 +990,7 @@ mod tests {
         let s = sizes(Rect::new(0, 0, 80, 24));
 
         assert_eq!(s.detail_width, 76);
-        assert_eq!(s.list_rows, 10);
+        assert_eq!(s.list_rows, 9);
     }
 
     #[test]
@@ -907,11 +1018,186 @@ mod tests {
         let terminal = draw(&app, &terminal_theme());
 
         let status: String = (0..100)
-            .map(|x| terminal.backend().buffer()[(x, 23)].symbol().to_owned())
+            .map(|x| terminal.backend().buffer()[(x, 22)].symbol().to_owned())
             .collect();
         assert!(
             status.starts_with(" CONFIRM  This will remove formatting. Continue? (y/N)"),
             "{status}"
         );
+    }
+
+    // --- Context-dependent key hints ----------------------------------------
+
+    fn hint_text(app: &App) -> String {
+        key_hints(app)
+            .iter()
+            .map(|(keys, label)| format!("{keys} {label}"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+
+    fn key_event(code: ratatui::crossterm::event::KeyCode) -> Msg {
+        Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            code,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ))
+    }
+
+    #[test]
+    fn the_list_hints_its_main_actions() {
+        let app = app_with(fixture("notifications_page.json"));
+
+        let hints = hint_text(&app);
+
+        for expected in [
+            "j/k move",
+            "Enter open",
+            "e read",
+            "u unread",
+            "V select",
+            "c comment",
+            "p project",
+            "/ search",
+            "? help",
+            "q quit",
+        ] {
+            assert!(hints.contains(expected), "missing {expected:?} in {hints}");
+        }
+    }
+
+    #[test]
+    fn the_task_pane_hints_scrolling_and_task_actions() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "l");
+
+        let hints = hint_text(&app);
+
+        for expected in [
+            "j/k scroll",
+            "Esc back",
+            "c comment",
+            "Tab e edit description",
+            "p project",
+            "o open in browser",
+        ] {
+            assert!(hints.contains(expected), "missing {expected:?} in {hints}");
+        }
+        assert!(!hints.contains("V select"));
+    }
+
+    #[test]
+    fn visual_mode_hints_only_what_applies_to_a_range() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "V");
+
+        let hints = hint_text(&app);
+
+        assert!(
+            hints.contains("e read") && hints.contains("x toggle") && hints.contains("Esc cancel"),
+            "{hints}"
+        );
+        assert!(!hints.contains("comment"), "{hints}");
+    }
+
+    #[test]
+    fn a_kept_search_adds_match_navigation() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "/bravo");
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
+
+        let hints = hint_text(&app);
+
+        assert!(
+            hints.contains("n/N next/previous match") && hints.contains("Esc clear search"),
+            "{hints}"
+        );
+    }
+
+    #[test]
+    fn text_inputs_hint_how_to_finish() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "/b");
+        assert!(hint_text(&app).contains("Enter keep") && hint_text(&app).contains("Esc clear"));
+
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Esc));
+        press(&mut app, ":");
+        let hints = hint_text(&app);
+        assert!(
+            hints.contains("Enter run")
+                && hints.contains("Esc cancel")
+                && hints.contains("read-all"),
+            "{hints}"
+        );
+    }
+
+    #[test]
+    fn the_picker_hints_moving_and_choosing() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        open_picker(&mut app);
+
+        let hints = hint_text(&app);
+
+        assert!(
+            hints.contains("Ctrl-n/Ctrl-p move")
+                && hints.contains("Enter choose")
+                && hints.contains("Esc cancel"),
+            "{hints}"
+        );
+    }
+
+    #[test]
+    fn the_confirm_question_and_help_hint_their_keys() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        with_detail(&mut app);
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Tab));
+        press(&mut app, "e");
+        assert!(hint_text(&app).contains("y yes"), "{}", hint_text(&app));
+
+        press(&mut app, "n");
+        press(&mut app, "?");
+        assert_eq!(hint_text(&app), "any key close");
+    }
+
+    #[test]
+    fn hinted_keys_are_real_bindings() {
+        use crate::tui::keys::{BINDINGS, sequence_label};
+        let labels: Vec<String> = BINDINGS.iter().map(|b| sequence_label(b.keys)).collect();
+        let mut app = app_with(fixture("notifications_page.json"));
+        let mut all = key_hints(&app);
+        press(&mut app, "l");
+        all.extend(key_hints(&app));
+
+        for (keys, _) in all {
+            let parts: Vec<&str> = if keys == "/" {
+                vec!["/"]
+            } else {
+                keys.split('/').collect()
+            };
+            for key in parts {
+                assert!(labels.iter().any(|l| l == key), "{key:?} is not bound");
+            }
+        }
+    }
+
+    #[test]
+    fn the_hint_line_stays_visible_while_a_message_is_shown() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        press(&mut app, "o");
+        assert!(app.toast.is_none() || app.toast.is_some());
+        app.update(Msg::Marked {
+            gids: vec![app.notifications[0].gid.clone()],
+            read: true,
+            result: Err("Could not reach Asana".into()),
+        });
+
+        let terminal = draw(&app, &terminal_theme());
+
+        let row = |y: u16| -> String {
+            (0..100)
+                .map(|x| terminal.backend().buffer()[(x, y)].symbol().to_owned())
+                .collect()
+        };
+        assert!(row(22).contains("Could not reach Asana"), "{}", row(22));
+        assert!(row(23).contains("? help"), "{}", row(23));
     }
 }

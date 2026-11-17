@@ -123,6 +123,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - The comment appears optimistically. If the request fails, it's removed and an error toast is shown. The text is kept as a draft: the next `c` on that task reopens the editor with it.
 - The temp file is created with mode 0600 and removed afterwards. The editor doesn't inherit `ASANA_TOKEN`. While the editor runs, `asn` stops reading the keyboard so no keystroke is taken from it.
 - Comments work on tasks only; on other items `c` explains that.
+- Once Asana confirms the comment, every loaded unread notification about that task is marked read (commenting means the task was dealt with). A failed post marks nothing.
 
 ### F4. Edit description
 
@@ -137,6 +138,8 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - Adds the task to the chosen project. If the task has no project, this gives it its first one. If it already has projects, this adds another and keeps the existing ones. Projects the task already belongs to are hidden in the picker. Removing a task from a project, or moving it between projects, is out of scope.
 
 ### F6. Keymap: vim first, Asana web aliases always on
+
+- **Hint line:** the bottom line always shows the keys for the current context (list, task pane, visual mode, picker, search, command line, confirm question, help), taken from the keymap table. `? help` is always kept when space runs out.
 
 Vim is the primary keymap. Asana web Inbox shortcuts are aliases that are always enabled wherever they don't clash with vim, so people coming from the web app can keep their muscle memory. Applies to every list and pane.
 
@@ -288,4 +291,4 @@ One `TestBackend` render snapshot per screen with the `terminal` theme, plus one
 ## Open Questions
 
 1. **Publishing name:** the binary is `asn` and the repo lives under GitHub user `lplotni` (both decided). Check crates.io and Homebrew for a free package name before the first release. The package name can differ from the binary name.
-2. **Should a mutation mark the notification read?** For example, should commenting on a task mark its notification read? The spec says no (explicit only). Confirm while dogfooding.
+2. ~~Should a mutation mark the notification read?~~ **Decided:** posting a comment marks every unread notification about that task read (TUI). Other mutations don't.

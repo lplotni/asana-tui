@@ -433,6 +433,8 @@ impl App {
                             text: "Comment posted".into(),
                             is_error: false,
                         });
+                        // Commenting means the task was dealt with.
+                        return self.mark_task_read(&task_gid);
                     }
                     Err(message) => {
                         if let Some(comments) = comments {
@@ -967,6 +969,24 @@ impl App {
             text,
             expected_modified_at,
         }]
+    }
+
+    /// Marks every loaded unread notification about `task_gid` read.
+    fn mark_task_read(&mut self, task_gid: &str) -> Vec<Effect> {
+        let gids: Vec<String> = self
+            .notifications
+            .iter()
+            .filter(|n| !n.is_read && n.work_objects.first().is_some_and(|o| o.gid == task_gid))
+            .map(|n| n.gid.clone())
+            .collect();
+        if gids.is_empty() {
+            return Vec::new();
+        }
+        self.replace_keeping_selection(|app| app.set_read(&gids, true));
+        for gid in &gids {
+            self.pending_marks.insert(gid.clone(), true);
+        }
+        vec![Effect::MarkRead { gids, read: true }]
     }
 
     /// Opens the editor for a comment on the selected task, with any draft
