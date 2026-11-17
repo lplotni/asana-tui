@@ -222,3 +222,30 @@ fn rich_text_is_detected_from_html_notes() {
     ));
     assert!(!core::has_formatting(""));
 }
+
+#[tokio::test]
+async fn comment_reactions_are_parsed() {
+    let server = MockServer::start().await;
+    serve_task(&server, fixture("task_full.json")).await;
+    let story = json!({
+        "gid": "1", "type": "comment", "text": "hi",
+        "created_at": "2026-11-03T09:11:43.087Z", "created_by": null,
+        "reaction_summary": [
+            { "emoji_base": "👍", "variant": "👍🏽", "count": 2, "reacted": true }
+        ]
+    });
+    serve_stories(&server, None, json!({ "data": [story], "next_page": null })).await;
+
+    let detail = core::task_detail(&client(&server), TASK).await.unwrap();
+
+    let reactions = &detail.comments[0].reaction_summary;
+    assert_eq!(reactions.len(), 1);
+    assert_eq!(reactions[0].variant, "👍🏽");
+    assert_eq!(reactions[0].count, 2);
+}
+
+#[test]
+fn story_fields_request_reactions() {
+    assert!(STORY_FIELDS.contains("reaction_summary.variant"));
+    assert!(STORY_FIELDS.contains("reaction_summary.count"));
+}

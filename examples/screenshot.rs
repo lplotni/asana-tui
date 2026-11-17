@@ -58,6 +58,7 @@ fn demo_task() -> TaskDetail {
         text: Some(text.into()),
         created_at: when.into(),
         created_by: Some(named("2", who)),
+        reaction_summary: Vec::new(),
     };
     TaskDetail {
         task: Task {

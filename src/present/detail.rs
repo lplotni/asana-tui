@@ -108,6 +108,18 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
         for line in wrap(text, width.saturating_sub(2)) {
             out.push(vec![Segment::new(format!("  {line}"), Role::Text)]);
         }
+        if !comment.reaction_summary.is_empty() {
+            let reactions: Vec<String> = comment
+                .reaction_summary
+                .iter()
+                .map(|r| format!("{} {}", r.variant, r.count))
+                .collect();
+            push(
+                &format!("  {}", reactions.join(" · ")),
+                Role::TaskMeta,
+                &mut out,
+            );
+        }
     }
     out
 }
@@ -380,6 +392,37 @@ mod tests {
             let byline = format!("{author} · {}", relative_time(&c.created_at, now()));
             assert!(lines.contains(&byline), "missing {byline}");
         }
+    }
+
+    #[test]
+    fn comment_reactions_are_shown_under_the_comment() {
+        let mut d = detail("task_full.json");
+        d.comments.truncate(1);
+        d.comments[0].reaction_summary = vec![
+            crate::api::tasks::Reaction {
+                variant: "👍".into(),
+                count: 3,
+            },
+            crate::api::tasks::Reaction {
+                variant: "🎉".into(),
+                count: 1,
+            },
+        ];
+
+        let lines = text(&d, 60);
+
+        assert_eq!(lines.last().unwrap(), "  👍 3 · 🎉 1");
+    }
+
+    #[test]
+    fn comments_without_reactions_have_no_reaction_line() {
+        let mut d = detail("task_full.json");
+        d.comments.truncate(1);
+        let body = d.comments[0].text.clone().unwrap();
+
+        let lines = text(&d, 200);
+
+        assert_eq!(lines.last().unwrap(), &format!("  {body}"));
     }
 
     #[test]

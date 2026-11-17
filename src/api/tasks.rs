@@ -10,7 +10,8 @@ notes,html_notes,permalink_url,modified_at,memberships.project.name,memberships.
 tags.name,custom_fields.name,custom_fields.display_value,parent.name,num_subtasks";
 
 /// Story fields: enough to show comments and count the rest.
-pub const STORY_FIELDS: &str = "type,resource_subtype,text,created_at,created_by.name";
+pub const STORY_FIELDS: &str = "type,resource_subtype,text,created_at,created_by.name,\
+reaction_summary.variant,reaction_summary.count";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Named {
@@ -78,6 +79,16 @@ pub struct TaskStory {
     pub created_at: String,
     #[serde(default)]
     pub created_by: Option<Named>,
+    /// Emoji reactions, one entry per emoji (skin tone included).
+    #[serde(default)]
+    pub reaction_summary: Vec<Reaction>,
+}
+
+/// One emoji and how many people reacted with it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reaction {
+    pub variant: String,
+    pub count: u32,
 }
 
 impl TaskStory {

@@ -1025,6 +1025,7 @@ impl App {
                     gid: "me".into(),
                     name: "You".into(),
                 }),
+                reaction_summary: Vec::new(),
             });
         }
         self.posting.insert(local_gid.clone(), text.clone());
