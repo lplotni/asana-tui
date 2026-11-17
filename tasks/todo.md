@@ -338,6 +338,69 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
+## Phase 3d: Complete and assign (F16, F17)
+
+### - [ ] T16: `asn task done` and `asn task assign`
+
+**Description:**
+- `core::set_completed(client, task, bool)` and `core::assign(client, task, assignee)`, where the assignee is a user GID, `me` or none. Both are `PUT /tasks/{gid}`, and assign returns the new assignee.
+- CLI: `asn task done <gid> [--undo]` and `asn task assign <gid> <user-gid|me|none>`. `asn task <gid> [--json]` is unchanged.
+
+**Acceptance criteria:**
+- [ ] `done` sends `{completed: true}`, and `--undo` sends `false`. `assign` sends the GID, `"me"` or `null`, and prints the new assignee (or `unassigned`).
+- [ ] `asn task <gid>` and `asn task <gid> --json` behave exactly as before.
+
+**Verification:**
+- [ ] Tests: `wiremock` tests for both requests. CLI tests that the subcommands are in the help and that `asn task <gid>` still parses.
+
+**Dependencies:** None
+
+**Files likely touched:** `src/api/tasks.rs`, `src/core/mod.rs`, `src/main.rs`, `tests/api_task.rs`, `tests/cli.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T17: `d` completes, with undo
+
+**Description:** `d` toggles completion of the shown task or card. On a board the card leaves its column at once (`BoardView::remove`), and the board reloads. The success toast offers undo, and `d` as the very next key reopens the task (on a board, the card comes back selected). A failure restores the card or state and shows an error.
+
+**Acceptance criteria:**
+- [ ] `d` on a card removes it, sends the completion, and reloads the board. `d` again right after reopens it.
+- [ ] `d` in the Inbox toggles the loaded task's state, and asks to wait when it isn't loaded.
+- [ ] Another key ends the undo. A failure restores and says so.
+
+**Verification:**
+- [ ] Tests: `tui/board.rs` (remove) and `app_tests.rs` for each criterion. Key collision and help overlay tests.
+
+**Dependencies:** T16
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/board.rs`, `src/tui/keys.rs`, `src/tui/mod.rs`, `src/tui/ui.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T18: `Tab a` assigns
+
+**Description:** `Tab a` opens a people picker with "Me" and "Unassigned" first, and typing searches people. `Enter` sends the assignment. The task pane shows the assignee Asana returns, and a board reloads.
+
+**Acceptance criteria:**
+- [ ] `Tab a`, then `Enter` on "Me", assigns to me. "Unassigned" clears the assignee. Typing a name and choosing a person assigns them.
+- [ ] Results arrive for the latest query only. A failure says so.
+
+**Verification:**
+- [ ] Tests: `app_tests.rs` for each criterion. A picker snapshot. Hints and help.
+- [ ] Manual (with T17): complete, undo and assign on a real board and in the Inbox.
+
+**Dependencies:** T16
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/picker.rs`, `src/tui/keys.rs`, `src/tui/mod.rs`, `src/tui/ui.rs`, `src/tui/app_tests.rs`, `README.md`
+
+**Estimated scope:** M
+
+---
+
 ## Phase 4: Ship
 
 ### - [x] T9: Help, README and spec updates

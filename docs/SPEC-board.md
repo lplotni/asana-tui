@@ -87,6 +87,8 @@ A card's column is its membership whose `project.gid` is this project. Other mem
 | `b` | Inbox | open the selected task's project board | asn |
 | `R` | board | refresh the board | asn |
 | `Tab q` | board | new task in the selected column (F14) | Asana |
+| `d` | Inbox, board | complete / reopen the task (F16); `d` again right after undoes | asn |
+| `Tab a` | Inbox, board | assign the task (F17) | Asana |
 
 `V` (visual mode), `e`/`u`/`x` (read state) and `f` (unread filter) are Inbox-only and do nothing on the board. The hint line gets a `board` context. The help overlay and the no-collision test both cover the new bindings, because they are generated from the same table in `keys.rs`.
 
@@ -131,6 +133,25 @@ Added after F14 at the user's request. It applies to both screens, because the e
   - URLs that aren't mentions, and mentions without a label, stay as they are.
   - `--json` is unchanged.
 - **CLI:** in `asn comment` and `asn desc`, `@` followed by a GID of 10+ digits (e.g. `@1200000000000011`) becomes a mention of that user, task or project. `asn users <query…>` prints matching people as `gid  name`, and `asn search` already finds tasks.
+
+### F16. Complete a task (`d`)
+
+Added after F15 at the user's request. It works on both screens, on the selected task or card.
+
+- `d` toggles completion with `PUT /tasks/{gid}` `{completed}`. A task whose details are loaded uses their state. A board card is open by definition.
+- **On a board**, a completed card leaves its column at once, because boards show open tasks. The board then reloads. In the Inbox, the task pane shows `✓ Completed`.
+- **Undo:** the toast says `Completed "<name>" · d to undo`. Pressing `d` as the next key reopens that task, and on a board its card comes back selected. Any other key ends the undo.
+- **Failure:** the card or state comes back and an error toast is shown.
+- **CLI:** `asn task done <task-gid> [--undo]`.
+
+### F17. Assign a task (`Tab a`)
+
+Added after F15 at the user's request. `Tab a` is Asana's own shortcut, reserved in v0.1's F6.
+
+- `Tab a` opens a people picker. "Me" and "Unassigned" are listed first, and typing searches people in the workspace (the user typeahead from F15). `Enter` assigns.
+- The task is updated with `PUT /tasks/{gid}` `{assignee: <gid> | "me" | null}`. The task pane shows the assignee Asana returns, and a board reloads so the card's initials change.
+- **CLI:** `asn task assign <task-gid> <user-gid | me | none>`.
+- **CLI layout:** `asn task <gid> [--json]` keeps working unchanged. `assign` and `done` are subcommands next to it, and task GIDs are numeric, so they can't clash.
 
 ## Tech Stack, Commands, Structure
 
@@ -239,7 +260,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 
 - **Stacked/list layout or a `v` toggle:** one renderer first. The sections → tasks model leaves room for one later.
 - **Custom fields, tags, subtask/comment counts on cards:** assignee and due date are what a glance needs, and narrow cards depend on that.
-- **Reordering cards, editing sections, completing tasks:** these are workflow, not status. `m` already covers moving between sections, and `o` covers the rest.
+- **Reordering cards, editing sections:** these are workflow, not status. `m` already covers moving between sections, and `o` covers the rest.
 - **Section summaries and "what changed since I last looked":** strong ideas for glancing, but post-MVP. Revisit if scanning 300 cards turns out slow.
 - **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** 60 s polling and session recents cover the job, and nothing is written to disk.
 - **Showing completed tasks:** they are hidden, to keep columns about current work.
