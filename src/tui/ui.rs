@@ -211,15 +211,17 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (input(Cmd::Cancel), "cancel"),
         ];
     }
+    // Most useful first: what doesn't fit is dropped from the end, and
+    // `?` lists everything.
     if app.screen == Screen::Board && app.focus == Focus::Detail {
         return vec![
             (moves, "scroll"),
             (normal(Cmd::Back), "back"),
             (normal(Cmd::Comment), "comment"),
-            (normal(Cmd::EditDescription), "edit description"),
-            (normal(Cmd::AddToProject), "project"),
             (normal(Cmd::MoveToSection), "move"),
-            (normal(Cmd::OpenInBrowser), "open in browser"),
+            (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::EditDescription), "edit"),
+            (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Help), "help"),
         ];
     }
@@ -228,7 +230,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         if app.board_search.is_some() {
             hints.push((
                 pair(normal(Cmd::NextMatch), normal(Cmd::PrevMatch)),
-                "next/previous match",
+                "match",
             ));
             hints.push((normal(Cmd::Back), "end search"));
         }
@@ -238,13 +240,17 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
                 pair(normal(Cmd::FocusLeft), normal(Cmd::FocusRight)),
                 "column",
             ),
-            (normal(Cmd::SwitchProject), "projects"),
+            (normal(Cmd::Comment), "comment"),
+            (normal(Cmd::MoveToSection), "move"),
+            (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::EditDescription), "edit"),
+            (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::NewTask), "new task"),
             (normal(Cmd::Search), "find"),
-            (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
+            (normal(Cmd::SwitchProject), "projects"),
             (normal(Cmd::Refresh), "refresh"),
-            (normal(Cmd::Help), "help"),
             (normal(Cmd::Quit), "quit"),
+            (normal(Cmd::Help), "help"),
         ]);
         return hints;
     }
@@ -262,11 +268,12 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (moves, "scroll"),
             (normal(Cmd::Back), "back"),
             (normal(Cmd::Comment), "comment"),
-            (normal(Cmd::EditDescription), "edit description"),
-            (normal(Cmd::AddToProject), "project"),
-            (normal(Cmd::MoveToSection), "move"),
-            (normal(Cmd::OpenInBrowser), "open in browser"),
             (normal(Cmd::MarkRead), "read"),
+            (normal(Cmd::OpenTaskBoard), "board"),
+            (normal(Cmd::MoveToSection), "move"),
+            (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::EditDescription), "edit"),
+            (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Help), "help"),
         ];
     }
@@ -274,7 +281,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
     if app.search.is_some() {
         hints.push((
             pair(normal(Cmd::NextMatch), normal(Cmd::PrevMatch)),
-            "next/previous match",
+            "match",
         ));
         hints.push((normal(Cmd::Back), "clear search"));
     }
@@ -282,15 +289,20 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         (normal(Cmd::Open), "open"),
         (normal(Cmd::MarkRead), "read"),
         (normal(Cmd::MarkUnread), "unread"),
-        (normal(Cmd::Visual), "select"),
         (normal(Cmd::Comment), "comment"),
+        (normal(Cmd::OpenTaskBoard), "board"),
+        (normal(Cmd::SwitchProject), "projects"),
+        (normal(Cmd::MoveToSection), "move"),
         (normal(Cmd::AddToProject), "project"),
+        (normal(Cmd::EditDescription), "edit"),
+        (normal(Cmd::OpenInBrowser), "browser"),
         (normal(Cmd::Search), "search"),
+        (normal(Cmd::SearchTasks), "tasks"),
         (normal(Cmd::ToggleFilter), "filter"),
-        (normal(Cmd::SearchTasks), "search tasks"),
+        (normal(Cmd::Visual), "select"),
         (normal(Cmd::Refresh), "refresh"),
-        (normal(Cmd::Help), "help"),
         (normal(Cmd::Quit), "quit"),
+        (normal(Cmd::Help), "help"),
     ]);
     hints
 }
@@ -298,7 +310,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
 /// The hint line: as many of the current context's hints as fit.
 /// `? help` is always kept, at the end, so every other key can be looked up.
 fn render_hints(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    let width_of = |keys: &str, label: &str| keys.chars().count() + 1 + label.chars().count() + 3;
+    let width_of = |keys: &str, label: &str| keys.chars().count() + 1 + label.chars().count() + 2;
     let (help, others): (Vec<_>, Vec<_>) = key_hints(app)
         .into_iter()
         .partition(|(_, label)| *label == "help");
@@ -318,7 +330,7 @@ fn render_hints(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     for (keys, label) in shown {
         spans.push(Span::styled(keys, theme.style(Role::PickerMatch)));
         spans.push(Span::styled(
-            format!(" {label}   "),
+            format!(" {label}  "),
             theme.style(Role::Keyhint),
         ));
     }
@@ -1466,7 +1478,7 @@ mod tests {
 
         let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
 
-        assert!(labels.contains(&"next/previous match"), "{labels:?}");
+        assert!(labels.contains(&"match"), "{labels:?}");
     }
 
     #[test]
@@ -1877,9 +1889,9 @@ mod tests {
             "j/k scroll",
             "Esc back",
             "c comment",
-            "Tab e edit description",
+            "Tab e edit",
             "p project",
-            "o open in browser",
+            "o browser",
         ] {
             assert!(hints.contains(expected), "missing {expected:?} in {hints}");
         }
@@ -1909,7 +1921,7 @@ mod tests {
         let hints = hint_text(&app);
 
         assert!(
-            hints.contains("n/N next/previous match") && hints.contains("Esc clear search"),
+            hints.contains("n/N match") && hints.contains("Esc clear search"),
             "{hints}"
         );
     }
@@ -1957,6 +1969,94 @@ mod tests {
         press(&mut app, "n");
         press(&mut app, "?");
         assert_eq!(hint_text(&app), "any key close");
+    }
+
+    fn labels(app: &App) -> Vec<&'static str> {
+        key_hints(app).into_iter().map(|(_, l)| l).collect()
+    }
+
+    fn missing<'a>(labels: &[&str], wanted: &[&'a str]) -> Vec<&'a str> {
+        wanted
+            .iter()
+            .filter(|w| !labels.contains(w))
+            .copied()
+            .collect()
+    }
+
+    #[test]
+    fn every_screen_hints_the_actions_that_work_there() {
+        let mut inbox = app_with(fixture("notifications_page.json"));
+        let wanted = [
+            "read", "unread", "comment", "board", "projects", "project", "move", "edit", "browser",
+        ];
+        assert_eq!(
+            missing(&labels(&inbox), &wanted),
+            [] as [&str; 0],
+            "Inbox list"
+        );
+
+        press(&mut inbox, "l");
+        let wanted = [
+            "back", "comment", "edit", "project", "move", "board", "browser",
+        ];
+        assert_eq!(
+            missing(&labels(&inbox), &wanted),
+            [] as [&str; 0],
+            "Inbox task"
+        );
+
+        let mut board = board_app();
+        let wanted = [
+            "open", "column", "comment", "move", "project", "edit", "browser", "new task", "find",
+            "projects", "refresh",
+        ];
+        assert_eq!(missing(&labels(&board), &wanted), [] as [&str; 0], "board");
+
+        board.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
+        let wanted = ["back", "comment", "edit", "project", "move", "browser"];
+        assert_eq!(
+            missing(&labels(&board), &wanted),
+            [] as [&str; 0],
+            "open card"
+        );
+    }
+
+    #[test]
+    fn a_100_column_hint_line_keeps_the_most_useful_keys_close_together() {
+        let mut board = board_app();
+
+        let terminal = draw_at(&mut board, 100);
+        let buffer = terminal.backend().buffer();
+        let line: String = (0..100)
+            .map(|x| buffer[(x, 23)].symbol().to_owned())
+            .collect();
+
+        assert!(
+            line.starts_with(" j/k move  Enter open  h/l column  c comment  m move"),
+            "{line:?}"
+        );
+        assert!(line.trim_end().ends_with("? help"), "{line:?}");
+    }
+
+    #[test]
+    fn hinted_board_keys_are_real_bindings() {
+        use crate::tui::keys::{BINDINGS, sequence_label};
+        let bound: Vec<String> = BINDINGS.iter().map(|b| sequence_label(b.keys)).collect();
+        let mut app = board_app();
+        let mut all = key_hints(&app);
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
+        all.extend(key_hints(&app));
+
+        for (keys, _) in all {
+            let parts: Vec<&str> = if keys == "/" {
+                vec!["/"]
+            } else {
+                keys.split('/').collect()
+            };
+            for key in parts {
+                assert!(bound.iter().any(|l| l == key), "{key:?} is not bound");
+            }
+        }
     }
 
     #[test]

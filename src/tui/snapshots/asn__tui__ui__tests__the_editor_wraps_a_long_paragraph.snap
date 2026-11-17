@@ -31,4 +31,4 @@ expression: terminal.backend()
 "┃           ┃                                                                                              ┃           │"
 "┗━━━━━━━━━━━┗ Ctrl-s post · Esc cancel · Ctrl-o $EDITOR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛───────────┘"
 " NORMAL  1/10                                                                                                           "
-" Ctrl-s post   Esc cancel   Ctrl-o open in $EDITOR                                                                      "
+" Ctrl-s post  Esc cancel  Ctrl-o open in $EDITOR                                                                        "
