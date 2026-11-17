@@ -225,6 +225,48 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
+## Phase 3b: New task (F14, added after Checkpoint C)
+
+### - [ ] T11: `asn project new`
+
+**Description:** `core::create_task(client, project_gid, section_gid, name)` creates the task unassigned in the project (`POST /tasks`). With a section, it then adds the task to it (`POST /sections/{gid}/addTask`). It returns the new task, plus the section error if only that step failed. `asn project new <project-gid> [--section <gid>] <name…>` prints the GID.
+
+**Acceptance criteria:**
+- [ ] `POST /tasks` sends `{name, projects: [project]}` and no assignee. With `--section`, `addTask` follows for the new GID.
+- [ ] If the section step fails, the GID is still printed, stderr says why, and the exit code is 1. If creating fails, nothing is printed to stdout, and the exit code follows F7.
+
+**Verification:**
+- [ ] Tests: `wiremock` tests in `tests/api_project.rs` (create only, create + section, section refused). A CLI help test for `project new`.
+
+**Dependencies:** None
+
+**Files likely touched:** `src/api/tasks.rs` or `src/api/projects.rs`, `src/core/mod.rs`, `src/main.rs`, `tests/api_project.rs`, `tests/cli.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T12: `Tab q` on the board
+
+**Description:** `Tab q` on the board (card not open) starts the name prompt for the selected column. `Enter` emits `CreateTask`, and the result reloads the board with the new card selected, queuing a reload if one is running. Failures follow F14: a toast, and the name kept as a draft. The prompt shows in the status bar, the hint line has a "new task" context, and `Tab q` appears in the help overlay and README.
+
+**Acceptance criteria:**
+- [ ] `Tab q`, type, `Enter` creates the task in the selected column's section, and the new card is then selected.
+- [ ] `Esc` or an empty name creates nothing. A failed create keeps the name for the next `Tab q`. A section failure says the task was created.
+- [ ] A reload requested while one is running happens after it, for `Tab q` and also for `m`/`p`.
+
+**Verification:**
+- [ ] Tests: `app_tests.rs` for each criterion. A status-bar test for the prompt. The key collision test and the help overlay snapshot.
+- [ ] Manual: create a task on a real board.
+
+**Dependencies:** T11
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/keys.rs`, `src/tui/ui.rs`, `src/tui/mod.rs`, `src/tui/app_tests.rs`, `README.md`
+
+**Estimated scope:** M
+
+---
+
 ## Phase 4: Ship
 
 ### - [x] T9: Help, README and spec updates

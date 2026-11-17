@@ -24,6 +24,7 @@ You reach a board three ways: the project switcher (`P`), `b` on an Inbox task, 
 |---|---|---|
 | Board title | `GET /projects/{gid}?opt_fields=name` | The project's name for the header (`asn --project` only has the GID). Loaded at the same time as the rest. |
 | Columns | `GET /projects/{gid}/sections` | Already used by F5 and `m`. Gives column order and empty columns. |
+| New task (F14) | `POST /tasks` `{name, projects: [project]}`, then `POST /sections/{section}/addTask` `{task}` | Unassigned. `addTask` puts it at the top of the section. |
 | Cards | `GET /projects/{gid}/tasks?completed_since=now&limit=100&opt_fields=name,assignee.name,due_on,due_at,memberships.project.gid,memberships.section.gid` | Follows `next_page` until `null`. `completed_since=now` returns open tasks only. Top-level tasks only (subtasks aren't project members unless added). |
 | Project switcher | `GET /workspaces/{gid}/typeahead?resource_type=project` | Already used by F5 (`core::search_projects`). |
 
@@ -85,6 +86,7 @@ A card's column is its membership whose `project.gid` is this project. Other mem
 | `P` | anywhere | project switcher | asn |
 | `b` | Inbox | open the selected task's project board | asn |
 | `R` | board | refresh the board | asn |
+| `Tab q` | board | new task in the selected column (F14) | Asana |
 
 `V` (visual mode), `e`/`u`/`x` (read state) and `f` (unread filter) are Inbox-only and do nothing on the board. The hint line gets a `board` context. The help overlay and the no-collision test both cover the new bindings, because they are generated from the same table in `keys.rs`.
 
@@ -93,11 +95,24 @@ A card's column is its membership whose `project.gid` is this project. Other mem
 ```
 asn board <project-gid> [--json]    # open tasks of a project, grouped by section
 asn --project <project-gid>         # TUI, opened on that board
+asn project new <project-gid> [--section <gid>] <name…>   # F14: create a task, print its gid
 ```
 
 - Text output: for each section in board order, a line with the section's `gid` and `name`, followed by one indented tab-separated line per task: `gid  name  assignee  due_on`, with an empty field when a value is missing. Plain text, neutralized like the rest of the CLI.
 - `--json`: `{"sections": [...], "tasks": [...]}`, where both are the Asana `data` objects unchanged (the F7 contract). Section membership is read from each task's `memberships`.
 - Exit codes as in F7.
+
+### F14. New task on the board
+
+Added after Checkpoint C at the user's request. It was in Not Doing before.
+
+- `Tab q` (Asana's quick-add key) on the board, with no card open, starts a one-line prompt in the status bar: `NEW TASK` and `Name in <Section>: …`. Typing edits the name, `Enter` creates the task, and `Esc` cancels. An empty name creates nothing.
+- The task is created unassigned in the board's project (`POST /tasks`), then put in the selected column's section (`POST /sections/{gid}/addTask`, which places it at the top). In the "(no section)" column, or on a board with no columns, it isn't put in any section.
+- Once Asana confirms, the board reloads and the new card is selected. If a reload is already running, another one follows it, so the new card is never missed.
+- **Failures never lose the name or make duplicates:**
+  - If creating fails, an error toast is shown, and the next `Tab q` starts with the name typed before.
+  - If the task was created but couldn't be put in the section, a toast says so (`Created, but not in <Section>: …`). The task is still on the board, in Asana's default section, and `m` can move it.
+- CLI: `asn project new <project-gid> [--section <gid>] <name…>` prints the new task's GID. If the task was created but not put in the section, it still prints the GID, and it warns on stderr and exits 1.
 
 ## Tech Stack, Commands, Structure
 
@@ -204,7 +219,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 
 - **Stacked/list layout or a `v` toggle:** one renderer first. The sections → tasks model leaves room for one later.
 - **Custom fields, tags, subtask/comment counts on cards:** assignee and due date are what a glance needs, and narrow cards depend on that.
-- **Reordering cards, editing sections, creating tasks, completing tasks:** these are workflow, not status. `m` already covers moving between sections, and `o` covers the rest.
+- **Reordering cards, editing sections, completing tasks:** these are workflow, not status. `m` already covers moving between sections, and `o` covers the rest.
 - **Section summaries and "what changed since I last looked":** strong ideas for glancing, but post-MVP. Revisit if scanning 300 cards turns out slow.
 - **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** 60 s polling and session recents cover the job, and nothing is written to disk.
 - **Showing completed tasks:** they are hidden, to keep columns about current work.
