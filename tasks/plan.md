@@ -61,7 +61,7 @@ T0 API spike + fixtures
 
 ### Checkpoint B: daily triage possible
 - [ ] Open `asn` and get through a real Inbox to empty using only `j`/`k`/`e`/`V`
-- [ ] Looks right in Rex with `terminal`, `dark`, `light` and `NO_COLOR`
+- [x] Looks right in Rex with `terminal`, `dark`, `light` and `NO_COLOR` (confirmed by the user, 2026-11-17)
 - [ ] The terminal is always restored (`q`, Ctrl-C, forced panic)
 - [ ] **Human review before Phase 3**
 

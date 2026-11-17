@@ -159,7 +159,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 **Verification:**
 - [x] `cargo test`
-- [ ] (Deferred to Checkpoint B, which needs the T7 UI. The query itself is confirmed working in Rex.) Manual in Rex: selection and status bar shading match the terminal theme. After switching the Rex theme between light and dark and restarting `asn`, it still looks right.
+- [x] Manual in Rex: selection and status-bar shading match the terminal theme (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T4
 
@@ -236,7 +236,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 ## Checkpoint B: daily triage possible
 - [ ] Real Inbox processed to empty using only the keyboard. The terminal is always restored.
-- [ ] Visual check in Rex: `terminal` (with tints), `dark`, `light`, `NO_COLOR`.
+- [x] Visual check in Rex: `terminal` (with tints), `dark`, `light`, `NO_COLOR` (confirmed by the user, 2026-11-17).
 - [ ] **Human review before Phase 3.**
 
 ---
