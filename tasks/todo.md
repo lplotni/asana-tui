@@ -425,12 +425,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T10: Release v0.2.0
+### - [x] T10: Release v0.2.0
 
 **Description:** Bump the version in `Cargo.toml` / `Cargo.lock` (`chore: release v0.2.0`), tag it, and let the release workflow build the binaries and update Homebrew, as for v0.1.1. **Ask the user before tagging or pushing.**
 
 **Acceptance criteria:**
-- [ ] `v0.2.0` is tagged, the release has binaries attached, and `brew upgrade asn` installs it.
+- [x] `v0.2.0` is tagged, the release has binaries attached, and `brew upgrade asn` installs it.
 
 **Verification:**
 - [ ] Manual: `asn --version` from the Homebrew install prints 0.2.0.
@@ -444,5 +444,5 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 ---
 
 ### Checkpoint: Complete
-- [ ] All SPEC-board.md success criteria are met, and v0.2.0 is released.
+- [x] All SPEC-board.md success criteria are met, and v0.2.0 is released (2026-11-17; the first release run lost its macOS arm64 runner to GitHub capacity and was re-run).
 - [ ] Two weeks of status checks happen in `asn` instead of the web board (the spec's success metric).

@@ -81,7 +81,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 4: Ship
 - [x] T9: Help, README and spec updates
-- [ ] T10: Release v0.2.0 (ask first)
+- [x] T10: Release v0.2.0 (ask first)
 
 ## Risks and Mitigations
 
