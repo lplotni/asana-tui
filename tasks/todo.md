@@ -464,18 +464,18 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T20: Read `~/.config/asn/config.toml`
+### - [x] T20: Read `~/.config/asn/config.toml`
 
 **Description:** `Config` resolves every setting from the environment, then the file, then the default (F22). `token` and unknown keys are errors. `theme` and `animations` join `Config`; `tui::run` takes the theme choice from it.
 
 **Acceptance criteria:**
-- [ ] Each key: env wins over file, file over default. A missing file behaves exactly as today.
-- [ ] A `token` key, an unknown key, or a wrongly typed value exits 1 naming the file and the key.
-- [ ] The path follows `XDG_CONFIG_HOME`, else `HOME/.config`.
-- [ ] Error messages name the file key and the env variable.
+- [x] Each key: env wins over file, file over default. A missing file behaves exactly as today.
+- [x] A `token` key, an unknown key, or a wrongly typed value exits 1 naming the file and the key.
+- [x] The path follows `XDG_CONFIG_HOME`, else `HOME/.config`.
+- [x] Error messages name the file key and the env variable.
 
 **Verification:**
-- [ ] Unit tests in `config.rs`; `cargo test`, clippy, fmt.
+- [x] Unit tests in `config.rs`; `cargo test`, clippy, fmt.
 
 **Dependencies:** T19
 

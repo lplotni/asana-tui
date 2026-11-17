@@ -163,3 +163,33 @@ fn asn_task_with_a_gid_still_shows_a_task() {
         assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
     }
 }
+
+/// A config directory with `config.toml` holding `text`, for `XDG_CONFIG_HOME`.
+fn config_home(name: &str, text: &str) -> String {
+    let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    std::fs::create_dir_all(home.join("asn")).unwrap();
+    std::fs::write(home.join("asn/config.toml"), text).unwrap();
+    home.display().to_string()
+}
+
+#[test]
+fn the_config_file_supplies_the_workspace() {
+    let home = config_home("cfg-workspace", "workspace = \"1200000000000001\"\n");
+
+    // The workspace is found, so the next problem is the missing token.
+    let output = asn(&["inbox"], &[("XDG_CONFIG_HOME", &home)]);
+
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("No valid Asana token"));
+}
+
+#[test]
+fn a_token_in_the_config_file_exits_1_without_using_it() {
+    let home = config_home("cfg-token", "token = \"secret-pat\"\n");
+
+    let output = asn(&["inbox"], &[("XDG_CONFIG_HOME", &home)]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("\"token\" isn't allowed"));
+    assert!(!stderr(&output).contains("secret-pat"));
+}

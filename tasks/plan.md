@@ -85,7 +85,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 5: Config file and completion animation (F22, F23; ADR-010)
 - [x] T19: Spec, ADR-010 and tasks
-- [ ] T20: Read `~/.config/asn/config.toml` (env over file over default)
+- [x] T20: Read `~/.config/asn/config.toml` (env over file over default)
 - [ ] T21: `asn init` interview, and first-run setup in the TUI
 - [ ] T22: Completion animation on board cards (frame timer only while animating)
 - [ ] T23: Docs

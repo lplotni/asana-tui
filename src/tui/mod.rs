@@ -39,7 +39,12 @@ pub async fn run(
     client: Client,
     project: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let theme = Theme::load(|key| std::env::var(key).ok())?;
+    // The theme choice comes from the config (env, then file); NO_COLOR stays
+    // environment-only.
+    let theme = Theme::load(|key| match key {
+        "ASN_THEME" => config.theme.clone(),
+        _ => std::env::var(key).ok(),
+    })?;
     let client = Arc::new(client);
     let workspace: Arc<str> = config.workspace.into();
     let search = config.search;

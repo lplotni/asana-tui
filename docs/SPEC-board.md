@@ -172,7 +172,7 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
 
 - **Precedence:** a non-empty environment variable, then the file, then the default. `ASANA_TOKEN` still wins over any `token_cmd`. `NO_COLOR` stays environment-only.
 - **No secrets in the file:** a `token` key is an error: `config.toml: "token" isn't allowed — put a command that prints it in token_cmd, or set ASANA_TOKEN`. Unknown keys and wrongly typed values are errors that name the file, the key and the line (exit 1).
-- **Errors name both places:** e.g. `No workspace — set workspace in ~/.config/asn/config.toml (or run asn init), or set ASANA_WORKSPACE`. A missing token keeps exit code 2.
+- **Errors name both places:** e.g. `ASANA_WORKSPACE is not set and config.toml has no workspace — run asn init, or …`, and a bad value says where it came from (`workspace in config.toml must be a numeric GID, …`). A missing token keeps exit code 2.
 - **`asn init`:** an interview on the terminal, then the file is written.
   1. If the file exists: `~/.config/asn/config.toml exists. Replace it? [y/N]`. Anything but `y` leaves it untouched (exit 0).
   2. **Token command:** explains that the token is never stored and shows examples (`op read …`, `pass show …`, and on macOS `security find-generic-password -s asn -w` with the matching `add-generic-password` line). The default offered is `$ASANA_TOKEN_CMD` if set. An empty answer is accepted only when `ASANA_TOKEN` is set (the file then has no `token_cmd`). The command is run once to check it prints something.

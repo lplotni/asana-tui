@@ -2,7 +2,7 @@ use std::process::ExitCode;
 
 use asn::api::{ASANA_API_URL, Client};
 use asn::cli::inbox;
-use asn::config::Config;
+use asn::config::{self, Config, ConfigError, FileConfig};
 use asn::core;
 use clap::{Parser, Subcommand};
 
@@ -175,6 +175,16 @@ enum ProjectCommand {
 /// Default for `asn inbox --limit`.
 const DEFAULT_INBOX_LIMIT: u32 = 50;
 
+/// The settings from the environment, then the config file (spec F22).
+fn load_config() -> Result<Config, ConfigError> {
+    let env = |key: &str| std::env::var(key).ok();
+    let file = match config::file_path(env) {
+        Some(path) => FileConfig::read(&path)?,
+        None => FileConfig::default(),
+    };
+    Config::resolve(env, &file)
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = match Cli::try_parse() {
@@ -190,7 +200,7 @@ async fn main() -> ExitCode {
         }
     };
 
-    let config = match Config::from_env(|key| std::env::var(key).ok()) {
+    let config = match load_config() {
         Ok(config) => config,
         Err(err) => return fail(&err, err.exit_code()),
     };
