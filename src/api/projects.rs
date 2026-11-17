@@ -1,4 +1,5 @@
-//! Project search, sections, and adding a task to a project.
+//! Project search, sections, adding a task to a project and moving it
+//! between sections.
 
 use serde::Deserialize;
 
@@ -57,6 +58,23 @@ impl Client {
                 &format!("/tasks/{task_gid}/addProject"),
                 &[],
                 &serde_json::json!({ "data": data }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Moves the task into `section_gid` (out of its current section of that
+    /// project). The task must already be in the section's project.
+    pub async fn add_task_to_section(
+        &self,
+        section_gid: &str,
+        task_gid: &str,
+    ) -> Result<(), ApiError> {
+        let _: serde_json::Value = self
+            .post(
+                &format!("/sections/{section_gid}/addTask"),
+                &[],
+                &serde_json::json!({ "data": { "task": task_gid } }),
             )
             .await?;
         Ok(())

@@ -97,6 +97,18 @@ enum ProjectCommand {
         #[arg(long, value_name = "SECTION_GID")]
         section: Option<String>,
     },
+    /// Move a task to another section of a project it's in
+    Move {
+        #[arg(value_name = "TASK_GID")]
+        task: String,
+        #[arg(value_name = "SECTION_GID")]
+        section: String,
+    },
+    /// List a project's sections (gid and name)
+    Sections {
+        #[arg(value_name = "PROJECT_GID")]
+        project: String,
+    },
 }
 
 /// Default for `asn inbox --limit`.
@@ -211,6 +223,21 @@ async fn main() -> ExitCode {
                 },
         }) => match core::add_to_project(&client, &task, &project, section.as_deref()).await {
             Ok(()) => ExitCode::SUCCESS,
+            Err(err) => fail(&err, err.exit_code()),
+        },
+        Some(Command::Project {
+            command: ProjectCommand::Move { task, section },
+        }) => match core::move_to_section(&client, &task, &section).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => fail(&err, err.exit_code()),
+        },
+        Some(Command::Project {
+            command: ProjectCommand::Sections { project },
+        }) => match core::sections(&client, &project).await {
+            Ok(sections) => {
+                print!("{}", asn::cli::project::render_sections(&sections));
+                ExitCode::SUCCESS
+            }
             Err(err) => fail(&err, err.exit_code()),
         },
         Some(Command::Desc {

@@ -94,3 +94,39 @@ async fn adding_without_a_section_sends_only_the_project() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn moving_to_a_section_adds_the_task_to_that_section() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/sections/77/addTask"))
+        .and(body_json(json!({ "data": { "task": "31" } })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    core::move_to_section(&client(&server), "31", "77")
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn moving_to_a_section_reports_asanas_refusal() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "errors": [{ "message": "task: Not in the section's project" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let err = core::move_to_section(&client(&server), "31", "77")
+        .await
+        .unwrap_err();
+
+    assert!(
+        err.to_string().contains("Not in the section's project"),
+        "{err}"
+    );
+}

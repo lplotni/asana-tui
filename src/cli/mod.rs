@@ -1,6 +1,7 @@
 //! Output formatting for CLI subcommands.
 
 pub mod inbox;
+pub mod project;
 pub mod search;
 pub mod task;
 

@@ -156,6 +156,15 @@ pub async fn add_to_project(
     client.add_project(task_gid, project_gid, section_gid).await
 }
 
+/// Moves the task to another section of a project it's already in.
+pub async fn move_to_section(
+    client: &Client,
+    task_gid: &str,
+    section_gid: &str,
+) -> Result<(), ApiError> {
+    client.add_task_to_section(section_gid, task_gid).await
+}
+
 /// Why a description couldn't be saved.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveNotesError {
