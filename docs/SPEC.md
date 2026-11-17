@@ -44,6 +44,8 @@ Notification fields we rely on: `gid`, `is_read`, `created_at`, `story_resource_
 
 Environment variables only. The only file `asn` ever reads is an optional theme file that the user points to with `ASN_THEME`.
 
+> Since F22 ([SPEC-board.md](SPEC-board.md#f22-config-file-and-first-run-setup), ADR-010) these settings can also come from `~/.config/asn/config.toml`, written by `asn init`. The variables below still work and win over the file. The token itself is never stored in the file.
+
 | Variable | Required | Purpose |
 |---|---|---|
 | `ASANA_TOKEN` | one of these two | Personal Access Token, sent as `Authorization: Bearer`. |

@@ -1,7 +1,7 @@
 # ADR-003: Configuration and credentials come only from the environment
 
 ## Status
-Accepted
+Superseded by [ADR-010](ADR-010-config-file-without-secrets.md)
 
 ## Date
 2026-11-16 (recorded 2026-11-17)

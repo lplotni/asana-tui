@@ -153,6 +153,54 @@ Added after F15 at the user's request. `Tab a` is Asana's own shortcut, reserved
 - **CLI:** `asn task assign <task-gid> <user-gid | me | none>`.
 - **CLI layout:** `asn task <gid> [--json]` keeps working unchanged. `assign` and `done` are subcommands next to it, and task GIDs are numeric, so they can't clash.
 
+## Feature Spec — Config file and completion animation (F22–F23)
+
+Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with [ADR-010](decisions/ADR-010-config-file-without-secrets.md).
+
+### F22. Config file and first-run setup
+
+- **Where:** `$XDG_CONFIG_HOME/asn/config.toml`, or `~/.config/asn/config.toml` when `XDG_CONFIG_HOME` is unset or empty. The same path on macOS and Linux.
+- **Keys** (all optional in the file; each has an environment variable that wins over it):
+
+  | Key | Env | Values | Default |
+  |---|---|---|---|
+  | `workspace` | `ASANA_WORKSPACE` | numeric GID, as a string | none (required) |
+  | `token_cmd` | `ASANA_TOKEN_CMD` | a command that prints the token | none |
+  | `search` | `ASN_SEARCH` | `"tasks"`, `"typeahead"` | `"tasks"` |
+  | `theme` | `ASN_THEME` | `"terminal"`, `"dark"`, `"light"`, or a theme file path | `"terminal"` |
+  | `animations` | `ASN_ANIMATIONS` (`on`/`off`) | `true`, `false` | `true` |
+
+- **Precedence:** a non-empty environment variable, then the file, then the default. `ASANA_TOKEN` still wins over any `token_cmd`. `NO_COLOR` stays environment-only.
+- **No secrets in the file:** a `token` key is an error: `config.toml: "token" isn't allowed — put a command that prints it in token_cmd, or set ASANA_TOKEN`. Unknown keys and wrongly typed values are errors that name the file, the key and the line (exit 1).
+- **Errors name both places:** e.g. `No workspace — set workspace in ~/.config/asn/config.toml (or run asn init), or set ASANA_WORKSPACE`. A missing token keeps exit code 2.
+- **`asn init`:** an interview on the terminal, then the file is written.
+  1. If the file exists: `~/.config/asn/config.toml exists. Replace it? [y/N]`. Anything but `y` leaves it untouched (exit 0).
+  2. **Token command:** explains that the token is never stored and shows examples (`op read …`, `pass show …`, and on macOS `security find-generic-password -s asn -w` with the matching `add-generic-password` line). The default offered is `$ASANA_TOKEN_CMD` if set. An empty answer is accepted only when `ASANA_TOKEN` is set (the file then has no `token_cmd`). The command is run once to check it prints something.
+  3. **Workspace:** fetched with `GET /workspaces` using that token. One workspace is chosen and shown. Several are listed with numbers and you pick one; the default is `$ASANA_WORKSPACE` if it's among them. A failed request (e.g. 401) shows the error and goes back to step 2.
+  4. The file is written with mode 0600 (directories created as needed), with the chosen `workspace` and `token_cmd`, and the other keys present as commented-out defaults so they can be found. Then: `Saved ~/.config/asn/config.toml`.
+  - stdin and stdout must be terminals; otherwise `asn init` exits 1 with `asn init needs a terminal`. Ctrl-D or Ctrl-C at any prompt aborts without writing.
+- **First run of the TUI:** `asn` with no subcommand, no config file, and stdin/stdout on a terminal runs the same interview before the TUI starts, then continues with the new settings. CLI subcommands never prompt; without a file they behave exactly as before.
+
+### F23. Completion animation
+
+- When `d` completes a task on a board, its card plays a short animation before it leaves its column, instead of disappearing at once (F16):
+  1. **Strike (about 240 ms):** a strike-through sweeps across the name from left to right, and the second line reads `✓ done` (role `toast_success`).
+  2. **Collapse (about 160 ms):** the card shrinks to its name line, then is gone, and the cards below move up.
+- Frames come every 40 ms. Other keys keep working during the animation. The cursor stays on the card until it leaves, then behaves as in F16.
+- **Undo:** `d` during the animation (the next key, as in F16) reopens the task: the animation stops and the card stays as it was.
+- **Board reloads** that arrive during the animation are applied when it ends, so the card isn't cut off mid-way.
+- **Failure:** if Asana refuses the completion, the card is restored (as in F16), whether or not the animation has finished.
+- **Off switch:** `animations = false` in the config file or `ASN_ANIMATIONS=off` gives F16's instant behaviour.
+- The Inbox and search task pane are unchanged: they show `✓ Completed` at once, and nothing disappears there.
+- Styles come from existing roles (`text_muted` with a crossed-out modifier, `toast_success`). No new theme roles.
+
+**Tests (F22–F23):**
+- `config.rs`: precedence (env over file over default) for every key; `token` rejected; unknown key and wrong type rejected with the key named; `XDG_CONFIG_HOME` and `HOME` path resolution; a missing file is the old env-only behaviour.
+- The interview, driven by scripted input and output: single and multiple workspaces, replace declined, empty token command with and without `ASANA_TOKEN`, a failing token command, a 401 from `GET /workspaces` (wiremock), and the written file (contents and mode 0600).
+- `tests/cli.rs`: `asn init` without a terminal exits 1; a subcommand never prompts.
+- App tests: the animation's state from `d` through the frames to removal; undo during it; a reload during it is held; a failure restores; animations off removes at once.
+- Snapshots: a card mid-strike and mid-collapse.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**
@@ -231,7 +279,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
   - anything that writes to disk
   - changing the `--json` contract of an existing command
 - **Never:**
-  - persist recents or caches to disk
+  - persist recents or caches to disk (the F22 config file, written only by `asn init`, is the one exception; ADR-010)
   - put a real workspace/project GID or name in tests, fixtures, docs or commits
   - log or print the token
 

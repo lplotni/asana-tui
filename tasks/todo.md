@@ -446,3 +446,98 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 ### Checkpoint: Complete
 - [x] All SPEC-board.md success criteria are met, and v0.2.0 is released (2026-11-17; the first release run lost its macOS arm64 runner to GitHub capacity and was re-run).
 - [ ] Two weeks of status checks happen in `asn` instead of the web board (the spec's success metric).
+
+---
+
+## Phase 5: Config file and completion animation (F22, F23)
+
+### - [x] T19: Spec, ADR-010 and tasks
+
+**Description:** F22 and F23 in `docs/SPEC-board.md`, ADR-010 superseding ADR-003, and these tasks.
+
+**Acceptance criteria:**
+- [x] F22/F23 describe the file, precedence, the interview and the animation; ADR-010 records why the token stays off disk.
+
+**Files likely touched:** `docs/SPEC-board.md`, `docs/SPEC.md`, `docs/decisions/`, `tasks/`
+
+**Estimated scope:** XS
+
+---
+
+### - [ ] T20: Read `~/.config/asn/config.toml`
+
+**Description:** `Config` resolves every setting from the environment, then the file, then the default (F22). `token` and unknown keys are errors. `theme` and `animations` join `Config`; `tui::run` takes the theme choice from it.
+
+**Acceptance criteria:**
+- [ ] Each key: env wins over file, file over default. A missing file behaves exactly as today.
+- [ ] A `token` key, an unknown key, or a wrongly typed value exits 1 naming the file and the key.
+- [ ] The path follows `XDG_CONFIG_HOME`, else `HOME/.config`.
+- [ ] Error messages name the file key and the env variable.
+
+**Verification:**
+- [ ] Unit tests in `config.rs`; `cargo test`, clippy, fmt.
+
+**Dependencies:** T19
+
+**Files likely touched:** `src/config.rs`, `src/main.rs`, `src/tui/mod.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T21: `asn init` and first-run setup
+
+**Description:** The F22 interview as a core function over generic input/output, `GET /workspaces` in the API, the `asn init` subcommand, and the TUI's first run when no file exists.
+
+**Acceptance criteria:**
+- [ ] The interview asks for the token command and the workspace, and writes the file with mode 0600 and the other keys as commented defaults.
+- [ ] It never replaces an existing file without `y`; Ctrl-D aborts without writing.
+- [ ] A failing token command or a 401 goes back to the token step.
+- [ ] `asn init` without a terminal exits 1; CLI subcommands never prompt.
+
+**Verification:**
+- [ ] Interview tests with scripted input; wiremock for `GET /workspaces`; `tests/cli.rs` for no terminal.
+- [ ] Manual: delete the file, run `asn`, answer the questions, and the TUI starts.
+
+**Dependencies:** T20
+
+**Files likely touched:** `src/setup.rs`, `src/api/`, `src/main.rs`, `tests/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T22: Completion animation on board cards
+
+**Description:** F23: `d` on a board card plays the strike and collapse before the card leaves. The event loop sends `Msg::Frame` every 40 ms only while an animation runs. Reloads during it are held. `animations = false` keeps F16's instant removal.
+
+**Acceptance criteria:**
+- [ ] A completed card strikes through, collapses and leaves after the last frame.
+- [ ] `d` during the animation reopens the task, and the card stays.
+- [ ] A reload during the animation is applied when it ends; a failure restores the card.
+- [ ] With animations off, the card leaves at once (today's tests still pass).
+
+**Verification:**
+- [ ] App tests and two snapshots (mid-strike, mid-collapse).
+- [ ] Manual: complete a card on a real board.
+
+**Dependencies:** T20
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/board.rs`, `src/tui/mod.rs`, `src/tui/ui.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T23: Docs
+
+**Description:** README "Configure" leads with `asn init` and the file, with the env table kept as overrides; `ASN_ANIMATIONS` added.
+
+**Acceptance criteria:**
+- [ ] README, `asn --help` and F22 agree on keys, variables and the path.
+
+**Dependencies:** T21, T22
+
+**Files likely touched:** `README.md`
+
+**Estimated scope:** XS
