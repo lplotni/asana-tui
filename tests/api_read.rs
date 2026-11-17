@@ -46,7 +46,7 @@ async fn sends_120_gids_as_batches_of_50_50_and_20() {
 
     let failed = core::mark_read(&client(&server), WORKSPACE, &input, true)
         .await
-        .unwrap();
+        .failed;
 
     assert!(failed.is_empty());
     let bodies = sent_bodies(&server).await;
@@ -79,7 +79,7 @@ async fn collects_failed_gids_from_every_batch() {
 
     let failed = core::mark_read(&client(&server), WORKSPACE, &gids(60), true)
         .await
-        .unwrap();
+        .failed;
 
     assert_eq!(failed, ["1", "1"]);
 }
@@ -91,7 +91,7 @@ async fn unread_uses_mark_unread() {
 
     let failed = core::mark_read(&client(&server), WORKSPACE, &gids(2), false)
         .await
-        .unwrap();
+        .failed;
 
     assert!(failed.is_empty());
     assert_eq!(sent_bodies(&server).await.len(), 1);
@@ -103,7 +103,7 @@ async fn no_gids_makes_no_request() {
 
     let failed = core::mark_read(&client(&server), WORKSPACE, &[], true)
         .await
-        .unwrap();
+        .failed;
 
     assert!(failed.is_empty());
     assert!(sent_bodies(&server).await.is_empty());
@@ -122,7 +122,36 @@ async fn an_unknown_workspace_names_asana_workspace() {
 
     let err = core::mark_read(&client(&server), WORKSPACE, &gids(1), true)
         .await
-        .unwrap_err();
+        .error
+        .unwrap();
 
     assert!(err.to_string().contains("ASANA_WORKSPACE"), "{err}");
+}
+
+#[tokio::test]
+async fn a_failing_batch_only_fails_its_own_gids_and_reports_the_error() {
+    let server = MockServer::start().await;
+    let input = gids(60);
+    // First batch (50) succeeds, the second (10) gets a server error.
+    Mock::given(method("POST"))
+        .and(path("/users/me/notifications/markRead"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": { "failed_gids": [] } })),
+        )
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/notifications/markRead"))
+        .respond_with(
+            ResponseTemplate::new(500)
+                .set_body_json(json!({ "errors": [{ "message": "Server error" }] })),
+        )
+        .mount(&server)
+        .await;
+
+    let outcome = core::mark_read(&client(&server), WORKSPACE, &input, true).await;
+
+    assert_eq!(outcome.failed, input[50..].to_vec());
+    assert!(outcome.error.unwrap().to_string().contains("Server error"));
 }

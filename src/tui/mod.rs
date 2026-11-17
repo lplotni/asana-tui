@@ -293,9 +293,13 @@ fn run_effects(
                     }
                 }
                 Effect::MarkRead { gids, read } => {
-                    let result = core::mark_read(&client, &workspace, &gids, read)
-                        .await
-                        .map_err(|e| e.to_string());
+                    let outcome = core::mark_read(&client, &workspace, &gids, read).await;
+                    // Only a total failure undoes everything; otherwise only
+                    // the GIDs Asana didn't update are undone.
+                    let result = match outcome.error {
+                        Some(err) if outcome.failed.len() == gids.len() => Err(err.to_string()),
+                        _ => Ok(outcome.failed),
+                    };
                     Msg::Marked { gids, read, result }
                 }
             };

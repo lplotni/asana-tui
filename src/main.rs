@@ -129,15 +129,14 @@ async fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some(Command::Read { gids, unread }) => {
-            match core::mark_read(&client, &config.workspace, &gids, !unread).await {
-                Ok(failed) if failed.is_empty() => ExitCode::SUCCESS,
-                Ok(failed) => {
-                    for gid in failed {
-                        eprintln!("Asana could not update notification {gid}");
-                    }
-                    ExitCode::FAILURE
-                }
-                Err(err) => fail(&err, err.exit_code()),
+            let outcome = core::mark_read(&client, &config.workspace, &gids, !unread).await;
+            for gid in &outcome.failed {
+                eprintln!("Asana could not update notification {gid}");
+            }
+            match (outcome.error, outcome.failed.is_empty()) {
+                (Some(err), _) => fail(&err, err.exit_code()),
+                (None, true) => ExitCode::SUCCESS,
+                (None, false) => ExitCode::FAILURE,
             }
         }
         None => match asn::tui::run(config, client).await {

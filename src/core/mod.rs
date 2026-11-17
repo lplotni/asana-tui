@@ -168,21 +168,32 @@ fn workspace_hint(err: ApiError) -> ApiError {
     }
 }
 
-/// Marks notifications read (or unread) in batches of [`MARK_BATCH`].
-/// Returns every GID Asana could not update. No GIDs means no requests.
+/// What happened when marking notifications: the GIDs that weren't updated,
+/// and the first error if a whole batch failed.
+#[derive(Debug, Default)]
+pub struct MarkOutcome {
+    pub failed: Vec<String>,
+    pub error: Option<ApiError>,
+}
+
+/// Marks notifications read (or unread) in batches of [`MARK_BATCH`]. Every
+/// batch is tried: a failing batch puts its own GIDs into `failed` without
+/// affecting the others. No GIDs means no requests.
 pub async fn mark_read(
     client: &Client,
     workspace: &str,
     gids: &[String],
     read: bool,
-) -> Result<Vec<String>, ApiError> {
-    let mut failed = Vec::new();
+) -> MarkOutcome {
+    let mut outcome = MarkOutcome::default();
     for batch in gids.chunks(MARK_BATCH) {
-        let batch_failed = client
-            .mark_notifications(workspace, batch, read)
-            .await
-            .map_err(workspace_hint)?;
-        failed.extend(batch_failed);
+        match client.mark_notifications(workspace, batch, read).await {
+            Ok(failed) => outcome.failed.extend(failed),
+            Err(err) => {
+                outcome.failed.extend_from_slice(batch);
+                outcome.error.get_or_insert(workspace_hint(err));
+            }
+        }
     }
-    Ok(failed)
+    outcome
 }
