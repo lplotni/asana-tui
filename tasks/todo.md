@@ -304,7 +304,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: unit tests for `readable`. A `present::detail` test showing a comment and a description with a mention.
-- [ ] Manual: a task with mentions shows names in `asn` and `asn task`.
+- [x] Manual: a task with mentions shows names in `asn` and `asn task` (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T13
 
