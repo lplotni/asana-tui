@@ -529,12 +529,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T23: Docs
+### - [x] T23: Docs
 
 **Description:** README "Configure" leads with `asn init` and the file, with the env table kept as overrides; `ASN_ANIMATIONS` added.
 
 **Acceptance criteria:**
-- [ ] README, `asn --help` and F22 agree on keys, variables and the path.
+- [x] README, `asn --help` and F22 agree on keys, variables and the path.
 
 **Dependencies:** T21, T22
 

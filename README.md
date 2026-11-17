@@ -11,7 +11,7 @@ I built `asn` to get a simple terminal UI for the way I work with Asana:
 - **The Inbox:** go through notifications, read the task, comment, and mark them read.
 - **Projects as boards:** see where every task of a project stands, section by section, and act on any card.
 
-The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`, `project new`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
+The CLI is deliberately small as well. It covers the same use cases (`init`, `inbox`, `read`, `task`, `comment`, `desc`, `project add`, `project new`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
 
 > v0.2 adds project boards, creating, completing and assigning tasks, and @-mentions ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
 
@@ -34,16 +34,31 @@ The release binaries aren't code-signed, so macOS blocks one downloaded in a bro
 
 ## Configure
 
-Everything comes from the environment. Nothing is written to disk.
+Run `asn` (or `asn init`) and answer two questions: a command that prints your [personal access token](https://app.asana.com/0/my-apps), and your workspace, which `asn` lists for you. The answers go to `~/.config/asn/config.toml` (or `$XDG_CONFIG_HOME/asn/config.toml`), readable only by you. `asn init` again changes them.
 
-| Variable | |
-|---|---|
-| `ASANA_TOKEN` | A [personal access token](https://app.asana.com/0/my-apps) |
-| `ASANA_TOKEN_CMD` | …or a command that prints it, e.g. `pass show asana/pat` |
-| `ASANA_WORKSPACE` | Workspace GID (digits only): `curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces` |
-| `ASN_SEARCH` | How `S` and `asn search` find tasks: `tasks` (default) uses Asana's full-text [task search](https://developers.asana.com/reference/searchtasksforworkspace) (names and descriptions; paid plans only); `typeahead` matches task names like the web search box and works on every plan |
-| `ASN_THEME` | `terminal` (default, follows your terminal's colors), `dark`, `light`, or a path to a theme file ([example](themes/terminal.toml)) |
-| `NO_COLOR` | Disables colors |
+The token itself is never stored: keep it in a password manager or the keychain and give `asn` the command that reads it, e.g. `op read op://Private/Asana/token`, `pass show asana/pat`, or on macOS `security find-generic-password -s asn -w` (after `security add-generic-password -s asn -a asana -w`).
+
+Every setting can also come from an environment variable, which wins over the file:
+
+| File key | Variable | |
+|---|---|---|
+| | `ASANA_TOKEN` | The token itself (wins over any token command) |
+| `token_cmd` | `ASANA_TOKEN_CMD` | A command that prints the token |
+| `workspace` | `ASANA_WORKSPACE` | Workspace GID (digits only) |
+| `search` | `ASN_SEARCH` | How `S` and `asn search` find tasks: `tasks` (default) uses Asana's full-text [task search](https://developers.asana.com/reference/searchtasksforworkspace) (names and descriptions; paid plans only); `typeahead` matches task names like the web search box and works on every plan |
+| `theme` | `ASN_THEME` | `terminal` (default, follows your terminal's colors), `dark`, `light`, or a path to a theme file ([example](themes/terminal.toml)) |
+| `animations` | `ASN_ANIMATIONS` | A completed board card is struck through before it leaves: `true` (default) or `false` in the file, `on` or `off` in the variable |
+| | `NO_COLOR` | Disables colors |
+
+```toml
+# ~/.config/asn/config.toml
+workspace = "1200000000000001"
+token_cmd = "op read op://Private/Asana/token"
+search = "typeahead"
+animations = false
+```
+
+CLI subcommands read the same file but never ask questions, so scripts behave the same with or without it.
 
 ## Use
 
@@ -86,7 +101,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `h` / `l` | Previous / next column |
 | `Enter` | Open the card's task full-width (`h`/`Esc`/`q` back) |
 | `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
-| `d` | Complete the card: it leaves the column at once; `d` as the very next key reopens it |
+| `d` | Complete the card: it's struck through and leaves the column (at once with `animations = false`); `d` as the very next key reopens it |
 | `Tab a` | Assign the card (its initials change once the board reloads) |
 | `Tab q` | New task in this column: type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
 | `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
@@ -124,6 +139,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 
 | What | Endpoint |
 |---|---|
+| Setup (`asn init`) | `GET /workspaces` |
 | Inbox | `GET /users/me/notifications`, `POST /users/me/notifications/markRead` (and `markUnread`) |
 | Task, description, completion, assignee | `GET /tasks/{task}`, `PUT /tasks/{task}` |
 | Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` (`html_text` when there's an @-mention, as for descriptions with `html_notes`) |
