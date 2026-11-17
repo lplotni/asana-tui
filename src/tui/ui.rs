@@ -197,9 +197,22 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         ];
     }
     let moves = pair(normal(Cmd::MoveDown), normal(Cmd::MoveUp));
+    if app.screen == Screen::Board && app.focus == Focus::Detail {
+        return vec![
+            (moves, "scroll"),
+            (normal(Cmd::Back), "back"),
+            (normal(Cmd::Comment), "comment"),
+            (normal(Cmd::EditDescription), "edit description"),
+            (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::MoveToSection), "move"),
+            (normal(Cmd::OpenInBrowser), "open in browser"),
+            (normal(Cmd::Help), "help"),
+        ];
+    }
     if app.screen == Screen::Board {
         return vec![
             (moves, "move"),
+            (normal(Cmd::Open), "open"),
             (
                 pair(normal(Cmd::FocusLeft), normal(Cmd::FocusRight)),
                 "column",
@@ -344,11 +357,21 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
     let (header, body, status, hint_line) = split_screen(frame.area());
     if app.screen == Screen::Board {
         render_board_header(frame, header, app, theme);
-        render_board(frame, body, app, theme, now);
+        // An open card takes the whole body, like the task pane on a
+        // narrow terminal.
+        let mut images = Vec::new();
+        if app.focus == Focus::Detail {
+            images = render_detail(frame, body, app, theme, now);
+        } else {
+            render_board(frame, body, app, theme, now);
+        }
         render_status(frame, status, app, theme);
         render_hints(frame, hint_line, app, theme);
         render_overlays(frame, app, theme);
-        return Vec::new();
+        if app.overlay_open() {
+            images.clear();
+        }
+        return images;
     }
     let (list, detail) = split_body(body);
 
@@ -717,7 +740,7 @@ fn render_detail(
     let inner = block.inner(area);
     let width = usize::from(area.width.saturating_sub(4));
     let muted = theme.style(Role::TextMuted);
-    if app.selected().is_none() && app.opened.is_none() {
+    if app.shown_task_name().is_none() {
         frame.render_widget(block, area);
         return Vec::new();
     }
@@ -1234,6 +1257,34 @@ mod tests {
         assert!(status.contains(" 2/2"), "{status:?}");
         assert!(!status.contains("Loading"), "{status:?}");
         assert!(!status.contains("Inbox failed"), "{status:?}");
+    }
+
+    #[test]
+    fn an_open_card_fills_the_board() {
+        let mut app = board_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 24))));
+        with_detail(&mut app);
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+
+        insta::assert_snapshot!(draw_at(&mut app, 120).backend());
+    }
+
+    #[test]
+    fn an_open_cards_hints_offer_task_actions_but_not_read_state() {
+        let mut app = board_app();
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+
+        assert!(labels.contains(&"back"), "{labels:?}");
+        assert!(labels.contains(&"move"), "{labels:?}");
+        assert!(!labels.contains(&"read"), "{labels:?}");
     }
 
     #[test]

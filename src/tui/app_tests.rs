@@ -2505,3 +2505,172 @@ fn a_failed_reload_keeps_the_board_and_says_so() {
             .is_some_and(|t| t.is_error && t.text.contains("timed out"))
     );
 }
+
+/// The full fixture task, as a member of section "s0" of `project`.
+fn card_detail(project: &str) -> TaskDetail {
+    let mut detail = task_detail();
+    detail.task.memberships = vec![Membership {
+        project: named(project, "Website"),
+        section: Some(named("s0", "Section 0")),
+    }];
+    detail
+}
+
+#[test]
+fn moving_on_the_board_schedules_the_cards_details() {
+    let mut app = on_board(&[2]);
+
+    let effects = keys_all(&mut app, "j");
+
+    assert_eq!(schedules(&effects), ["c0-1"]);
+}
+
+#[test]
+fn enter_opens_the_card_and_h_returns_to_the_same_card() {
+    let mut app = on_board(&[2, 2]);
+    keys(&mut app, "lj");
+
+    enter(&mut app);
+    assert_eq!(app.focus, Focus::Detail);
+    assert_eq!(app.selected_task_gid(), Some("c1-1"));
+    assert_eq!(app.shown_task_name(), Some("Card 1-1"));
+
+    keys(&mut app, "h");
+    assert_eq!(app.focus, Focus::List);
+    assert_eq!(selected_card(&app), Some("c1-1"));
+}
+
+#[test]
+fn esc_and_q_leave_the_card_without_quitting() {
+    let mut app = on_board(&[1]);
+
+    enter(&mut app);
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    assert_eq!(app.focus, Focus::List);
+    enter(&mut app);
+    keys(&mut app, "q");
+    assert_eq!(app.focus, Focus::List);
+    assert!(!app.should_quit);
+    assert_eq!(app.screen, Screen::Board);
+}
+
+#[test]
+fn motions_in_an_open_card_scroll_it_and_keep_the_board_still() {
+    let mut app = on_board(&[3]);
+    app.update(Msg::Resize(Sizes {
+        detail_rows: 3,
+        board_width: 120,
+        board_card_rows: 10,
+        ..Sizes::default()
+    }));
+    load_task(&mut app, "c0-0", card_detail("42"));
+    enter(&mut app);
+
+    keys(&mut app, "j");
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    assert_eq!(app.detail_scroll, 1);
+}
+
+#[test]
+fn c_on_a_card_comments_on_that_task() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "j");
+
+    keys(&mut app, "c");
+
+    assert_eq!(
+        app.editor.as_ref().map(|e| e.task_gid.as_str()),
+        Some("c0-1")
+    );
+}
+
+#[test]
+fn o_on_a_card_opens_it_in_the_browser() {
+    let mut app = on_board(&[1]);
+
+    let effects = keys(&mut app, "o");
+
+    assert_eq!(
+        effects,
+        vec![Effect::OpenUrl {
+            url: "https://app.asana.com/0/0/c0-0".into()
+        }]
+    );
+}
+
+#[test]
+fn m_on_a_loaded_card_offers_the_sections_of_its_project() {
+    let mut app = on_board(&[1]);
+    load_task(&mut app, "c0-0", card_detail("42"));
+
+    let effects = keys(&mut app, "m");
+
+    assert!(app.picker.is_some());
+    assert!(effects.contains(&Effect::LoadSections {
+        project_gid: "42".into()
+    }));
+}
+
+#[test]
+fn a_card_moved_to_another_section_reloads_the_board() {
+    let mut app = on_board(&[1, 1]);
+
+    let effects = app.update(Msg::MovedToSection {
+        task_gid: "c0-0".into(),
+        project_gid: "42".into(),
+        section: named("s1", "Section 1"),
+        previous: Some(named("s0", "Section 0")),
+        result: Ok(()),
+    });
+
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn a_failed_move_leaves_the_board_as_it_is() {
+    let mut app = on_board(&[1, 1]);
+
+    let effects = app.update(Msg::MovedToSection {
+        task_gid: "c0-0".into(),
+        project_gid: "42".into(),
+        section: named("s1", "Section 1"),
+        previous: Some(named("s0", "Section 0")),
+        result: Err("Forbidden".into()),
+    });
+
+    assert_eq!(board_loads(&effects), 0);
+}
+
+#[test]
+fn a_card_added_to_a_project_reloads_the_board() {
+    let mut app = on_board(&[1]);
+
+    let effects = app.update(Msg::AddedToProject {
+        task_gid: "c0-0".into(),
+        project_gid: "7".into(),
+        result: Ok(()),
+    });
+
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn a_comment_posted_from_the_board_marks_that_tasks_notifications_read() {
+    // Inbox notification "2" is about task "t2"; comment on it from the board.
+    let mut app = on_board(&[1]);
+
+    let effects = app.update(Msg::CommentPosted {
+        task_gid: "t2".into(),
+        local_gid: "local-1".into(),
+        result: Ok(Box::new(task_detail().comments[0].clone())),
+    });
+
+    assert!(
+        effects.contains(&Effect::MarkRead {
+            gids: vec!["2".into()],
+            read: true
+        }),
+        "{effects:?}"
+    );
+}

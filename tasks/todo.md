@@ -135,17 +135,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 3: Act and navigate
 
-### - [ ] T5: `Enter` → full-width detail, and actions on cards
+### - [x] T5: `Enter` → full-width detail, and actions on cards
 
 **Description:** On the board, the shown task is the selected card: `selected_task_gid()` / `shown_task_name()` resolve the card, through the same seam that `opened` uses for search. `Enter` focuses the detail full-width, reusing the narrow-terminal detail rendering. `h`/`Esc`/`q` return to the board with its cursor. Details load and cache per GID as in F2, and scrolling keys work. `c`/`Tab c`/`Tab e`/`p`/`m`/`o` work on the card both from the board and from its detail. After a successful `m` or `p`, the board reloads and the cursor follows the task.
 
 **Acceptance criteria:**
-- [ ] `Enter` shows the card's task full-width, and `h`/`Esc`/`q` return to the same card.
-- [ ] Comment, description edit, add to project, move and open work on a card. Commenting still marks that task's loaded unread notifications read (F3).
-- [ ] After `m`, the card shows in its new column with the cursor on it.
+- [x] `Enter` shows the card's task full-width, and `h`/`Esc`/`q` return to the same card.
+- [x] Comment, description edit, add to project, move and open work on a card. Commenting still marks that task's loaded unread notifications read (F3).
+- [x] After `m`, the card shows in its new column with the cursor on it.
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` (Enter/back keeps the cursor; each action emits the right effect for the card's GID; `MovedToSection` triggers `LoadBoard`, and the cursor follows after reload). A snapshot of the full-width detail from the board.
+- [x] Tests: `app_tests.rs` (Enter/back keeps the cursor; each action emits the right effect for the card's GID; `MovedToSection` triggers `LoadBoard`, and the cursor follows after reload). A snapshot of the full-width detail from the board.
 - [ ] Manual: comment on a task from the board, then move it.
 
 **Dependencies:** T4

@@ -752,6 +752,7 @@ impl App {
                 match result {
                     Ok(()) => {
                         self.toast = Some(Toast::info("Added to project"));
+                        return self.reload_board();
                     }
                     Err(message) => {
                         if let Some(memberships) = memberships {
@@ -772,6 +773,7 @@ impl App {
                 match result {
                     Ok(()) => {
                         self.toast = Some(Toast::info(format!("Moved to {}", section.name)));
+                        return self.reload_board();
                     }
                     Err(message) => {
                         self.set_section(&task_gid, &project_gid, previous);
@@ -816,11 +818,11 @@ impl App {
     }
 
     /// The task in the task pane: one opened from search, else the task the
-    /// selected notification is about (if it is about a task). The board
-    /// screen has no task pane.
+    /// selected notification is about (if it is about a task). On the board,
+    /// the selected card.
     pub fn selected_task_gid(&self) -> Option<&str> {
         if self.screen == Screen::Board {
-            return None;
+            return Some(self.selected_card()?.gid.as_str());
         }
         if let Some(opened) = &self.opened {
             return Some(&opened.gid);
@@ -845,6 +847,9 @@ impl App {
 
     /// The name of what the task pane shows, known before its details load.
     pub fn shown_task_name(&self) -> Option<&str> {
+        if self.screen == Screen::Board {
+            return Some(self.selected_card()?.name.as_str());
+        }
         if let Some(opened) = &self.opened {
             return Some(&opened.name);
         }
@@ -933,12 +938,21 @@ impl App {
         self.load_more_if_needed()
     }
 
-    /// A key command on the board screen: motions move on the board; Inbox
+    /// A key command on the board screen: motions move on the board, or
+    /// scroll the open card; task actions work on the selected card; Inbox
     /// commands do nothing here.
     fn run_board(&mut self, Action { cmd, count }: Action) -> Vec<Effect> {
         let n = count.unwrap_or(1);
         let half_page = (self.sizes.board_card_rows / 2).max(1);
-        if let Some(view) = self.board_view_mut() {
+        if self.focus == Focus::Detail {
+            if self.scroll_detail(cmd, count) {
+                return Vec::new();
+            }
+            if matches!(cmd, Cmd::Back | Cmd::FocusLeft | Cmd::Quit) {
+                self.set_focus(Focus::List);
+                return Vec::new();
+            }
+        } else if let Some(view) = self.board_view_mut() {
             match cmd {
                 Cmd::MoveDown => view.down(n),
                 Cmd::MoveUp => view.up(n),
@@ -958,6 +972,12 @@ impl App {
             }
         }
         match cmd {
+            Cmd::Open if self.selected_card().is_some() => self.set_focus(Focus::Detail),
+            Cmd::Comment => return self.start_comment(),
+            Cmd::EditDescription => return self.start_description(),
+            Cmd::AddToProject => return self.open_picker(),
+            Cmd::MoveToSection => return self.open_move(),
+            Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::Help => self.help = true,
             Cmd::Refresh => return self.reload_board(),
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
@@ -978,6 +998,11 @@ impl App {
         vec![Effect::LoadBoard {
             project_gid: slot.project_gid.clone(),
         }]
+    }
+
+    /// The selected card of the loaded board, if any.
+    fn selected_card(&self) -> Option<&crate::api::projects::BoardTask> {
+        self.board_view()?.selected_task()
     }
 
     /// The loaded board on screen, if any.
@@ -1082,10 +1107,19 @@ impl App {
     }
 
     /// The last scroll position that still fills the detail pane.
+    /// Text columns of the task view: the detail pane next to the Inbox, or
+    /// the whole width on the board (inside borders and padding).
+    pub fn detail_width(&self) -> usize {
+        match self.screen {
+            Screen::Board => self.sizes.board_width.saturating_sub(4),
+            Screen::Inbox => self.sizes.detail_width,
+        }
+    }
+
     fn detail_max_scroll(&self) -> usize {
         match self.selected_detail() {
             Some(Detail::Loaded(detail)) => {
-                detail::lines_with_images(detail, self.sizes.detail_width, self.now, IMAGE_ROWS)
+                detail::lines_with_images(detail, self.detail_width(), self.now, IMAGE_ROWS)
                     .0
                     .len()
                     .saturating_sub(self.sizes.detail_rows)
