@@ -40,6 +40,8 @@ pub enum ConfigError {
     TokenCmdFailed { exit: Option<i32> },
     #[error("ASANA_TOKEN_CMD printed no token")]
     TokenCmdEmpty,
+    #[error("ASANA_TOKEN_CMD couldn't be run: {reason}")]
+    TokenCmdNotRun { reason: String },
     #[error(
         "ASANA_WORKSPACE is not set — find your workspace GID with: \
          curl -H \"Authorization: Bearer $ASANA_TOKEN\" https://app.asana.com/api/1.0/workspaces"
@@ -72,7 +74,10 @@ impl ConfigError {
     /// Process exit code: 2 for authentication problems, 1 for everything else.
     pub fn exit_code(&self) -> i32 {
         match self {
-            Self::MissingToken | Self::TokenCmdFailed { .. } | Self::TokenCmdEmpty => 2,
+            Self::MissingToken
+            | Self::TokenCmdFailed { .. }
+            | Self::TokenCmdEmpty
+            | Self::TokenCmdNotRun { .. } => 2,
             Self::MissingWorkspace | Self::InvalidWorkspace { .. } => 1,
         }
     }
@@ -118,7 +123,9 @@ fn run_token_cmd(cmd: &str) -> Result<Token, ConfigError> {
         .stdin(Stdio::inherit())
         .stderr(Stdio::inherit())
         .output()
-        .map_err(|_| ConfigError::TokenCmdFailed { exit: None })?;
+        .map_err(|e| ConfigError::TokenCmdNotRun {
+            reason: e.to_string(),
+        })?;
 
     if !output.status.success() {
         return Err(ConfigError::TokenCmdFailed {
@@ -285,5 +292,18 @@ mod tests {
             ConfigError::InvalidWorkspace { got: "x".into() }.exit_code(),
             1
         );
+    }
+
+    #[test]
+    fn a_token_command_that_cannot_start_says_so() {
+        let err = ConfigError::TokenCmdNotRun {
+            reason: "No such file or directory".into(),
+        };
+
+        assert_eq!(
+            err.to_string(),
+            "ASANA_TOKEN_CMD couldn't be run: No such file or directory"
+        );
+        assert_eq!(err.exit_code(), 2);
     }
 }

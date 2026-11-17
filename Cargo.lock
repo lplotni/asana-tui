@@ -97,6 +97,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
+ "libc",
  "ratatui",
  "reqwest",
  "serde",

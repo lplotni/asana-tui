@@ -91,7 +91,7 @@ pub fn short_date(date: &str, now: i64) -> String {
     let days = days_from_civil(year, month, day);
     let weekday = WEEKDAYS[(days + 4).rem_euclid(7) as usize];
     let month_name = MONTHS[(month - 1) as usize];
-    let today = now.div_euclid(86_400);
+    let today = (now + local_offset(now)).div_euclid(86_400);
     let same_year = days_from_civil(year, 1, 1) <= today && today < days_from_civil(year + 1, 1, 1);
     if same_year {
         format!("{weekday} {day} {month_name}")
@@ -100,9 +100,16 @@ pub fn short_date(date: &str, now: i64) -> String {
     }
 }
 
-/// Whether the `YYYY-MM-DD` day `date` lies before the day of `now`.
+/// Whether the `YYYY-MM-DD` day `date` lies before the local day of `now`
+/// when the local time is `offset` seconds east of UTC.
+pub fn is_before_today_at(date: &str, now: i64, offset: i64) -> bool {
+    let today = (now + offset).div_euclid(86_400);
+    parse_date(date).is_some_and(|(y, m, d)| days_from_civil(y, m, d) < today)
+}
+
+/// Whether the `YYYY-MM-DD` day `date` lies before today (local time).
 pub fn is_before_today(date: &str, now: i64) -> bool {
-    parse_date(date).is_some_and(|(y, m, d)| days_from_civil(y, m, d) < now.div_euclid(86_400))
+    is_before_today_at(date, now, local_offset(now))
 }
 
 /// `YYYY-MM-DD` (or the date part of a timestamp) as (year, month, day).
@@ -114,6 +121,23 @@ fn parse_date(text: &str) -> Option<(i64, i64, i64)> {
     let num = |range: std::ops::Range<usize>| text.get(range)?.parse::<i64>().ok();
     let (year, month, day) = (num(0..4)?, num(5..7)?, num(8..10)?);
     ((1..=12).contains(&month) && (1..=31).contains(&day)).then_some((year, month, day))
+}
+
+/// Seconds east of UTC for local time at `now` (from the system's time zone).
+pub fn local_offset(now: i64) -> i64 {
+    let time: libc::time_t = now as libc::time_t;
+    // SAFETY: `localtime_r` only writes into the zeroed `tm` we own; a null
+    // result (conversion failed) falls back to UTC.
+    unsafe {
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&time, &mut tm).is_null() {
+            0
+        } else {
+            // `tm_gmtoff` is 32-bit on some targets.
+            #[allow(clippy::useless_conversion)]
+            i64::from(tm.tm_gmtoff)
+        }
+    }
 }
 
 /// What happened, as read in the Inbox: `comment_added` → "commented".
@@ -204,5 +228,28 @@ mod tests {
         ] {
             assert_eq!(timestamp(parse_timestamp(text).unwrap()), text);
         }
+    }
+
+    #[test]
+    fn overdue_uses_the_local_date_not_utc() {
+        // 2026-11-16 23:30 UTC.
+        let now = parse_timestamp("2026-11-16T23:30:00.000Z").unwrap();
+
+        assert!(
+            is_before_today_at("2026-11-16", now, 2 * 3600),
+            "already the 17th at UTC+2"
+        );
+        assert!(
+            !is_before_today_at("2026-11-16", now, -8 * 3600),
+            "still the 16th at UTC-8"
+        );
+        assert!(!is_before_today_at("2026-11-17", now, 2 * 3600));
+    }
+
+    #[test]
+    fn the_local_offset_is_a_plausible_time_zone() {
+        let offset = local_offset(parse_timestamp("2026-11-16T12:00:00.000Z").unwrap());
+
+        assert!((-14 * 3600..=14 * 3600).contains(&offset), "{offset}");
     }
 }

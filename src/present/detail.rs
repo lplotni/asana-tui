@@ -173,16 +173,20 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
     let width = width.max(1);
     let mut out = Vec::new();
     for paragraph in text.split('\n') {
+        // Leading indentation (e.g. code) is kept on every wrapped line.
+        let words_start = paragraph.len() - paragraph.trim_start().len();
+        let indent = paragraph[..words_start].replace('\t', "    ");
+        let room = width.saturating_sub(indent.width()).max(1);
         let mut line = String::new();
         for word in paragraph.split_whitespace() {
-            for piece in split_long(word, width) {
+            for piece in split_long(word, room) {
                 let needed = if line.is_empty() {
                     piece.width()
                 } else {
                     line.width() + 1 + piece.width()
                 };
-                if needed > width && !line.is_empty() {
-                    out.push(std::mem::take(&mut line));
+                if needed > room && !line.is_empty() {
+                    out.push(format!("{indent}{}", std::mem::take(&mut line)));
                 }
                 if !line.is_empty() {
                     line.push(' ');
@@ -190,7 +194,11 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
                 line.push_str(&piece);
             }
         }
-        out.push(line);
+        out.push(if line.is_empty() {
+            line
+        } else {
+            format!("{indent}{line}")
+        });
     }
     out
 }
@@ -372,6 +380,15 @@ mod tests {
             let byline = format!("{author} · {}", relative_time(&c.created_at, now()));
             assert!(lines.contains(&byline), "missing {byline}");
         }
+    }
+
+    #[test]
+    fn wrap_keeps_leading_indentation_on_every_line() {
+        assert_eq!(wrap("  let x = 1;", 20), ["  let x = 1;"]);
+        assert_eq!(
+            wrap("    indented words that wrap", 16),
+            ["    indented", "    words that", "    wrap"]
+        );
     }
 
     #[test]
