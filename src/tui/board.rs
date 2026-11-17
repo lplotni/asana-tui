@@ -114,6 +114,21 @@ impl BoardView {
         self.set_row(self.row);
     }
 
+    /// Selects task `gid` and scrolls it into view. Returns whether it's on
+    /// the board; if not, the selection stays.
+    pub fn select(&mut self, gid: &str) -> bool {
+        let found = self.columns.iter().enumerate().find_map(|(c, column)| {
+            let row = column.tasks.iter().position(|t| t.gid == gid)?;
+            Some((c, row))
+        });
+        let Some((column, row)) = found else {
+            return false;
+        };
+        self.column = column;
+        self.set_row(row);
+        true
+    }
+
     /// Shows a reloaded board. The selection stays on the same task wherever
     /// it is now; if it's gone, on the same position of the same section
     /// (or column), clamped.
@@ -372,6 +387,28 @@ mod tests {
         assert_eq!(v.scroll(1), 3);
         v.top();
         assert_eq!(v.scroll(1), 0);
+    }
+
+    #[test]
+    fn selecting_a_task_moves_to_its_column_and_row_and_into_view() {
+        let mut v = view(&[1, 1, 1, 6]);
+        v.resize(80, 2);
+
+        assert!(v.select("c3-4"));
+
+        assert_eq!(selected(&v), Some("c3-4"));
+        assert!(v.visible_columns().contains(&3));
+        assert_eq!(v.scroll(3), 3);
+    }
+
+    #[test]
+    fn selecting_a_task_that_is_not_on_the_board_changes_nothing() {
+        let mut v = view(&[2, 2]);
+        v.right(1);
+
+        assert!(!v.select("elsewhere"));
+
+        assert_eq!(selected(&v), Some("c1-0"));
     }
 
     #[test]

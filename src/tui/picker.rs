@@ -58,6 +58,8 @@ pub enum Stage {
     /// Choosing a project to open as a board: the boards opened this
     /// session while the query is empty, else projects found.
     Board,
+    /// Choosing which of the task's projects to open as a board, on it.
+    TaskBoard,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +103,16 @@ impl Picker {
         };
         picker.show_recents();
         picker
+    }
+
+    /// Opening the board of `task_gid`: choose among `projects` (its own).
+    pub fn task_board(task_gid: String, projects: Vec<Named>) -> Picker {
+        Picker {
+            stage: Stage::TaskBoard,
+            loading: false,
+            items: projects.into_iter().map(Item::from).collect(),
+            ..Picker::new(task_gid, Vec::new())
+        }
     }
 
     /// Whether there are recent boards to show for an empty query.

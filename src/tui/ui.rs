@@ -562,6 +562,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::MoveProject => " Move within which project? ".to_owned(),
         Stage::MoveSection { project, .. } => format!(" Move to a section of {} ", project.name),
         Stage::Board => " Open a project's board ".to_owned(),
+        Stage::TaskBoard => " Open which project's board? ".to_owned(),
     };
     let mut lines = Vec::new();
     if picker.has_query() {

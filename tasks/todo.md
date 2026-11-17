@@ -178,17 +178,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T7: `b` from an Inbox task
+### - [x] T7: `b` from an Inbox task
 
 **Description:** `b` on an Inbox task opens its project's board with the cursor on that task. It uses the task's loaded detail memberships (toast "loading…" if they aren't loaded yet, as `m` does). A task in several projects gets the project picker first, reusing the `MoveProject`-style stage. A task with no project, or a non-task item, gets a toast saying why. If the task isn't on the board (e.g. completed), the cursor starts at the first card and a toast says so.
 
 **Acceptance criteria:**
-- [ ] `b` on a one-project task opens that board with the card selected.
-- [ ] `b` on a multi-project task opens the picker first, then the chosen board.
-- [ ] Non-task items, tasks with no project, and tasks not on the board each give a clear toast.
+- [x] `b` on a one-project task opens that board with the card selected.
+- [x] `b` on a multi-project task opens the picker first, then the chosen board.
+- [x] Non-task items, tasks with no project, and tasks not on the board each give a clear toast.
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` for each case, plus the key collision test.
+- [x] Tests: `app_tests.rs` for each case, plus the key collision test.
 - [ ] Manual: `b` from a real notification.
 
 **Dependencies:** T6

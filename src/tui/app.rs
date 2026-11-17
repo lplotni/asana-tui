@@ -24,6 +24,8 @@ pub const INITIAL_LOAD: usize = 30;
 pub const REFRESH_WINDOW: usize = 30;
 /// Load the next page when the cursor is this close to the end.
 const LOAD_MORE_MARGIN: usize = 10;
+/// Why `b` couldn't select its task on the board.
+const NOT_ON_BOARD: &str = "The task isn't on this board (completed tasks aren't shown)";
 /// Rows of the task pane given to each image attachment.
 pub const IMAGE_ROWS: usize = 12;
 /// Decoded images kept in memory; older ones are downloaded again if needed.
@@ -314,6 +316,8 @@ pub struct BoardSlot {
     pub state: BoardState,
     /// A load of this board is running; another one isn't started.
     reloading: bool,
+    /// The task to select once the board has loaded.
+    select_task: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -914,6 +918,7 @@ impl App {
             Cmd::CommandLine => self.command = Some(String::new()),
             Cmd::SearchTasks => self.picker = Some(Picker::tasks()),
             Cmd::SwitchProject => return self.open_switcher(),
+            Cmd::OpenTaskBoard => return self.open_task_board(),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.set_focus(Focus::List);
@@ -1024,6 +1029,7 @@ impl App {
                 project,
                 state: BoardState::Loading,
                 reloading: false,
+                select_task: None,
             },
         };
         self.boards.insert(0, slot);
@@ -1034,6 +1040,47 @@ impl App {
             view.resize(sizes.board_width, sizes.board_card_rows);
         }
         self.reload_board()
+    }
+
+    /// The board of `project` with task `task_gid` selected, as soon as
+    /// the board is there.
+    fn open_board_at(&mut self, project: Named, task_gid: String) -> Vec<Effect> {
+        let effects = self.open_board(project);
+        if let Some(view) = self.board_view_mut() {
+            if !view.select(&task_gid) {
+                self.toast = Some(Toast::info(NOT_ON_BOARD));
+            }
+        } else if let Some(slot) = self.boards.first_mut() {
+            slot.select_task = Some(task_gid);
+        }
+        effects
+    }
+
+    /// `b`: the board of the shown task's project, on the task; asks which
+    /// project when it's in several.
+    fn open_task_board(&mut self) -> Vec<Effect> {
+        let Some((task_gid, detail)) = self.loaded_shown_task("Only tasks are on boards") else {
+            return Vec::new();
+        };
+        let mut projects: Vec<Named> = detail
+            .task
+            .memberships
+            .iter()
+            .map(|m| m.project.clone())
+            .collect();
+        match projects.len() {
+            0 => {
+                self.toast = Some(Toast::info(
+                    "The task isn't in a project yet; p adds it to one",
+                ));
+                Vec::new()
+            }
+            1 => self.open_board_at(projects.remove(0), task_gid),
+            _ => {
+                self.picker = Some(Picker::task_board(task_gid, projects));
+                Vec::new()
+            }
+        }
     }
 
     /// The project switcher: the other boards opened this session, or a
@@ -1097,6 +1144,7 @@ impl App {
         if let Ok(board) = &result {
             slot.project = board.project.clone();
         }
+        let select = result.is_ok().then(|| slot.select_task.take()).flatten();
         match (&mut slot.state, result) {
             (BoardState::Loaded(view), Ok(board)) => view.replace(board),
             (_, Ok(board)) => {
@@ -1108,6 +1156,11 @@ impl App {
                 self.toast = Some(Toast::error(format!("Refresh failed: {message}")));
             }
             (_, Err(message)) => slot.state = BoardState::Failed(message),
+        }
+        if let (Some(gid), BoardState::Loaded(view)) = (select, &mut slot.state)
+            && !view.select(&gid)
+        {
+            self.toast = Some(Toast::info(NOT_ON_BOARD));
         }
     }
 
@@ -1503,6 +1556,11 @@ impl App {
             picker::Stage::Board => {
                 self.picker = None;
                 self.open_board(item.into_named())
+            }
+            picker::Stage::TaskBoard => {
+                let task_gid = picker.task_gid.clone();
+                self.picker = None;
+                self.open_board_at(item.into_named(), task_gid)
             }
             picker::Stage::Project => {
                 let project = item.into_named();

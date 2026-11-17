@@ -2857,3 +2857,124 @@ fn the_inbox_keeps_polling_while_a_board_is_on_screen() {
             .any(|e| matches!(e, Effect::LoadInbox { .. }))
     );
 }
+
+// --- b: from an Inbox task to its board -----------------------------------
+
+/// Project "42"'s board with Inbox task `gid` as the second card of
+/// column 1.
+fn board_with_task(gid: &str) -> crate::core::Board {
+    let mut board = project_board(&[2, 2]);
+    let mut card = board.columns[1].tasks[0].clone();
+    card.gid = gid.into();
+    board.columns[1].tasks.insert(1, card);
+    board
+}
+
+#[test]
+fn b_opens_the_board_of_the_tasks_project_on_that_task() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", card_detail("42"));
+
+    let effects = ignoring_detail(keys(&mut app, "b"));
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_task("t0")),
+    });
+
+    assert_eq!(
+        effects,
+        vec![Effect::LoadBoard {
+            project_gid: "42".into()
+        }]
+    );
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(selected_card(&app), Some("t0"));
+}
+
+#[test]
+fn b_on_a_board_opened_before_selects_the_task_at_once() {
+    let mut app = on_board(&[1]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_task("t0")),
+    });
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "i");
+    load_task(&mut app, "t0", card_detail("42"));
+
+    keys(&mut app, "b");
+
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(selected_card(&app), Some("t0"));
+}
+
+#[test]
+fn b_on_a_task_in_several_projects_asks_which_board_first() {
+    let mut app = loaded(3, 10);
+    let mut detail = card_detail("42");
+    detail.task.memberships.push(Membership {
+        project: named("7", "Launch"),
+        section: None,
+    });
+    load_task(&mut app, "t0", detail);
+
+    keys(&mut app, "b");
+    assert_eq!(picker_names(&app), ["Website", "Launch"]);
+    keys(&mut app, "j");
+    let effects = ignoring_detail(enter(&mut app));
+
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(
+        effects,
+        vec![Effect::LoadBoard {
+            project_gid: "7".into()
+        }]
+    );
+}
+
+#[test]
+fn b_before_the_task_has_loaded_asks_to_wait() {
+    let mut app = loaded(3, 10);
+
+    let effects = keys(&mut app, "b");
+
+    assert!(effects.is_empty());
+    assert_eq!(app.screen, Screen::Inbox);
+    assert!(app.toast.is_some());
+}
+
+#[test]
+fn b_on_a_task_in_no_project_explains_why_nothing_opens() {
+    let mut app = loaded(3, 10);
+    let mut detail = card_detail("42");
+    detail.task.memberships.clear();
+    load_task(&mut app, "t0", detail);
+
+    keys(&mut app, "b");
+
+    assert_eq!(app.screen, Screen::Inbox);
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("isn't in a project"))
+    );
+}
+
+#[test]
+fn b_on_a_task_missing_from_its_board_says_so_and_starts_at_the_top() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", card_detail("42"));
+    keys(&mut app, "b");
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    });
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("isn't on this board"))
+    );
+}

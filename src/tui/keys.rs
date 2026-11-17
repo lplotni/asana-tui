@@ -56,6 +56,8 @@ pub enum Cmd {
     GoToInbox,
     /// Open a project's board (the project switcher).
     SwitchProject,
+    /// Open the board of the selected task's project, on that task.
+    OpenTaskBoard,
     OpenInBrowser,
     ToggleFilter,
     Refresh,
@@ -229,6 +231,13 @@ pub const BINDINGS: &[Binding] = &[
         Cmd::SwitchProject,
         Asn,
         "open a project's board",
+    ),
+    bind(
+        Normal,
+        &[Char('b')],
+        Cmd::OpenTaskBoard,
+        Asn,
+        "open the task's board",
     ),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),
