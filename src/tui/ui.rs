@@ -205,6 +205,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
                 "column",
             ),
             (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
+            (normal(Cmd::Refresh), "refresh"),
             (normal(Cmd::Help), "help"),
             (normal(Cmd::Quit), "quit"),
         ];
@@ -1242,6 +1243,7 @@ mod tests {
         let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
 
         assert!(labels.contains(&"column"), "{labels:?}");
+        assert!(labels.contains(&"refresh"), "{labels:?}");
         assert!(!labels.contains(&"read"), "{labels:?}");
     }
 

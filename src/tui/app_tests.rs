@@ -2402,3 +2402,106 @@ fn the_board_gets_the_space_from_a_resize() {
     };
     assert_eq!(view.visible_columns(), 0..2);
 }
+
+fn board_loads(effects: &[Effect]) -> usize {
+    effects
+        .iter()
+        .filter(|e| matches!(e, Effect::LoadBoard { .. }))
+        .count()
+}
+
+#[test]
+fn the_refresh_timer_reloads_the_board_on_screen_and_the_inbox() {
+    let mut app = on_board(&[2]);
+
+    let effects = app.update(Msg::Tick);
+
+    assert_eq!(board_loads(&effects), 1);
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::LoadInbox { .. }))
+    );
+}
+
+#[test]
+fn the_refresh_timer_leaves_a_board_that_is_not_on_screen_alone() {
+    let mut app = on_board(&[2]);
+    app.screen = Screen::Inbox;
+
+    let effects = app.update(Msg::Tick);
+
+    assert_eq!(board_loads(&effects), 0);
+}
+
+#[test]
+fn r_on_the_board_reloads_the_board() {
+    let mut app = on_board(&[2]);
+
+    let effects = keys(&mut app, "R");
+
+    assert_eq!(
+        effects,
+        vec![Effect::LoadBoard {
+            project_gid: "42".into()
+        }]
+    );
+}
+
+#[test]
+fn a_board_reload_is_not_started_while_one_is_running() {
+    let mut app = on_board(&[2]);
+
+    let first = keys(&mut app, "R");
+    let second = app.update(Msg::Tick);
+
+    assert_eq!(board_loads(&first), 1);
+    assert_eq!(board_loads(&second), 0);
+}
+
+#[test]
+fn after_a_reload_finishes_the_next_one_can_start() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "R");
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    });
+
+    assert_eq!(board_loads(&keys(&mut app, "R")), 1);
+}
+
+#[test]
+fn a_reload_keeps_the_selected_card_where_it_moved() {
+    let mut app = on_board(&[2, 2]);
+    keys(&mut app, "j");
+    let mut moved = project_board(&[2, 2]);
+    let card = moved.columns[0].tasks.pop().unwrap();
+    assert_eq!(card.gid, "c0-1");
+    moved.columns[1].tasks.push(card);
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(moved),
+    });
+
+    assert_eq!(selected_card(&app), Some("c0-1"));
+}
+
+#[test]
+fn a_failed_reload_keeps_the_board_and_says_so() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "R");
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Err("Could not reach Asana: timed out".into()),
+    });
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.is_error && t.text.contains("timed out"))
+    );
+}

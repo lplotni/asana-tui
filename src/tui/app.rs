@@ -311,6 +311,8 @@ pub enum Screen {
 pub struct BoardSlot {
     pub project_gid: String,
     pub state: BoardState,
+    /// A load of this board is running; another one isn't started.
+    reloading: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -442,6 +444,7 @@ impl App {
         app.board = Some(BoardSlot {
             project_gid: project_gid.clone(),
             state: BoardState::Loading,
+            reloading: true,
         });
         effects.push(Effect::LoadBoard { project_gid });
         (app, effects)
@@ -518,7 +521,11 @@ impl App {
                 self.move_to(self.cursor);
                 self.load_more_if_needed()
             }
-            Msg::Tick => self.refresh(),
+            Msg::Tick => {
+                let mut effects = self.refresh();
+                effects.extend(self.reload_board());
+                effects
+            }
             Msg::BoardLoaded {
                 project_gid,
                 result,
@@ -952,10 +959,25 @@ impl App {
         }
         match cmd {
             Cmd::Help => self.help = true,
+            Cmd::Refresh => return self.reload_board(),
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
             _ => {}
         }
         Vec::new()
+    }
+
+    /// Reloads the board on screen, unless a load of it is running.
+    fn reload_board(&mut self) -> Vec<Effect> {
+        if self.screen != Screen::Board {
+            return Vec::new();
+        }
+        let Some(slot) = self.board.as_mut().filter(|slot| !slot.reloading) else {
+            return Vec::new();
+        };
+        slot.reloading = true;
+        vec![Effect::LoadBoard {
+            project_gid: slot.project_gid.clone(),
+        }]
     }
 
     /// The loaded board on screen, if any.
@@ -984,6 +1006,7 @@ impl App {
         else {
             return;
         };
+        slot.reloading = false;
         match (&mut slot.state, result) {
             (BoardState::Loaded(view), Ok(board)) => view.replace(board),
             (_, Ok(board)) => {

@@ -48,7 +48,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 2: A board you can look at
 - [x] T3: Board screen opened with `asn --project` (F9 render, F11 startup)
-- [ ] T4: Polling, `R`, session cache (F9 refresh)
+- [x] T4: Polling and `R` (F9 refresh; the session cache moved to T6)
 
 ### Checkpoint B: glance works
 - [ ] The user dogfoods `asn --project` at 80, 120 and 200 columns (success criterion 6, A2, A3)
@@ -56,7 +56,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 3: Act and navigate
 - [ ] T5: `Enter` → full-width detail, and actions on cards (F10)
-- [ ] T6: `P` project switcher and Inbox ↔ board peers (F11)
+- [ ] T6: `P` project switcher, session cache of boards, and Inbox ↔ board peers (F11)
 - [ ] T7: `b` from an Inbox task (F11)
 - [ ] T8: `/`, `n`, `N` jump on the board (F12)
 

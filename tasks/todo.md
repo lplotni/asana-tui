@@ -106,17 +106,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T4: Polling, `R` and the session cache
+### - [x] T4: Polling and `R`
 
-**Description:** The 60 s `Msg::Tick` also reloads the active board when the board screen is visible, and `R` reloads it now. Results go through `Board::replace` (the cursor is kept by GID). A failed reload keeps the last data and shows an error toast. Boards opened this session stay in memory with their cursors, keyed by project GID. Reopening one shows it at once and reloads it in the background.
+**Description:** The 60 s `Msg::Tick` also reloads the active board when the board screen is visible, and `R` reloads it now. Results go through `Board::replace` (the cursor is kept by GID). A failed reload keeps the last data and shows an error toast. A reload isn't started while one is running. (The session cache of several boards moved to T6, the first task that can open a second board.)
 
 **Acceptance criteria:**
-- [ ] A Tick on the board screen emits `LoadInbox` and `LoadBoard`. A Tick on the Inbox screen emits only `LoadInbox`.
-- [ ] After a reload, the cursor stays on the same task, or is clamped if the task has gone. A failed reload keeps the board and shows a toast.
-- [ ] Reopening a cached board shows its old data and cursor immediately and emits one `LoadBoard`.
+- [x] A Tick on the board screen emits `LoadInbox` and `LoadBoard`. A Tick on the Inbox screen emits only `LoadInbox`.
+- [x] After a reload, the cursor stays on the same task, or is clamped if the task has gone. A failed reload keeps the board and shows a toast.
+- [x] Two reloads never overlap (moved: the cached-board criterion is now in T6).
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` for each bullet. Run with `cargo test`.
+- [x] Tests: `app_tests.rs` for each bullet. Run with `cargo test`.
 - [ ] Manual: move a task on the web, and it moves in `asn` within 60 s or on `R`.
 
 **Dependencies:** T3
@@ -158,11 +158,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ### - [ ] T6: `P` project switcher and Inbox ↔ board peers
 
-**Description:** `P` (bound in `keys.rs` on both screens) opens a new picker stage that reuses the project typeahead, debounce and fzf keys. With an empty query it lists the projects opened this session, most recent first. `Enter` opens the board (from the cache if present). `Tab i` from the board shows the Inbox with its cursor unchanged. The Inbox keeps polling, and `P Enter` returns to the last board.
+**Description:** Boards opened this session stay in memory with their cursors, keyed by project GID (moved here from T4). Reopening one shows it at once and reloads it in the background. `P` (bound in `keys.rs` on both screens) opens a new picker stage that reuses the project typeahead, debounce and fzf keys. With an empty query it lists the projects opened this session, most recent first. `Enter` opens the board (from the cache if present). `Tab i` from the board shows the Inbox with its cursor unchanged. The Inbox keeps polling, and `P Enter` returns to the last board.
 
 **Acceptance criteria:**
 - [ ] `P`, type, `Enter` opens any project's board. `P` with an empty query lists recents first, and `P Enter` reopens the last board with its cursor.
 - [ ] `Tab i` and back keeps both screens' cursors and data.
+- [ ] Reopening a cached board shows its old data and cursor immediately and emits one `LoadBoard`.
 - [ ] The no-collision key test passes, and `P` appears in the help overlay.
 
 **Verification:**
