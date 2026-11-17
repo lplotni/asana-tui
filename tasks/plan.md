@@ -68,6 +68,11 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T11: `asn project new` (create in project, then section)
 - [x] T12: `Tab q` on the board (name prompt, reload, select the new card)
 
+### Phase 3c: @-mentions (F15)
+- [ ] T13: Mentions in the core and CLI (`@<gid>`, `asn users`, rich-text writes)
+- [ ] Checkpoint M1: the user verifies a mention and a line break on real Asana
+- [ ] T14: `@` in the editor (mention picker, recorded mentions, drafts)
+
 ### Phase 4: Ship
 - [x] T9: Help, README and spec updates
 - [ ] T10: Release v0.2.0 (ask first)

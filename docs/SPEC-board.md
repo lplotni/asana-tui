@@ -114,6 +114,20 @@ Added after Checkpoint C at the user's request. It was in Not Doing before.
   - If the task was created but couldn't be put in the section, a toast says so (`Created, but not in <Section>: …`). The task is still on the board, in Asana's default section, and `m` can move it.
 - CLI: `asn project new <project-gid> [--section <gid>] <name…>` prints the new task's GID. If the task was created but not put in the section, it still prints the GID, and it warns on stderr and exits 1.
 
+### F15. @-mentions in comments and descriptions
+
+Added after F14 at the user's request. It applies to both screens, because the editor is shared.
+
+- **How Asana sees mentions:** a mention is rich text: `<a data-asana-gid="GID"/>` inside `html_text` (comments) or `html_notes` (descriptions). Asana shows it as a link to the person, task or project, and a mentioned person is notified. Plain `@Name` text is not a mention.
+- **In the editor:** typing `@` opens a picker titled "Mention someone" over the editor. Typing searches people, projects and tasks with Asana's typeahead, as three requests at once with the 200 ms debounce. People are listed first, then projects, then tasks, each labelled. `Enter` inserts `@Name` at the cursor and remembers which GID it stands for. `Esc` inserts a plain `@`.
+- **Saving:**
+  - The text is turned into rich text only if it still contains a remembered `@Name`. Each one becomes the mention tag, and all other text is HTML-escaped and wrapped in `<body>…</body>`.
+  - Text without mentions saves exactly as before, as plain `text` or `notes`.
+  - A remembered `@Name` that was edited away is plain text.
+  - Comment drafts keep their mentions, and `Ctrl-o` (`$EDITOR`) keeps them as long as the `@Name` text is left intact.
+- **Descriptions:** the formatting guard (F4) and the concurrency guard are unchanged. A description saved with a mention is written as `html_notes`, which replaces formatting just as a plain save does.
+- **CLI:** in `asn comment` and `asn desc`, `@` followed by a GID of 10+ digits (e.g. `@1200000000000011`) becomes a mention of that user, task or project. `asn users <query…>` prints matching people as `gid  name`, and `asn search` already finds tasks.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**
@@ -214,6 +228,8 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **A3: Initials are unambiguous enough in a project's assignee set.** No problem found at Checkpoint B. Test: dogfood. If two people share initials, fall back to the first name.
 - [ ] **A4: Hiding completed tasks matches how the board is read.** Test: dogfood. The web board collapses them by default.
 - [x] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Confirmed in planning: `selected_task_gid()` was already that seam (search used it); T5 made it return the selected card. Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
+
+- [ ] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app.
 
 ## Not Doing (and Why)
 

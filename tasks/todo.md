@@ -267,6 +267,57 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
+## Phase 3c: @-mentions (F15)
+
+### - [ ] T13: Mentions in the core and CLI
+
+**Description:**
+- A pure `core` function turns text plus mentions (`@Label` → GID) into Asana rich text (`<body>`, HTML-escaped, mention tags). It returns `None` when no mention is left, so the text saves plain.
+- `core::comment` and the description save write `html_text`/`html_notes` when there are mentions, and plain `text`/`notes` as today otherwise.
+- The CLI turns `@<10+ digit gid>` into mentions in `asn comment` and `asn desc`.
+- `asn users <query…>` lists people from the typeahead.
+
+**Acceptance criteria:**
+- [ ] Text with a mention becomes `<body>…<a data-asana-gid="…"/>…</body>`, with `&`, `<` and `>` escaped and line breaks kept. Text without one stays plain.
+- [ ] `asn comment <task> -m 'hi @1200000000000011'` posts `html_text`, and `-m 'hi @3pm'` posts plain `text`.
+- [ ] `asn users ada` prints `gid  name` lines.
+
+**Verification:**
+- [ ] Tests: unit tests for the rich-text function (escaping, several mentions, a mention that was edited away, line breaks). `wiremock` tests for `html_text`/`html_notes` versus plain bodies, and for the user typeahead.
+- [ ] **Checkpoint M1 (user):** post a comment with a mention and a line break on a test task, and check it in the web app.
+
+**Dependencies:** None
+
+**Files likely touched:** `src/core/mod.rs` (or a new `src/core/rich.rs`), `src/api/tasks.rs`, `src/api/search.rs`, `src/cli/`, `src/main.rs`, `tests/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T14: `@` in the editor
+
+**Description:**
+- Typing `@` in the comment or description editor opens a mention picker over it. Three typeahead searches run at once (people, projects, tasks), and the results are merged with labels.
+- `Enter` inserts `@Name` and records its GID on the editor, and `Esc` inserts a plain `@`.
+- Saving passes the mentions to the core. Drafts keep them.
+
+**Acceptance criteria:**
+- [ ] `@`, `ada`, `Enter` inserts `@Ada Lovelace`, and posting sends a mention of her GID.
+- [ ] `Esc` inserts `@`. Results arrive for the latest query only. A failed search says so.
+- [ ] A failed comment's draft keeps its mentions.
+
+**Verification:**
+- [ ] Tests: `app_tests.rs` for each criterion. A snapshot of the picker over the editor.
+- [ ] Manual: mention someone in a real comment and description.
+
+**Dependencies:** T13 and Checkpoint M1
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/picker.rs`, `src/tui/ui.rs`, `src/tui/mod.rs`, `src/tui/app_tests.rs`, `README.md`
+
+**Estimated scope:** M
+
+---
+
 ## Phase 4: Ship
 
 ### - [x] T9: Help, README and spec updates
