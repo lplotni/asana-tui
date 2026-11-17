@@ -97,6 +97,17 @@ impl Client {
         }
     }
 
+    /// `GET /workspaces`: the workspaces the token can see (first 100; a
+    /// person is in a handful).
+    pub async fn workspaces(&self) -> Result<Vec<tasks::Named>, ApiError> {
+        let query = [
+            ("opt_fields", "name".to_owned()),
+            ("limit", "100".to_owned()),
+        ];
+        let page: Page<tasks::Named> = self.get("/workspaces", &query).await?;
+        Ok(page.data)
+    }
+
     /// `GET /workspaces/{ws}/typeahead`: up to `count` objects of
     /// `resource_type` matching `query`, with `fields`.
     pub(crate) async fn typeahead<T: DeserializeOwned>(

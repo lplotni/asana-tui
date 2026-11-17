@@ -4,6 +4,7 @@ use asn::api::{ASANA_API_URL, Client};
 use asn::cli::inbox;
 use asn::config::{self, Config, ConfigError, FileConfig};
 use asn::core;
+use asn::setup;
 use clap::{Parser, Subcommand};
 
 /// Asana Inbox and project boards in your terminal. Runs the TUI when no
@@ -29,6 +30,8 @@ fn numeric_gid(value: &str) -> Result<String, String> {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Set up ~/.config/asn/config.toml: your token command and workspace
+    Init,
     /// List Inbox notifications
     Inbox {
         /// Only unread notifications
@@ -175,6 +178,35 @@ enum ProjectCommand {
 /// Default for `asn inbox --limit`.
 const DEFAULT_INBOX_LIMIT: u32 = 50;
 
+fn is_terminal() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+/// The setup interview on this terminal, writing the config file.
+async fn init() -> Result<setup::Outcome, ExitCode> {
+    if !is_terminal() {
+        return Err(fail(&"asn init needs a terminal", 1));
+    }
+    let env = |key: &str| std::env::var(key).ok();
+    let Some(path) = config::file_path(env) else {
+        return Err(fail(
+            &"Can't tell where the config file goes: set HOME or XDG_CONFIG_HOME",
+            1,
+        ));
+    };
+    let mut stdout = std::io::stdout();
+    setup::run(
+        &path,
+        &mut std::io::stdin().lock(),
+        &mut stdout,
+        env,
+        ASANA_API_URL,
+    )
+    .await
+    .map_err(|err| fail(&err, 1))
+}
+
 /// The settings from the environment, then the config file (spec F22).
 fn load_config() -> Result<Config, ConfigError> {
     let env = |key: &str| std::env::var(key).ok();
@@ -199,6 +231,20 @@ async fn main() -> ExitCode {
             };
         }
     };
+
+    // `asn init`, or the TUI's first run without a config file (spec F22).
+    // CLI subcommands never prompt.
+    let env = |key: &str| std::env::var(key).ok();
+    let first_run = cli.command.is_none()
+        && is_terminal()
+        && config::file_path(env).is_some_and(|path| !path.exists());
+    if matches!(cli.command, Some(Command::Init)) || first_run {
+        match init().await {
+            Ok(_) if !first_run => return ExitCode::SUCCESS,
+            Ok(_) => {}
+            Err(code) => return code,
+        }
+    }
 
     let config = match load_config() {
         Ok(config) => config,
@@ -231,6 +277,7 @@ async fn main() -> ExitCode {
                 (None, false) => ExitCode::FAILURE,
             }
         }
+        Some(Command::Init) => unreachable!("handled before the config is loaded"),
         None => match asn::tui::run(config, client, cli.project).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, 1),

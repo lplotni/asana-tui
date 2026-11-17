@@ -485,18 +485,18 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T21: `asn init` and first-run setup
+### - [x] T21: `asn init` and first-run setup
 
 **Description:** The F22 interview as a core function over generic input/output, `GET /workspaces` in the API, the `asn init` subcommand, and the TUI's first run when no file exists.
 
 **Acceptance criteria:**
-- [ ] The interview asks for the token command and the workspace, and writes the file with mode 0600 and the other keys as commented defaults.
-- [ ] It never replaces an existing file without `y`; Ctrl-D aborts without writing.
-- [ ] A failing token command or a 401 goes back to the token step.
-- [ ] `asn init` without a terminal exits 1; CLI subcommands never prompt.
+- [x] The interview asks for the token command and the workspace, and writes the file with mode 0600 and the other keys as commented defaults.
+- [x] It never replaces an existing file without `y`; Ctrl-D aborts without writing.
+- [x] A failing token command or a 401 goes back to the token step.
+- [x] `asn init` without a terminal exits 1; CLI subcommands never prompt.
 
 **Verification:**
-- [ ] Interview tests with scripted input; wiremock for `GET /workspaces`; `tests/cli.rs` for no terminal.
+- [x] Interview tests with scripted input; wiremock for `GET /workspaces`; `tests/cli.rs` for no terminal.
 - [ ] Manual: delete the file, run `asn`, answer the questions, and the TUI starts.
 
 **Dependencies:** T20

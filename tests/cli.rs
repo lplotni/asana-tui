@@ -193,3 +193,25 @@ fn a_token_in_the_config_file_exits_1_without_using_it() {
     assert!(stderr(&output).contains("\"token\" isn't allowed"));
     assert!(!stderr(&output).contains("secret-pat"));
 }
+
+#[test]
+fn asn_init_needs_a_terminal() {
+    let output = asn(&["init"], &[("HOME", env!("CARGO_TARGET_TMPDIR"))]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("asn init needs a terminal"));
+}
+
+#[test]
+fn a_subcommand_without_a_config_file_never_prompts() {
+    let home = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("cfg-none");
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+
+    let output = asn(&["inbox"], &[("HOME", home.to_str().unwrap())]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("run asn init"));
+    assert!(output.stdout.is_empty(), "it prompted");
+    assert!(!home.join(".config").exists(), "it wrote something");
+}
