@@ -144,6 +144,7 @@ pub async fn sections(client: &Client, project_gid: &str) -> Result<Vec<Named>, 
 /// A project's open tasks as board columns, in the project's section order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Board {
+    pub project: Named,
     pub columns: Vec<Column>,
 }
 
@@ -155,10 +156,11 @@ pub struct Column {
     pub tasks: Vec<BoardTask>,
 }
 
-/// Loads the project's sections and every page of its open tasks at the same
-/// time, and groups the tasks into columns.
+/// Loads the project, its sections and every page of its open tasks at the
+/// same time, and groups the tasks into columns.
 pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError> {
-    let (sections, tasks) = tokio::try_join!(
+    let (project, sections, tasks) = tokio::try_join!(
+        client.project(project_gid),
         client.sections(project_gid),
         all_pages(|offset| async move {
             client
@@ -166,13 +168,13 @@ pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError
                 .await
         }),
     )?;
-    Ok(group_board(project_gid, sections, tasks))
+    Ok(group_board(project, sections, tasks))
 }
 
 /// One column per section, keeping empty ones. Each task goes to its section
 /// in *this* project (a task can be in several). Tasks without a known
 /// section go to a leading column that exists only when it has tasks.
-fn group_board(project_gid: &str, sections: Vec<Named>, tasks: Vec<BoardTask>) -> Board {
+fn group_board(project: Named, sections: Vec<Named>, tasks: Vec<BoardTask>) -> Board {
     let mut columns: Vec<Column> = sections
         .into_iter()
         .map(|section| Column {
@@ -185,7 +187,7 @@ fn group_board(project_gid: &str, sections: Vec<Named>, tasks: Vec<BoardTask>) -
         let section_gid = task
             .memberships
             .iter()
-            .find(|m| m.project.gid == project_gid)
+            .find(|m| m.project.gid == project.gid)
             .and_then(|m| m.section.as_ref())
             .map(|s| s.gid.clone());
         let column = section_gid.and_then(|gid| {
@@ -207,7 +209,7 @@ fn group_board(project_gid: &str, sections: Vec<Named>, tasks: Vec<BoardTask>) -
             },
         );
     }
-    Board { columns }
+    Board { project, columns }
 }
 
 /// Adds the task to a project (and optionally a section), keeping the
@@ -379,7 +381,7 @@ mod tests {
             task("t3", &[("p", Some("s2"))]),
         ];
 
-        let board = group_board("p", sections, tasks);
+        let board = group_board(named("p", "Project"), sections, tasks);
 
         assert_eq!(board.columns.len(), 2);
         assert_eq!(board.columns[0].section, Some(named("s1", "To do")));
@@ -392,7 +394,7 @@ mod tests {
         let sections = vec![named("s1", "To do"), named("s2", "Doing")];
         let tasks = vec![task("t1", &[("other", Some("s1")), ("p", Some("s2"))])];
 
-        let board = group_board("p", sections, tasks);
+        let board = group_board(named("p", "Project"), sections, tasks);
 
         assert!(board.columns[0].tasks.is_empty());
         assert_eq!(gids(&board.columns[1]), ["t1"]);
@@ -402,7 +404,11 @@ mod tests {
     fn empty_sections_are_kept() {
         let sections = vec![named("s1", "To do"), named("s2", "Done")];
 
-        let board = group_board("p", sections, vec![task("t1", &[("p", Some("s1"))])]);
+        let board = group_board(
+            named("p", "Project"),
+            sections,
+            vec![task("t1", &[("p", Some("s1"))])],
+        );
 
         assert_eq!(board.columns.len(), 2);
         assert!(board.columns[1].tasks.is_empty());
@@ -417,7 +423,7 @@ mod tests {
             task("t3", &[("p", Some("s1"))]),
         ];
 
-        let board = group_board("p", sections, tasks);
+        let board = group_board(named("p", "Project"), sections, tasks);
 
         assert_eq!(board.columns[0].section, None);
         assert_eq!(gids(&board.columns[0]), ["t1", "t2"]);
@@ -427,7 +433,7 @@ mod tests {
     #[test]
     fn there_is_no_no_section_column_when_every_task_has_a_section() {
         let board = group_board(
-            "p",
+            named("p", "Project"),
             vec![named("s1", "To do")],
             vec![task("t1", &[("p", Some("s1"))])],
         );

@@ -39,6 +39,19 @@ impl Client {
             .await
     }
 
+    /// The project's GID and name.
+    pub async fn project(&self, project_gid: &str) -> Result<Named, ApiError> {
+        #[derive(Deserialize)]
+        struct Data {
+            data: Named,
+        }
+        let query = [("opt_fields", "name".to_owned())];
+        let body: Data = self
+            .get(&format!("/projects/{project_gid}"), &query)
+            .await?;
+        Ok(body.data)
+    }
+
     pub async fn sections(&self, project_gid: &str) -> Result<Vec<Named>, ApiError> {
         let query = [
             ("opt_fields", "name".to_owned()),

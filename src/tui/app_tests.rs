@@ -29,6 +29,7 @@ fn loaded_with(notifications: Vec<Notification>, next: Option<&str>, list_rows: 
         list_rows,
         detail_width: 60,
         detail_rows: 20,
+        ..Sizes::default()
     }));
     app.update(Msg::InboxLoaded(Ok((
         notifications,
@@ -503,6 +504,7 @@ fn a_short_inbox_keeps_loading_until_the_cursor_has_room() {
         list_rows: 10,
         detail_width: 60,
         detail_rows: 20,
+        ..Sizes::default()
     }));
 
     let effects = ignoring_detail(app.update(Msg::InboxLoaded(Ok((
@@ -2202,4 +2204,201 @@ fn a_blank_comment_from_the_external_editor_is_not_posted() {
         app.toast.as_ref().unwrap().text,
         "Empty comment; nothing posted"
     );
+}
+
+// --- Board screen ---------------------------------------------------------
+
+/// A board of project "42" with one column per entry of `sizes`; column `c`
+/// holds cards `c{c}-{row}`.
+fn project_board(sizes: &[usize]) -> crate::core::Board {
+    crate::core::Board {
+        project: named("42", "Website"),
+        columns: sizes
+            .iter()
+            .enumerate()
+            .map(|(c, &n)| crate::core::Column {
+                section: Some(named(&format!("s{c}"), &format!("Section {c}"))),
+                tasks: (0..n)
+                    .map(|row| crate::api::projects::BoardTask {
+                        gid: format!("c{c}-{row}"),
+                        name: format!("Card {c}-{row}"),
+                        assignee: None,
+                        due_on: None,
+                        due_at: None,
+                        memberships: Vec::new(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+/// An app started with `--project 42`, its board loaded, and the Inbox
+/// loaded behind it.
+fn on_board(sizes: &[usize]) -> App {
+    let (mut app, _) = App::new_on_board("42".into());
+    app.update(Msg::Resize(Sizes {
+        list_rows: 10,
+        detail_width: 60,
+        detail_rows: 20,
+        board_width: 120,
+        board_card_rows: 10,
+    }));
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(sizes)),
+    });
+    app.update(Msg::InboxLoaded(Ok((inbox(5, |_| false), None))));
+    app
+}
+
+fn selected_card(app: &App) -> Option<&str> {
+    match &app.board.as_ref()?.state {
+        BoardState::Loaded(view) => view.selected_task().map(|t| t.gid.as_str()),
+        _ => None,
+    }
+}
+
+#[test]
+fn starting_on_a_project_loads_its_board_and_the_inbox() {
+    let (app, effects) = App::new_on_board("42".into());
+
+    assert_eq!(app.screen, Screen::Board);
+    assert!(effects.contains(&Effect::LoadBoard {
+        project_gid: "42".into()
+    }));
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::LoadInbox { .. }))
+    );
+    assert!(matches!(
+        app.board.as_ref().map(|b| &b.state),
+        Some(BoardState::Loading)
+    ));
+}
+
+#[test]
+fn a_loaded_board_selects_its_first_card() {
+    let app = on_board(&[2, 3]);
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+}
+
+#[test]
+fn a_board_that_fails_to_load_shows_why() {
+    let (mut app, _) = App::new_on_board("42".into());
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Err("Asana API error 404: Not Found".into()),
+    });
+
+    assert!(matches!(
+        app.board.as_ref().map(|b| &b.state),
+        Some(BoardState::Failed(message)) if message.contains("404")
+    ));
+}
+
+#[test]
+fn a_board_loaded_for_another_project_is_ignored() {
+    let (mut app, _) = App::new_on_board("42".into());
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "7".into(),
+        result: Ok(project_board(&[1])),
+    });
+
+    assert!(matches!(
+        app.board.as_ref().map(|b| &b.state),
+        Some(BoardState::Loading)
+    ));
+}
+
+#[test]
+fn vim_motions_move_on_the_board_not_in_the_inbox() {
+    let mut app = on_board(&[5, 5, 5]);
+
+    keys(&mut app, "2jl");
+    assert_eq!(selected_card(&app), Some("c1-2"));
+    keys(&mut app, "G");
+    assert_eq!(selected_card(&app), Some("c1-4"));
+    keys(&mut app, "ggh");
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    key(&mut app, KeyCode::Char('d'), KeyModifiers::CONTROL);
+    assert_eq!(selected_card(&app), Some("c0-4"));
+    assert_eq!(app.cursor, 0, "the Inbox cursor didn't move");
+}
+
+#[test]
+fn ctrl_w_l_moves_one_column_right() {
+    let mut app = on_board(&[1, 1]);
+
+    key(&mut app, KeyCode::Char('w'), KeyModifiers::CONTROL);
+    keys(&mut app, "l");
+
+    assert_eq!(selected_card(&app), Some("c1-0"));
+}
+
+#[test]
+fn inbox_only_keys_do_nothing_on_the_board() {
+    let mut app = on_board(&[2]);
+
+    let effects = keys(&mut app, "euxVf");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(app.visual_anchor.is_none());
+    assert!(!app.unread_only);
+    assert!(app.visible().all(|n| !n.is_read));
+}
+
+#[test]
+fn q_quits_from_the_board() {
+    let mut app = on_board(&[1]);
+
+    keys(&mut app, "q");
+
+    assert!(app.should_quit);
+}
+
+#[test]
+fn esc_on_the_board_does_nothing() {
+    let mut app = on_board(&[1, 1]);
+    keys(&mut app, "l");
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+
+    assert!(!app.should_quit);
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(selected_card(&app), Some("c1-0"));
+}
+
+#[test]
+fn the_inbox_loading_behind_the_board_fetches_no_task_details() {
+    let (mut app, _) = App::new_on_board("42".into());
+
+    let effects = app.update(Msg::InboxLoaded(Ok((inbox(5, |_| false), None))));
+
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::ScheduleDetail { .. } | Effect::LoadDetail { .. })),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn the_board_gets_the_space_from_a_resize() {
+    let mut app = on_board(&[1; 10]);
+
+    app.update(Msg::Resize(Sizes {
+        board_width: 80,
+        board_card_rows: 5,
+        ..Sizes::default()
+    }));
+
+    let Some(BoardState::Loaded(view)) = app.board.as_ref().map(|b| &b.state) else {
+        panic!("board not loaded");
+    };
+    assert_eq!(view.visible_columns(), 0..2);
 }

@@ -7,16 +7,19 @@ use ratatui::widgets::{
     Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
-use super::app::{App, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Sizes};
+use super::app::{App, BoardState, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Screen, Sizes};
+use super::board::BoardView;
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
-use crate::present::detail;
 use crate::present::format::{describe, relative_time};
+use crate::present::{card, detail};
 
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
+/// Lines per board card.
+const CARD_HEIGHT: u16 = 2;
 
 /// The help overlay's lines: every binding, generated from the keymap.
 pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
@@ -194,6 +197,18 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         ];
     }
     let moves = pair(normal(Cmd::MoveDown), normal(Cmd::MoveUp));
+    if app.screen == Screen::Board {
+        return vec![
+            (moves, "move"),
+            (
+                pair(normal(Cmd::FocusLeft), normal(Cmd::FocusRight)),
+                "column",
+            ),
+            (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
+            (normal(Cmd::Help), "help"),
+            (normal(Cmd::Quit), "quit"),
+        ];
+    }
     if app.visual_anchor.is_some() {
         return vec![
             (moves, "extend"),
@@ -274,8 +289,8 @@ fn render_hints(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     );
 }
 
-/// What fits in a terminal of `size`: Inbox items and the detail pane's text
-/// area. Must match the layout in [`render`].
+/// What fits in a terminal of `size`: Inbox items, the detail pane's text
+/// area and the board. Must match the layout in [`render`].
 pub fn sizes(size: Rect) -> Sizes {
     let (_, body, _, _) = split_screen(size);
     let (list, detail) = split_body(body);
@@ -286,6 +301,8 @@ pub fn sizes(size: Rect) -> Sizes {
         list_rows: usize::from((list_inner / ITEM_HEIGHT).max(1)),
         detail_width: usize::from(detail.width.saturating_sub(4)),
         detail_rows: usize::from(detail.height.saturating_sub(2)),
+        board_width: usize::from(body.width),
+        board_card_rows: usize::from((body.height.saturating_sub(2) / CARD_HEIGHT).max(1)),
     }
 }
 
@@ -324,6 +341,14 @@ pub struct ShownImage {
 /// not covered by an overlay; drawing them is up to [`super::images`].
 pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<ShownImage> {
     let (header, body, status, hint_line) = split_screen(frame.area());
+    if app.screen == Screen::Board {
+        render_board_header(frame, header, app, theme);
+        render_board(frame, body, app, theme, now);
+        render_status(frame, status, app, theme);
+        render_hints(frame, hint_line, app, theme);
+        render_overlays(frame, app, theme);
+        return Vec::new();
+    }
     let (list, detail) = split_body(body);
 
     render_header(frame, header, app, theme);
@@ -337,6 +362,15 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
     }
     render_status(frame, status, app, theme);
     render_hints(frame, hint_line, app, theme);
+    render_overlays(frame, app, theme);
+    if app.overlay_open() {
+        images.clear();
+    }
+    images
+}
+
+/// Help, picker and editor, drawn over whatever screen is shown.
+fn render_overlays(frame: &mut Frame, app: &App, theme: &Theme) {
     let screen = frame.area();
     if app.help {
         render_help(frame, screen, theme);
@@ -347,10 +381,130 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
     if let Some(editor) = &app.editor {
         render_editor(frame, screen, editor, app, theme);
     }
-    if app.overlay_open() {
-        images.clear();
+}
+
+/// " asn  Project · N open tasks" with the hidden columns at the right.
+fn render_board_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    let view = app.board_view();
+    let title = match view {
+        Some(view) => {
+            let open: usize = view.columns().iter().map(|c| c.tasks.len()).sum();
+            format!(" {} · {open} open", view.project().name)
+        }
+        None => " Board".to_owned(),
+    };
+    let line = Line::from(vec![
+        Span::styled(" asn ", theme.style(Role::Title)),
+        Span::styled(title, theme.style(Role::Text)),
+    ]);
+    let right = match view.map(BoardView::hidden) {
+        Some((0, 0)) | None => String::new(),
+        Some((left, right)) => {
+            let left = if left > 0 {
+                format!("‹ {left}")
+            } else {
+                String::new()
+            };
+            let right = if right > 0 {
+                format!("{right} ›")
+            } else {
+                String::new()
+            };
+            format!("{left}  {right} ")
+        }
+    };
+    let right = Span::styled(right, theme.style(Role::Keyhint));
+    let [left_area, right_area] =
+        Layout::horizontal([Constraint::Min(0), Constraint::Length(right.width() as u16)])
+            .areas(area);
+    let style = theme.style(Role::Text);
+    frame.render_widget(Paragraph::new(line).style(style), left_area);
+    frame.render_widget(Paragraph::new(right).style(style), right_area);
+}
+
+/// The board's columns, or why there are none yet.
+fn render_board(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
+    let message = match app.board.as_ref().map(|b| &b.state) {
+        Some(BoardState::Loaded(view)) => {
+            render_columns(frame, area, view, theme, now);
+            return;
+        }
+        Some(BoardState::Failed(message)) => {
+            vec![
+                Line::styled(
+                    "The board couldn't be loaded",
+                    theme.style(Role::ToastError),
+                ),
+                Line::styled(message.clone(), theme.style(Role::TextMuted)),
+            ]
+        }
+        Some(BoardState::Loading) | None => {
+            vec![Line::styled("Loading board…", theme.style(Role::TextMuted))]
+        }
+    };
+    let block = pane("Board", true, theme).padding(Padding::horizontal(1));
+    frame.render_widget(Paragraph::new(message).block(block), area);
+}
+
+fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme, now: i64) {
+    let visible = view.visible_columns();
+    let count = visible.len() as u32;
+    let areas = Layout::horizontal((0..count).map(|_| Constraint::Ratio(1, count))).split(area);
+    for (index, column_area) in visible.zip(areas.iter()) {
+        let column = &view.columns()[index];
+        let name = column
+            .section
+            .as_ref()
+            .map_or("(no section)", |s| s.name.as_str());
+        let focused = index == view.column();
+        let block = pane(&format!("{name} ({})", column.tasks.len()), focused, theme);
+        if column.tasks.is_empty() {
+            let block = block.padding(Padding::horizontal(1));
+            let text = Paragraph::new(Span::styled("no tasks", theme.style(Role::TextMuted)));
+            frame.render_widget(text.block(block), *column_area);
+            continue;
+        }
+        // Inside the borders, after the one-cell selection marker.
+        let text_width = usize::from(column_area.width.saturating_sub(3));
+        let items: Vec<ListItem> = column
+            .tasks
+            .iter()
+            .map(|task| card_item(task, text_width, theme, now))
+            .collect();
+        let list = List::new(items)
+            .block(block)
+            .highlight_style(theme.style(Role::Selection))
+            .highlight_symbol("▌")
+            .highlight_spacing(HighlightSpacing::Always);
+        let mut state = ListState::default()
+            .with_offset(view.scroll(index))
+            .with_selected(focused.then_some(view.row()));
+        frame.render_stateful_widget(list, *column_area, &mut state);
     }
-    images
+}
+
+/// A card: the task name, then the assignee's initials and the due date.
+fn card_item<'a>(
+    task: &crate::api::projects::BoardTask,
+    width: usize,
+    theme: &Theme,
+    now: i64,
+) -> ListItem<'a> {
+    let name = Line::styled(card::truncate(&task.name, width), theme.style(Role::Text));
+    let mut meta = vec![Span::styled(
+        card::initials(task),
+        theme.style(Role::TaskMeta),
+    )];
+    if let Some(due) = card::due(task, now) {
+        meta.push(Span::styled(" · ", theme.style(Role::TextMuted)));
+        if due.overdue {
+            meta.push(Span::styled(due.text, theme.style(Role::ToastError)));
+            meta.push(Span::styled("!", theme.style(Role::ToastError)));
+        } else {
+            meta.push(Span::styled(due.text, theme.style(Role::TaskMeta)));
+        }
+    }
+    ListItem::new(vec![name, Line::from(meta)])
 }
 
 /// The comment or description editor, centered.
@@ -691,20 +845,34 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         " NORMAL "
     };
     let mut left = vec![Span::styled(mode, theme.style(Role::StatusbarMode))];
-    if app.visible_len() > 0 {
-        left.push(Span::raw(format!(
-            " {}/{}",
-            app.cursor + 1,
-            app.visible_len()
-        )));
+    let on_board = app.screen == Screen::Board;
+    // Position in the list on screen: the Inbox, or the board's column.
+    let position = if on_board {
+        app.board_view().and_then(|view| {
+            let cards = view.columns().get(view.column())?.tasks.len();
+            (cards > 0).then(|| (view.row() + 1, cards))
+        })
+    } else {
+        (app.visible_len() > 0).then(|| (app.cursor + 1, app.visible_len()))
+    };
+    if let Some((at, of)) = position {
+        left.push(Span::raw(format!(" {at}/{of}")));
     }
     if let Some(pending) = app.keys.pending() {
         left.push(Span::raw(format!("  {pending}")));
     }
-    if app.loading {
+    let loading = if on_board {
+        matches!(
+            app.board.as_ref().map(|b| &b.state),
+            Some(BoardState::Loading)
+        )
+    } else {
+        app.loading
+    };
+    if loading {
         left.push(Span::raw("  Loading…"));
     }
-    if let Some(error) = &app.error {
+    if let Some(error) = app.error.as_ref().filter(|_| !on_board) {
         left.push(Span::styled(
             format!("  ✗ {error}"),
             theme.style(Role::ToastError),
@@ -769,6 +937,15 @@ mod tests {
 
     fn terminal_theme() -> Theme {
         Theme::builtin("terminal").unwrap()
+    }
+
+    #[test]
+    fn the_board_gets_the_whole_body_and_two_rows_per_card() {
+        // 24 rows: header, status and hint lines leave 21; borders leave 19.
+        let sizes = sizes(Rect::new(0, 0, 120, 24));
+
+        assert_eq!(sizes.board_width, 120);
+        assert_eq!(sizes.board_card_rows, 9);
     }
 
     /// The style of the first cell whose symbol is `symbol`. Buffer cells
@@ -868,6 +1045,204 @@ mod tests {
                     .is_none_or(|bg| bg == ratatui::style::Color::Reset)),
             "a cell has a color under NO_COLOR"
         );
+    }
+
+    // --- Board screen -----------------------------------------------------
+
+    fn card(
+        gid: &str,
+        name: &str,
+        assignee: Option<&str>,
+        due_on: Option<&str>,
+    ) -> crate::api::projects::BoardTask {
+        crate::api::projects::BoardTask {
+            gid: gid.into(),
+            name: name.into(),
+            assignee: assignee.map(|name| crate::api::tasks::Named {
+                gid: "u".into(),
+                name: name.into(),
+            }),
+            due_on: due_on.map(Into::into),
+            due_at: None,
+            memberships: Vec::new(),
+        }
+    }
+
+    fn column(
+        gid: &str,
+        name: &str,
+        tasks: Vec<crate::api::projects::BoardTask>,
+    ) -> crate::core::Column {
+        crate::core::Column {
+            section: Some(crate::api::tasks::Named {
+                gid: gid.into(),
+                name: name.into(),
+            }),
+            tasks,
+        }
+    }
+
+    /// Five sections; "Review" is empty. NOW is Mon 16 Nov 2026.
+    fn sample_board() -> crate::core::Board {
+        crate::core::Board {
+            project: crate::api::tasks::Named {
+                gid: "42".into(),
+                name: "Website relaunch".into(),
+            },
+            columns: vec![
+                column(
+                    "s1",
+                    "Backlog",
+                    vec![
+                        card("t1", "Pick a font pairing for headings", None, None),
+                        card(
+                            "t2",
+                            "Audit image sizes",
+                            Some("Grace Hopper"),
+                            Some("2026-11-27"),
+                        ),
+                    ],
+                ),
+                column(
+                    "s2",
+                    "In progress",
+                    vec![
+                        card(
+                            "t3",
+                            "Rewrite the pricing page copy so it fits on one screen",
+                            Some("Ada Lovelace"),
+                            Some("2026-11-12"),
+                        ),
+                        card(
+                            "t4",
+                            "Cookie banner",
+                            Some("Alan Turing"),
+                            Some("2026-11-20"),
+                        ),
+                    ],
+                ),
+                column("s3", "Review", Vec::new()),
+                column(
+                    "s4",
+                    "Done this week",
+                    vec![card("t5", "Favicon", Some("Grace Hopper"), None)],
+                ),
+                column("s5", "Later", vec![card("t6", "Dark mode", None, None)]),
+            ],
+        }
+    }
+
+    fn board_app() -> App {
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(sample_board()),
+        });
+        app
+    }
+
+    #[test]
+    fn board_screen() {
+        let mut app = board_app();
+
+        insta::assert_snapshot!(draw_at(&mut app, 120).backend());
+    }
+
+    #[test]
+    fn board_paged_to_the_right_shows_hidden_columns_on_both_sides() {
+        let mut app = board_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 80, 24))));
+        press(&mut app, "lll");
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn board_on_a_terminal_too_narrow_for_two_columns() {
+        let mut app = board_app();
+
+        insta::assert_snapshot!(draw_at(&mut app, 50).backend());
+    }
+
+    #[test]
+    fn board_loading_screen() {
+        let (mut app, _) = App::new_on_board("42".into());
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn board_error_screen() {
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Err("Asana API error 404: project: Not a recognized ID".into()),
+        });
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn an_overdue_card_is_marked_with_more_than_color() {
+        let mut app = board_app();
+
+        let terminal = draw_at(&mut app, 120);
+
+        assert_eq!(
+            cell_style(&terminal, "!"),
+            terminal_theme().style(Role::ToastError)
+        );
+    }
+
+    #[test]
+    fn no_color_board_has_no_colors_and_a_reversed_selection() {
+        let mut app = board_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 100, 24))));
+
+        let terminal = draw(&app, &Theme::no_color());
+
+        let selected = cell_style(&terminal, "▌");
+        assert!(selected.add_modifier.contains(Modifier::REVERSED));
+        let buffer = terminal.backend().buffer();
+        assert!(
+            buffer.content().iter().all(|c| c
+                .style()
+                .fg
+                .is_none_or(|fg| fg == ratatui::style::Color::Reset)
+                && c.style()
+                    .bg
+                    .is_none_or(|bg| bg == ratatui::style::Color::Reset)),
+            "a cell has a color under NO_COLOR"
+        );
+    }
+
+    #[test]
+    fn the_board_status_shows_the_card_position_not_the_inbox_behind_it() {
+        // The Inbox is still loading and failed once; neither is the board's.
+        let mut app = board_app();
+        app.error = Some("Inbox failed".into());
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 24))));
+        press(&mut app, "lj");
+
+        let terminal = draw_at(&mut app, 120);
+        let buffer = terminal.backend().buffer();
+        let status: String = (0..120)
+            .map(|x| buffer[(x, 22)].symbol().to_owned())
+            .collect();
+
+        assert!(status.contains(" 2/2"), "{status:?}");
+        assert!(!status.contains("Loading"), "{status:?}");
+        assert!(!status.contains("Inbox failed"), "{status:?}");
+    }
+
+    #[test]
+    fn the_board_hint_line_offers_columns_not_inbox_actions() {
+        let app = board_app();
+
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+
+        assert!(labels.contains(&"column"), "{labels:?}");
+        assert!(!labels.contains(&"read"), "{labels:?}");
     }
 
     fn press(app: &mut App, typed: &str) {

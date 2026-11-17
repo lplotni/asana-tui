@@ -11,7 +11,7 @@ pub const MIN_COLUMN_WIDTH: usize = 28;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardView {
-    pub project: Named,
+    project: Named,
     columns: Vec<Column>,
     /// The selected column.
     column: usize,
@@ -28,9 +28,9 @@ pub struct BoardView {
 }
 
 impl BoardView {
-    pub fn new(project: Named, board: Board) -> BoardView {
+    pub fn new(board: Board) -> BoardView {
         BoardView {
-            project,
+            project: board.project,
             scrolls: vec![0; board.columns.len()],
             columns: board.columns,
             column: 0,
@@ -39,6 +39,10 @@ impl BoardView {
             width: 0,
             card_rows: 1,
         }
+    }
+
+    pub fn project(&self) -> &Named {
+        &self.project
     }
 
     pub fn columns(&self) -> &[Column] {
@@ -138,6 +142,7 @@ impl BoardView {
             (column, self.row)
         });
         self.scrolls = vec![0; board.columns.len()];
+        self.project = board.project;
         self.columns = board.columns;
         self.column = column.min(self.columns.len().saturating_sub(1));
         self.set_row(row);
@@ -204,6 +209,7 @@ mod tests {
     /// Column `c` is section `s{c}`; its cards are `c{c}-{row}`.
     fn board(sizes: &[usize]) -> Board {
         Board {
+            project: named("p", "Project"),
             columns: sizes
                 .iter()
                 .enumerate()
@@ -216,7 +222,7 @@ mod tests {
     }
 
     fn view(sizes: &[usize]) -> BoardView {
-        BoardView::new(named("p", "Project"), board(sizes))
+        BoardView::new(board(sizes))
     }
 
     fn selected(view: &BoardView) -> Option<&str> {
@@ -372,6 +378,7 @@ mod tests {
     fn replacing_the_board_keeps_the_selected_task_even_in_another_column() {
         let mut v = view(&[3, 3]);
         v.down(2);
+        assert_eq!(v.project().name, "Project");
         let mut moved = board(&[2, 3]);
         let task = card("c0-2");
         moved.columns[1].tasks.insert(1, task);

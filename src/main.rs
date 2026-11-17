@@ -8,10 +8,22 @@ use clap::{Parser, Subcommand};
 
 /// Asana Inbox in your terminal. Runs the TUI when no subcommand is given.
 #[derive(Parser)]
-#[command(name = "asn", version)]
+#[command(name = "asn", version, args_conflicts_with_subcommands = true)]
 struct Cli {
+    /// Open the TUI on this project's board
+    #[arg(long, value_name = "PROJECT_GID", value_parser = numeric_gid)]
+    project: Option<String>,
     #[command(subcommand)]
     command: Option<Command>,
+}
+
+/// A GID given on the command line: digits only, checked before any request.
+fn numeric_gid(value: &str) -> Result<String, String> {
+    if !value.is_empty() && value.chars().all(|c| c.is_ascii_digit()) {
+        Ok(value.to_owned())
+    } else {
+        Err(format!("must be a numeric GID, got \"{value}\""))
+    }
 }
 
 #[derive(Subcommand)]
@@ -168,7 +180,7 @@ async fn main() -> ExitCode {
                 (None, false) => ExitCode::FAILURE,
             }
         }
-        None => match asn::tui::run(config, client).await {
+        None => match asn::tui::run(config, client, cli.project).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, 1),
         },

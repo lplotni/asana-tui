@@ -31,9 +31,14 @@ const WRITE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 /// How often the Inbox is polled (the API has no push).
 const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Runs the TUI until the user quits. The theme (including the terminal color
-/// query) is resolved before the terminal enters raw mode.
-pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::error::Error>> {
+/// Runs the TUI until the user quits, on the board of `project` if given,
+/// else on the Inbox. The theme (including the terminal color query) is
+/// resolved before the terminal enters raw mode.
+pub async fn run(
+    config: Config,
+    client: Client,
+    project: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let theme = Theme::load(|key| std::env::var(key).ok())?;
     let client = Arc::new(client);
     let workspace: Arc<str> = config.workspace.into();
@@ -55,7 +60,10 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     let editor = editor::editor_command(|key| std::env::var(key).ok());
     spawn_refresh_timer(tx.clone());
 
-    let (mut app, effects) = App::new();
+    let (mut app, effects) = match project {
+        Some(project_gid) => App::new_on_board(project_gid),
+        None => App::new(),
+    };
     app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
     run_effects(effects, &client, &workspace, search, &tx, &mut writes);
 
@@ -211,6 +219,15 @@ fn run_effects(
                         .await
                         .map_err(|e| e.to_string()),
                 ),
+                Effect::LoadBoard { project_gid } => {
+                    let result = core::board(&client, &project_gid)
+                        .await
+                        .map_err(|e| e.to_string());
+                    Msg::BoardLoaded {
+                        project_gid,
+                        result,
+                    }
+                }
                 Effect::LoadMore { offset } => Msg::MoreLoaded(
                     core::inbox_pages(&client, &workspace, 1, Some(&offset), |_| true)
                         .await

@@ -22,19 +22,20 @@ You reach a board three ways: the project switcher (`P`), `b` on an Inbox task, 
 
 | Need | Endpoint | Notes |
 |---|---|---|
+| Board title | `GET /projects/{gid}?opt_fields=name` | The project's name for the header (`asn --project` only has the GID). Loaded at the same time as the rest. |
 | Columns | `GET /projects/{gid}/sections` | Already used by F5 and `m`. Gives column order and empty columns. |
 | Cards | `GET /projects/{gid}/tasks?completed_since=now&limit=100&opt_fields=name,assignee.name,due_on,due_at,memberships.project.gid,memberships.section.gid` | Follows `next_page` until `null`. `completed_since=now` returns open tasks only. Top-level tasks only (subtasks aren't project members unless added). |
 | Project switcher | `GET /workspaces/{gid}/typeahead?resource_type=project` | Already used by F5 (`core::search_projects`). |
 
 A card's column is its membership whose `project.gid` is this project. Other memberships are ignored, because a task can be in several projects. A task whose section isn't in the section list goes into a leading **(no section)** column, which is shown only when it has cards.
 
-**Request budget:** one load is 1 + ⌈tasks / 100⌉ requests, i.e. 4 for 300 tasks. Only the board on screen is polled, every 60 s. Together with the Inbox's 1/min, that stays far below the ~150 req/min free-plan limit.
+**Request budget:** one load is 2 + ⌈tasks / 100⌉ requests, i.e. 5 for 300 tasks. Only the board on screen is polled, every 60 s. Together with the Inbox's 1/min, that stays far below the ~150 req/min free-plan limit.
 
 ## Feature Spec — v0.2
 
 ### F9. Board screen
 
-- **Layout:** one column per section, in Asana's section order. The header reads `Section name (n)` and uses the `title` role. When every column fits at ≥ 28 cells, the columns share the full width evenly. When they don't, as many 28-cell columns as fit are shown, and the view pages horizontally to keep the selected column visible. The edges show how many columns are hidden on each side (`‹ 2`, `3 ›`). A terminal narrower than two columns shows one column at a time.
+- **Layout:** one column per section, in Asana's section order. The header reads `Section name (n)` and uses the `title` role. When every column fits at ≥ 28 cells, the columns share the full width evenly. When they don't, as many 28-cell columns as fit are shown, and the view pages horizontally to keep the selected column visible. The right end of the header line shows how many columns are hidden on each side (`‹ 2  3 ›`), so every column keeps its full width. The status bar shows the card's position in its column (`2/5`), not the Inbox's. A terminal narrower than two columns shows one column at a time.
 - **Cards:** two lines each.
   - Line 1: the task name, truncated with `…`.
   - Line 2: assignee initials (first letter of the first and last word of `assignee.name`, `—` when unassigned) and the due date in the detail pane's short format.

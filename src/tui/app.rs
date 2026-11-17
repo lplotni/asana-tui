@@ -4,6 +4,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui_textarea::{CursorMove, TextArea};
 
+use super::board::BoardView;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
 use crate::present::{detail, format};
@@ -13,7 +14,7 @@ use std::sync::Arc;
 use crate::api::notifications::Notification;
 use crate::api::search::FoundTask;
 use crate::api::tasks::{Membership, Named, TaskStory};
-use crate::core::TaskDetail;
+use crate::core::{Board, TaskDetail};
 
 /// Notifications fetched on start. Asana returns ~10 per page, so this is a
 /// few requests; scrolling loads more.
@@ -37,6 +38,11 @@ pub enum Msg {
     Key(KeyEvent),
     /// How much fits on screen (sent on start and resize).
     Resize(Sizes),
+    /// A project's board, or why it couldn't be loaded.
+    BoardLoaded {
+        project_gid: String,
+        result: Result<Board, String>,
+    },
     /// The 60-second refresh timer.
     Tick,
     /// The Inbox from the first page (start or refresh).
@@ -113,6 +119,10 @@ pub enum Effect {
     /// Load the Inbox from the first page until `target` notifications.
     LoadInbox {
         target: usize,
+    },
+    /// Load a project's board, then send [`Msg::BoardLoaded`].
+    LoadBoard {
+        project_gid: String,
     },
     /// Load notifications after `offset`.
     LoadMore {
@@ -282,6 +292,32 @@ pub struct Sizes {
     pub detail_width: usize,
     /// Text rows inside the detail pane.
     pub detail_rows: usize,
+    /// Cells across the board's columns.
+    pub board_width: usize,
+    /// Cards that fit in a board column.
+    pub board_card_rows: usize,
+}
+
+/// Which top-level screen is shown.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    #[default]
+    Inbox,
+    Board,
+}
+
+/// The board of one project, as far as it's loaded.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoardSlot {
+    pub project_gid: String,
+    pub state: BoardState,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BoardState {
+    Loading,
+    Failed(String),
+    Loaded(BoardView),
 }
 
 /// Why a description wasn't saved, and where the user's text was kept.
@@ -315,6 +351,9 @@ pub struct Toast {
 
 #[derive(Debug, Default)]
 pub struct App {
+    pub screen: Screen,
+    /// The project board opened this session, if any.
+    pub board: Option<BoardSlot>,
     /// Everything loaded, newest first.
     pub notifications: Vec<Notification>,
     /// Show only unread notifications. Off by default, matching the web Inbox.
@@ -395,6 +434,19 @@ impl App {
         )
     }
 
+    /// A new app that shows the board of `project_gid` and loads the Inbox
+    /// behind it.
+    pub fn new_on_board(project_gid: String) -> (App, Vec<Effect>) {
+        let (mut app, mut effects) = App::new();
+        app.screen = Screen::Board;
+        app.board = Some(BoardSlot {
+            project_gid: project_gid.clone(),
+            state: BoardState::Loading,
+        });
+        effects.push(Effect::LoadBoard { project_gid });
+        (app, effects)
+    }
+
     pub fn update(&mut self, msg: Msg) -> Vec<Effect> {
         let before = self.selected_task_gid().map(str::to_owned);
         let mut effects = self.handle(msg);
@@ -450,17 +502,30 @@ impl App {
                     return self.load_more_if_needed();
                 }
                 match self.keys.feed(Context::Normal, event) {
+                    Outcome::Action(action) if self.screen == Screen::Board => {
+                        self.run_board(action)
+                    }
                     Outcome::Action(action) => self.run(action),
                     Outcome::Insert(_) | Outcome::Pending | Outcome::Ignored => Vec::new(),
                 }
             }
             Msg::Resize(sizes) => {
+                if let Some(view) = self.board_view_mut() {
+                    view.resize(sizes.board_width, sizes.board_card_rows);
+                }
                 self.list_rows = sizes.list_rows.max(1);
                 self.sizes = sizes;
                 self.move_to(self.cursor);
                 self.load_more_if_needed()
             }
             Msg::Tick => self.refresh(),
+            Msg::BoardLoaded {
+                project_gid,
+                result,
+            } => {
+                self.board_loaded(&project_gid, result);
+                Vec::new()
+            }
             Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
                 self.recovering = false;
@@ -744,8 +809,12 @@ impl App {
     }
 
     /// The task in the task pane: one opened from search, else the task the
-    /// selected notification is about (if it is about a task).
+    /// selected notification is about (if it is about a task). The board
+    /// screen has no task pane.
     pub fn selected_task_gid(&self) -> Option<&str> {
+        if self.screen == Screen::Board {
+            return None;
+        }
         if let Some(opened) = &self.opened {
             return Some(&opened.gid);
         }
@@ -855,6 +924,78 @@ impl App {
             _ => {}
         }
         self.load_more_if_needed()
+    }
+
+    /// A key command on the board screen: motions move on the board; Inbox
+    /// commands do nothing here.
+    fn run_board(&mut self, Action { cmd, count }: Action) -> Vec<Effect> {
+        let n = count.unwrap_or(1);
+        let half_page = (self.sizes.board_card_rows / 2).max(1);
+        if let Some(view) = self.board_view_mut() {
+            match cmd {
+                Cmd::MoveDown => view.down(n),
+                Cmd::MoveUp => view.up(n),
+                Cmd::Top => view.top(),
+                Cmd::Bottom => match count {
+                    Some(line) => {
+                        view.top();
+                        view.down(line.saturating_sub(1));
+                    }
+                    None => view.bottom(),
+                },
+                Cmd::HalfPageDown => view.down(half_page),
+                Cmd::HalfPageUp => view.up(half_page),
+                Cmd::FocusRight => view.right(n),
+                Cmd::FocusLeft => view.left(n),
+                _ => {}
+            }
+        }
+        match cmd {
+            Cmd::Help => self.help = true,
+            Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
+            _ => {}
+        }
+        Vec::new()
+    }
+
+    /// The loaded board on screen, if any.
+    pub fn board_view(&self) -> Option<&BoardView> {
+        match &self.board.as_ref()?.state {
+            BoardState::Loaded(view) => Some(view),
+            _ => None,
+        }
+    }
+
+    fn board_view_mut(&mut self) -> Option<&mut BoardView> {
+        match &mut self.board.as_mut()?.state {
+            BoardState::Loaded(view) => Some(view),
+            _ => None,
+        }
+    }
+
+    /// Shows a loaded board, keeping the selection of the one shown before.
+    /// A failure replaces a board only if none is shown yet.
+    fn board_loaded(&mut self, project_gid: &str, result: Result<Board, String>) {
+        let sizes = self.sizes;
+        let Some(slot) = self
+            .board
+            .as_mut()
+            .filter(|slot| slot.project_gid == project_gid)
+        else {
+            return;
+        };
+        match (&mut slot.state, result) {
+            (BoardState::Loaded(view), Ok(board)) => view.replace(board),
+            (_, Ok(board)) => {
+                let mut view = BoardView::new(board);
+                view.resize(sizes.board_width, sizes.board_card_rows);
+                slot.state = BoardState::Loaded(view);
+            }
+            (BoardState::Loaded(_), Err(message)) => {
+                self.toast = Some(Toast::error(format!("Refresh failed: {message}")));
+            }
+            (_, Err(message)) => slot.state = BoardState::Failed(message),
+        }
     }
 
     /// Scrolls the detail pane for a motion command. Returns false for

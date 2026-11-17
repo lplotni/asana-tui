@@ -106,3 +106,36 @@ fn project_help_lists_add_move_and_sections() {
         assert!(help.contains(sub), "missing `{sub}` in help:\n{help}");
     }
 }
+
+#[test]
+fn a_non_numeric_project_exits_1_before_any_request() {
+    let output = asn(
+        &["--project", "gid:42"],
+        &[
+            ("ASANA_TOKEN", "secret-pat"),
+            ("ASANA_WORKSPACE", "1234567890123456"),
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("must be a numeric GID"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn project_only_opens_the_tui_so_it_cannot_be_combined_with_a_subcommand() {
+    let output = asn(&["--project", "42", "inbox"], &[]);
+
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn help_mentions_opening_a_project_board() {
+    let output = asn(&["--help"], &[]);
+    let help = String::from_utf8_lossy(&output.stdout);
+
+    assert!(help.contains("--project"), "{help}");
+}

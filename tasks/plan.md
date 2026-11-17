@@ -47,7 +47,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] fmt, clippy and tests are clean
 
 ### Phase 2: A board you can look at
-- [ ] T3: Board screen opened with `asn --project` (F9 render, F11 startup)
+- [x] T3: Board screen opened with `asn --project` (F9 render, F11 startup)
 - [ ] T4: Polling, `R`, session cache (F9 refresh)
 
 ### Checkpoint B: glance works

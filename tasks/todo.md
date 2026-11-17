@@ -74,7 +74,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 2: A board you can look at
 
-### - [ ] T3: Board screen opened with `asn --project`
+### - [x] T3: Board screen opened with `asn --project`
 
 **Description:** The board becomes visible. This adds:
 - `App` gets `screen: Screen { Inbox, Board }` and the active board, plus `Effect::LoadBoard { project_gid }` / `Msg::BoardLoaded`.
@@ -90,12 +90,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - On the board, `h`/`j`/`k`/`l`/`gg`/`G`/`Ctrl-d`/`Ctrl-u`/counts go to `tui/board.rs`. `e`/`u`/`x`/`V`/`f` do nothing. `q` quits, and `Esc` at the root does nothing. The hint line has a `board` context.
 
 **Acceptance criteria:**
-- [ ] `cargo run -- --project <gid>` shows the project's board, and all navigation keys work as in F12.
-- [ ] Initials and due text are correct (one word, many words, unassigned, overdue vs. not, using local dates). Overdue is never shown by color alone.
-- [ ] Inbox-only keys do nothing on the board. A non-numeric `--project` exits with a message before any request.
+- [x] `cargo run -- --project <gid>` shows the project's board, and all navigation keys work as in F12.
+- [x] Initials and due text are correct (one word, many words, unassigned, overdue vs. not, using local dates). Overdue is never shown by color alone.
+- [x] Inbox-only keys do nothing on the board. A non-numeric `--project` exits with a message before any request.
 
 **Verification:**
-- [ ] Tests: `present/` unit tests for card text. `app_tests.rs` covering key dispatch on the board and Inbox-only keys ignored. `TestBackend` snapshots: board that fits, board paged with markers, one-column narrow, empty section, overdue card, loading, error, `NO_COLOR` board. CLI arg validation test.
+- [x] Tests: `present/` unit tests for card text. `app_tests.rs` covering key dispatch on the board and Inbox-only keys ignored. `TestBackend` snapshots: board that fits, board paged with markers, one-column narrow, empty section, overdue card, loading, error, `NO_COLOR` board. CLI arg validation test.
 - [ ] Manual: run against a real project at 80, 120 and 200 columns.
 
 **Dependencies:** T1, T2

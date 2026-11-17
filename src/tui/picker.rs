@@ -245,6 +245,7 @@ mod tests {
             list_rows: 10,
             detail_width: 60,
             detail_rows: 20,
+            ..Sizes::default()
         }));
         app.update(Msg::InboxLoaded(Ok((vec![n], None))));
         app.update(Msg::DetailDue { gid: "t0".into() });

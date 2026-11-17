@@ -161,8 +161,19 @@ async fn a_board_loads_open_tasks_from_every_page_grouped_by_section() {
         .mount(&server)
         .await;
 
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{project}")))
+        .and(query_param("opt_fields", "name"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "data": { "gid": project, "name": "Maple willow mike" } })),
+        )
+        .mount(&server)
+        .await;
+
     let board = core::board(&client(&server), project).await.unwrap();
 
+    assert_eq!(board.project.name, "Maple willow mike");
     let columns: Vec<(&str, Vec<&str>)> = board
         .columns
         .iter()

@@ -62,6 +62,7 @@ mod tests {
 
     fn board() -> Board {
         Board {
+            project: named("p", "Project"),
             columns: vec![
                 Column {
                     section: Some(named("s1", "To do")),
@@ -94,6 +95,7 @@ mod tests {
     #[test]
     fn the_no_section_column_has_an_empty_gid() {
         let board = Board {
+            project: named("p", "Project"),
             columns: vec![Column {
                 section: None,
                 tasks: vec![card("t1", "Loose", None, None)],
@@ -106,6 +108,7 @@ mod tests {
     #[test]
     fn task_names_cannot_break_the_lines() {
         let board = Board {
+            project: named("p", "Project"),
             columns: vec![Column {
                 section: Some(named("s1", "A\nB")),
                 tasks: vec![card("t1", "a\tb\nc\u{1b}[2J", None, None)],
@@ -146,6 +149,7 @@ mod tests {
     #[test]
     fn json_has_no_section_entry_for_the_no_section_column() {
         let board = Board {
+            project: named("p", "Project"),
             columns: vec![Column {
                 section: None,
                 tasks: vec![card("t1", "Loose", None, None)],
