@@ -281,6 +281,10 @@ One `TestBackend` render snapshot per screen with the `terminal` theme, plus one
 - **Colored CLI output:** the CLI is for pipes and scripts, so plain text is the right default.
 - **Windows:** not blocked, just not tested or supported in the MVP.
 
+## Findings from Use
+
+- Notifications archived in the web Inbox are not returned by the API, so they disappear from `asn` at its next refresh (confirmed by the user, 2026-11-17).
+
 ## Open Questions
 
 1. **Publishing name:** the binary is `asn` and the repo lives under GitHub user `lplotni` (both decided). Check crates.io and Homebrew for a free package name before the first release. The package name can differ from the binary name.

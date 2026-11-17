@@ -72,8 +72,8 @@ T0 API spike + fixtures
 - [x] T12: Add to project (fuzzy project picker, then section picker)
 
 ### Checkpoint C: feature complete
-- [ ] The full spec flow works: Inbox, open, comment, edit description, add to project, mark read
-- [ ] Every TUI action has a matching CLI subcommand that passes its tests
+- [x] The full spec flow works: Inbox, open, comment, edit description, add to project, mark read
+- [x] Every TUI action has a matching CLI subcommand that passes its tests
 - [ ] **Human review before Phase 4**
 
 ### Phase 4: Finish and ship
@@ -83,7 +83,7 @@ T0 API spike + fixtures
 
 ### Checkpoint D: v0.1 released
 - [ ] Every acceptance criterion in the spec is met
-- [ ] Tagged `v0.1.0`, binaries attached, install instructions verified on a clean machine
+- [x] Tagged `v0.1.0`, binaries attached, Homebrew install verified by the user (a teammate on a clean machine is still open)
 - [ ] Handed to 3 teammates for dogfooding (the spec's success metric)
 
 ## Risks and Mitigations

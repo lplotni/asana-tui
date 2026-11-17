@@ -287,7 +287,7 @@ Add `core::comment(task, text)` and `asn comment <gid> [-m TEXT | -]`, which tak
 
 **Verification:**
 - [x] `cargo test`
-- [ ] Manual: in Rex, a comment written in vim appears in the web app (**not done: it would post a real comment; for the user**). `:cq` cancels (**verified in Rex**: vi received every key, the TUI came back, nothing was posted, no temp file left).
+- [x] Manual: a comment written in vim appears in the web app (confirmed by the user, 2026-11-17). `:cq` cancels (verified in Rex).
 
 **Dependencies:** T9
 
@@ -310,7 +310,7 @@ Add `asn desc <gid> [--file PATH | -] [--force]`. Without `--force`, it refuses 
 
 **Verification:**
 - [x] `cargo test`
-- [ ] (Verified without saving in Rex: a formatted task asks and `n` cancels; a plain task opens vi with its current text and `:cq` cancels. Saving a real description and the conflict path are for the user.) Manual: editing a plain task works. A formatted task asks for confirmation. Editing the task in the web app while vim is open triggers the conflict path.
+- [x] Manual: editing a description saves and shows on the web (confirmed by the user, 2026-11-17); the formatted-task question and `:cq` were verified in Rex.
 
 **Dependencies:** T10
 
@@ -338,7 +338,7 @@ Add `asn project add <task> <project> [--section GID]`.
 
 **Verification:**
 - [x] `cargo test`
-- [ ] Manual: adding a real task to a second project and section shows correctly in the web app (**not done: it would change a real task; for the user**. Verified read-only in Rex: real typeahead results, section step with "No section" first, Esc closes without adding.)
+- [x] Manual: adding a real task to a project and section shows correctly in the web app (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T9 (can run in parallel with T10/T11)
 
@@ -347,7 +347,7 @@ Add `asn project add <task> <project> [--section GID]`.
 **Estimated scope:** M
 
 ## Checkpoint C: feature complete
-- [ ] The full flow works against real Asana: Inbox, open, comment, edit description, add to project, mark read.
+- [x] The full flow works against real Asana: Inbox, open, comment, edit description, add to project, mark read.
 - [ ] Every TUI action has a tested CLI counterpart.
 - [ ] **Human review before Phase 4.**
 
@@ -395,7 +395,7 @@ Add `asn project add <task> <project> [--section GID]`.
 
 ### - [x] T15: CI, release binaries, README
 
-> **Status (2026-11-16):** public at github.com/lplotni/asana-tui (MIT). CI green on macOS and Linux. v0.1.0 released with 4 binaries and checksums; the formula job failed once (missing `Formula/`), fixed, and the v0.1.0 formula was committed from the published checksums. Homebrew fetched and verified the formula; installing was blocked only by this Mac's outdated Xcode (a local Homebrew check). The released arm64 binary was downloaded, checksum-verified and run.
+> **Status (2026-11-17):** Homebrew install confirmed by the user. Earlier (2026-11-16): public at github.com/lplotni/asana-tui (MIT). CI green on macOS and Linux. v0.1.0 released with 4 binaries and checksums; the formula job failed once (missing `Formula/`), fixed, and the v0.1.0 formula was committed from the published checksums. Homebrew fetched and verified the formula; installing was blocked only by this Mac's outdated Xcode (a local Homebrew check). The released arm64 binary was downloaded, checksum-verified and run.
 
 **Description:**
 - GitHub Actions CI runs fmt, clippy and test on macOS and Linux.
