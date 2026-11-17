@@ -340,18 +340,18 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 3d: Complete and assign (F16, F17)
 
-### - [ ] T16: `asn task done` and `asn task assign`
+### - [x] T16: `asn task done` and `asn task assign`
 
 **Description:**
 - `core::set_completed(client, task, bool)` and `core::assign(client, task, assignee)`, where the assignee is a user GID, `me` or none. Both are `PUT /tasks/{gid}`, and assign returns the new assignee.
 - CLI: `asn task done <gid> [--undo]` and `asn task assign <gid> <user-gid|me|none>`. `asn task <gid> [--json]` is unchanged.
 
 **Acceptance criteria:**
-- [ ] `done` sends `{completed: true}`, and `--undo` sends `false`. `assign` sends the GID, `"me"` or `null`, and prints the new assignee (or `unassigned`).
-- [ ] `asn task <gid>` and `asn task <gid> --json` behave exactly as before.
+- [x] `done` sends `{completed: true}`, and `--undo` sends `false`. `assign` sends the GID, `"me"` or `null`, and prints the new assignee (or `unassigned`).
+- [x] `asn task <gid>` and `asn task <gid> --json` behave exactly as before.
 
 **Verification:**
-- [ ] Tests: `wiremock` tests for both requests. CLI tests that the subcommands are in the help and that `asn task <gid>` still parses.
+- [x] Tests: `wiremock` tests for both requests. CLI tests that the subcommands are in the help and that `asn task <gid>` still parses.
 
 **Dependencies:** None
 

@@ -451,3 +451,73 @@ async fn a_description_with_a_mention_is_saved_as_rich_text() {
     .await
     .unwrap();
 }
+
+// --- Complete and assign (F16, F17) ----------------------------------------
+
+#[tokio::test]
+async fn completing_a_task_sets_completed() {
+    let server = MockServer::start().await;
+    for completed in [true, false] {
+        Mock::given(method("PUT"))
+            .and(path(format!("/tasks/{TASK}")))
+            .and(wiremock::matchers::body_json(
+                json!({ "data": { "completed": completed } }),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+
+    core::set_completed(&client(&server), TASK, true)
+        .await
+        .unwrap();
+    core::set_completed(&client(&server), TASK, false)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn assigning_sends_the_assignee_and_returns_who_it_is_now() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(query_param("opt_fields", "assignee.name"))
+        .and(wiremock::matchers::body_json(
+            json!({ "data": { "assignee": "me" } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {
+            "gid": TASK,
+            "assignee": { "gid": "1200000000000011", "name": "Ada Lovelace" }
+        } })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let assignee = core::assign(&client(&server), TASK, Some("me"))
+        .await
+        .unwrap();
+
+    assert_eq!(assignee.map(|a| a.name).as_deref(), Some("Ada Lovelace"));
+}
+
+#[tokio::test]
+async fn unassigning_sends_null() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(wiremock::matchers::body_json(
+            json!({ "data": { "assignee": null } }),
+        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "data": { "gid": TASK, "assignee": null } })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let assignee = core::assign(&client(&server), TASK, None).await.unwrap();
+
+    assert_eq!(assignee, None);
+}

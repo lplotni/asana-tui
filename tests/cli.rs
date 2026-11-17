@@ -139,3 +139,27 @@ fn help_mentions_opening_a_project_board() {
 
     assert!(help.contains("--project"), "{help}");
 }
+
+#[test]
+fn task_help_lists_assign_and_done() {
+    let output = asn(&["task", "--help"], &[]);
+    let help = String::from_utf8_lossy(&output.stdout);
+
+    for sub in ["assign", "done"] {
+        assert!(help.contains(sub), "missing `{sub}` in help:\n{help}");
+    }
+}
+
+#[test]
+fn asn_task_with_a_gid_still_shows_a_task() {
+    // Parsed as before: it gets as far as needing a token (exit 2), not a
+    // usage error (exit 1).
+    for args in [
+        &["task", "1200000000000031"][..],
+        &["task", "1200000000000031", "--json"],
+    ] {
+        let output = asn(args, &[("ASANA_WORKSPACE", "1234567890123456")]);
+
+        assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    }
+}

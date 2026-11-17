@@ -270,6 +270,25 @@ pub async fn add_to_project(
     client.add_project(task_gid, project_gid, section_gid).await
 }
 
+/// Marks the task complete (or, not `completed`, incomplete again).
+pub async fn set_completed(
+    client: &Client,
+    task_gid: &str,
+    completed: bool,
+) -> Result<(), ApiError> {
+    client.set_completed(task_gid, completed).await
+}
+
+/// Assigns the task to a user GID, `"me"`, or (`None`) nobody; returns
+/// whom Asana has it assigned to now.
+pub async fn assign(
+    client: &Client,
+    task_gid: &str,
+    assignee: Option<&str>,
+) -> Result<Option<Named>, ApiError> {
+    client.set_assignee(task_gid, assignee).await
+}
+
 /// A task made by [`create_task`], and why it isn't in the section asked
 /// for, if it isn't. The task exists either way.
 #[derive(Debug)]

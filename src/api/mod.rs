@@ -145,10 +145,12 @@ impl Client {
     pub(crate) async fn put<T: DeserializeOwned>(
         &self,
         path: &str,
+        query: &[(&str, String)],
         body: &serde_json::Value,
     ) -> Result<T, ApiError> {
         let url = format!("{}{path}", self.base_url);
-        self.send(|| self.http.put(&url).json(body)).await
+        self.send(|| self.http.put(&url).query(query).json(body))
+            .await
     }
 
     /// Sends the request built by `request` with auth. A 429 is retried once

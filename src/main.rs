@@ -49,13 +49,16 @@ enum Command {
         #[arg(long)]
         unread: bool,
     },
-    /// Show a task with its comments
+    /// Show a task with its comments, or complete or assign it
+    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Task {
-        #[arg(value_name = "TASK_GID")]
-        gid: String,
+        #[arg(value_name = "TASK_GID", required = true)]
+        gid: Option<String>,
         /// Print JSON
         #[arg(long)]
         json: bool,
+        #[command(subcommand)]
+        command: Option<TaskCommand>,
     },
     /// Add a comment to a task (opens $EDITOR without -m or -); @<gid> mentions
     Comment {
@@ -109,6 +112,26 @@ enum Command {
     Project {
         #[command(subcommand)]
         command: ProjectCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum TaskCommand {
+    /// Mark a task complete
+    Done {
+        #[arg(value_name = "TASK_GID")]
+        gid: String,
+        /// Mark it incomplete again instead
+        #[arg(long)]
+        undo: bool,
+    },
+    /// Assign a task; prints whom it's assigned to now
+    Assign {
+        #[arg(value_name = "TASK_GID")]
+        gid: String,
+        /// A user gid (see `asn users`), `me`, or `none` to unassign
+        #[arg(value_name = "USER_GID|me|none")]
+        assignee: String,
     },
 }
 
@@ -202,7 +225,32 @@ async fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, 1),
         },
-        Some(Command::Task { gid, json }) => match core::task_detail(&client, &gid).await {
+        Some(Command::Task {
+            command: Some(TaskCommand::Done { gid, undo }),
+            ..
+        }) => match core::set_completed(&client, &gid, !undo).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(err) => fail(&err, err.exit_code()),
+        },
+        Some(Command::Task {
+            command: Some(TaskCommand::Assign { gid, assignee }),
+            ..
+        }) => {
+            let assignee = (assignee != "none").then_some(assignee.as_str());
+            match core::assign(&client, &gid, assignee).await {
+                Ok(now) => {
+                    let name = now.map_or("unassigned".to_owned(), |a| a.name);
+                    println!("{}", asn::cli::terminal_safe(&name));
+                    ExitCode::SUCCESS
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
+        }
+        Some(Command::Task {
+            gid: Some(gid),
+            json,
+            command: None,
+        }) => match core::task_detail(&client, &gid).await {
             Ok(detail) if json => {
                 println!("{}", asn::cli::task::render_json(&detail));
                 ExitCode::SUCCESS
@@ -213,6 +261,8 @@ async fn main() -> ExitCode {
             }
             Err(err) => fail(&err, err.exit_code()),
         },
+        // Clap requires the gid when there's no subcommand.
+        Some(Command::Task { .. }) => fail(&"a task gid is required", 1),
         Some(Command::Comment {
             gid,
             message,

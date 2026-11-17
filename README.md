@@ -98,6 +98,8 @@ asn inbox --json | jq '.[0]'            # Asana's own JSON
 asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
 asn search checkout redirect           # find tasks: gid, ✓ if completed, name (tab-separated; --json too)
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
+asn task done <task-gid> [--undo]       # mark it complete (or incomplete again)
+asn task assign <task-gid> me           # or a user gid (see `asn users`), or `none`; prints the new assignee
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project
 asn users ada                           # people in the workspace: gid and name (tab-separated)
@@ -119,7 +121,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | What | Endpoint |
 |---|---|
 | Inbox | `GET /users/me/notifications`, `POST /users/me/notifications/markRead` (and `markUnread`) |
-| Task and description | `GET /tasks/{task}`, `PUT /tasks/{task}` |
+| Task, description, completion, assignee | `GET /tasks/{task}`, `PUT /tasks/{task}` |
 | Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` (`html_text` when there's an @-mention, as for descriptions with `html_notes`) |
 | People (`asn users`, @-mentions) | `GET /workspaces/{workspace}/typeahead?resource_type=user` |
 | Attachments | `GET /attachments?parent={task}` |

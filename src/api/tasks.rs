@@ -150,8 +150,37 @@ impl Client {
     /// Replaces the description: `notes`, or `html_notes` for rich text.
     pub async fn set_notes(&self, gid: &str, notes: Text<'_>) -> Result<(), ApiError> {
         let body = serde_json::json!({ "data": notes.field("notes") });
-        let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &body).await?;
+        let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &[], &body).await?;
         Ok(())
+    }
+
+    /// Marks the task complete, or incomplete again.
+    pub async fn set_completed(&self, gid: &str, completed: bool) -> Result<(), ApiError> {
+        let body = serde_json::json!({ "data": { "completed": completed } });
+        let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &[], &body).await?;
+        Ok(())
+    }
+
+    /// Assigns the task to `assignee` (a user GID or `"me"`), or to nobody;
+    /// returns whom it's assigned to now.
+    pub async fn set_assignee(
+        &self,
+        gid: &str,
+        assignee: Option<&str>,
+    ) -> Result<Option<Named>, ApiError> {
+        #[derive(Deserialize)]
+        struct Assigned {
+            #[serde(default)]
+            assignee: Option<Named>,
+        }
+        #[derive(Deserialize)]
+        struct Data {
+            data: Assigned,
+        }
+        let query = [("opt_fields", "assignee.name".to_owned())];
+        let body = serde_json::json!({ "data": { "assignee": assignee } });
+        let updated: Data = self.put(&format!("/tasks/{gid}"), &query, &body).await?;
+        Ok(updated.data.assignee)
     }
 
     /// Adds a comment (`text`, or `html_text` for rich text); returns the
