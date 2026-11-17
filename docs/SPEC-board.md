@@ -126,6 +126,10 @@ Added after F14 at the user's request. It applies to both screens, because the e
   - A remembered `@Name` that was edited away is plain text.
   - Comment drafts keep their mentions, and `Ctrl-o` (`$EDITOR`) keeps them as long as the `@Name` text is left intact.
 - **Descriptions:** the formatting guard (F4) and the concurrency guard are unchanged. A description saved with a mention is written as `html_notes`, which replaces formatting just as a plain save does.
+- **Reading:** Asana's plain `text`/`notes` show a mention as a URL (`https://app.asana.com/…/profile/<gid>` for a person, or a task/project URL). The task view (both screens and `asn task`) shows its label instead: `@Ada Lovelace` for a person, the name for a task or project.
+  - The label comes from the matching mention link in `html_text`/`html_notes`, so no extra requests are made.
+  - URLs that aren't mentions, and mentions without a label, stay as they are.
+  - `--json` is unchanged.
 - **CLI:** in `asn comment` and `asn desc`, `@` followed by a GID of 10+ digits (e.g. `@1200000000000011`) becomes a mention of that user, task or project. `asn users <query…>` prints matching people as `gid  name`, and `asn search` already finds tasks.
 
 ## Tech Stack, Commands, Structure
@@ -229,7 +233,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [ ] **A4: Hiding completed tasks matches how the board is read.** Test: dogfood. The web board collapses them by default.
 - [x] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Confirmed in planning: `selected_task_gid()` was already that seam (search used it); T5 made it return the selected card. Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
 
-- [ ] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app.
+- [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.
 
 ## Not Doing (and Why)
 

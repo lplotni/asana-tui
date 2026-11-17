@@ -284,13 +284,33 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: unit tests for the rich-text function (escaping, several mentions, a mention that was edited away, line breaks). `wiremock` tests for `html_text`/`html_notes` versus plain bodies, and for the user typeahead.
-- [ ] **Checkpoint M1 (user):** post a comment with a mention and a line break on a test task, and check it in the web app.
+- [x] **Checkpoint M1 (user):** post a comment with a mention and a line break on a test task, and check it in the web app.
 
 **Dependencies:** None
 
 **Files likely touched:** `src/core/mod.rs` (or a new `src/core/rich.rs`), `src/api/tasks.rs`, `src/api/search.rs`, `src/cli/`, `src/main.rs`, `tests/`
 
 **Estimated scope:** M
+
+---
+
+### - [ ] T15: Show mentions as @Name when reading
+
+**Description:** Comments are fetched with `html_text`. A pure `core::mention::readable(text, html)` replaces each Asana URL in the plain text whose GID matches a mention link in the HTML with that link's label. Punctuation after the URL is kept, entities are decoded, and a person's label always starts with `@`. The task view uses it for comments and the description.
+
+**Acceptance criteria:**
+- [ ] A person's profile URL (old and new formats) shows as `@Name`, and a task or project URL as its name.
+- [ ] URLs without a matching mention, and text without HTML, are unchanged.
+
+**Verification:**
+- [ ] Tests: unit tests for `readable`. A `present::detail` test showing a comment and a description with a mention.
+- [ ] Manual: a task with mentions shows names in `asn` and `asn task`.
+
+**Dependencies:** T13
+
+**Files likely touched:** `src/core/mention.rs`, `src/api/tasks.rs`, `src/present/detail.rs`
+
+**Estimated scope:** S
 
 ---
 
