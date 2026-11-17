@@ -559,7 +559,7 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 **Verification:**
 - [x] Rendering tests in `cli/task.rs` (memberships, unassigned, no due date, completed, a hostile name and description); `tests/cli.rs` for the flag conflict; `cargo test`, clippy, fmt.
-- [ ] Manual: `asn task <real gid> --brief` matches the web app.
+- [x] Manual: `asn task <real gid> --brief` matches the web app (confirmed by the user, 2026-11-17).
 
 **Dependencies:** None
 
