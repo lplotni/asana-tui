@@ -1,6 +1,6 @@
 [package]
 name = "asn"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Your Asana Inbox in the terminal, with vim keys and a scriptable CLI"
 license = "MIT"
