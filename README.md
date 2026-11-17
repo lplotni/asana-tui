@@ -41,6 +41,7 @@ Everything comes from the environment. Nothing is written to disk.
 | `ASANA_TOKEN` | A [personal access token](https://app.asana.com/0/my-apps) |
 | `ASANA_TOKEN_CMD` | …or a command that prints it, e.g. `pass show asana/pat` |
 | `ASANA_WORKSPACE` | Workspace GID (digits only): `curl -H "Authorization: Bearer $ASANA_TOKEN" https://app.asana.com/api/1.0/workspaces` |
+| `ASN_SEARCH` | How `S` and `asn search` find tasks: `tasks` (default) uses Asana's full-text [task search](https://developers.asana.com/reference/searchtasksforworkspace) (names and descriptions; paid plans only); `typeahead` matches task names like the web search box and works on every plan |
 | `ASN_THEME` | `terminal` (default, follows your terminal's colors), `dark`, `light`, or a path to a theme file ([example](themes/terminal.toml)) |
 | `NO_COLOR` | Disables colors |
 
@@ -62,7 +63,8 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
 | `R` | Refresh (also every 60 s) |
-| `/` then `n` / `N` | Filter by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
+| `/` then `n` / `N` | Filter the loaded Inbox by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
+| `S` | Search tasks across the workspace (see `ASN_SEARCH`): type, `Ctrl-n`/`Ctrl-p` to move, `Enter` shows the task in the task pane, where `c`, `Tab e`, `p` and `o` work on it; `h`/`Esc` returns to the Inbox |
 | `:` | Commands: `:q`, `:refresh`, `:unread`, `:read-all` (marks everything loaded read) |
 | `?` | All keys (generated from the keymap) |
 | `q` / `Ctrl-c` | Back (from the task pane or visual mode), else quit / quit from anywhere |
@@ -73,6 +75,7 @@ Every action is also a command for scripts:
 asn inbox --unread                      # gid, unread marker, time, actor, action, task (tab-separated)
 asn inbox --json | jq '.[0]'            # Asana's own JSON
 asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
+asn search checkout redirect           # find tasks: gid, ✓ if completed, name (tab-separated; --json too)
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
@@ -91,6 +94,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | Task and description | `GET /tasks/{task}`, `PUT /tasks/{task}` |
 | Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` |
 | Attachments | `GET /attachments?parent={task}` |
+| Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
 | Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
 
@@ -106,6 +110,7 @@ These come from Asana's public API (most from the [Notifications API](https://fo
 - **Descriptions are edited as plain text.** Saving replaces Asana's formatting (links, lists, bold, mentions); `asn` asks first when a description has any. Edit formatted descriptions on the web.
 - **Mentions look like comments.** The API doesn't mark @mentions separately.
 - **Some tasks' comments can't be loaded.** For some tasks (likely those with replies to comments), Asana refuses the comment list with "unsupported parent in the public API: CommentStory". `asn` still shows the rest of the task and says why the comments are missing; read them on the web.
+- **Task search needs a paid plan.** On other plans Asana answers 402; set `ASN_SEARCH=typeahead` to search task names instead. Results are the 50 most relevant, and new or renamed tasks can take up to a minute to become searchable.
 - **Image links expire.** An attachment's `download_url` works for a short time only; if an image fails after the task was open a while, refresh (`R`).
 
 ## Develop

@@ -10,6 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use crate::api::notifications::Notification;
+use crate::api::search::FoundTask;
 use crate::api::tasks::{Membership, Named, TaskStory};
 use crate::core::TaskDetail;
 
@@ -72,6 +73,10 @@ pub enum Msg {
     NotesSaved {
         task_gid: String,
         result: Result<(), SaveFailure>,
+    },
+    TasksFound {
+        seq: u64,
+        result: Result<Vec<FoundTask>, String>,
     },
     /// Typing in the project picker paused long enough to search.
     SearchDue {
@@ -156,6 +161,11 @@ pub enum Effect {
         seq: u64,
     },
     SearchProjects {
+        query: String,
+        seq: u64,
+    },
+    /// Find tasks in the workspace, then send [`Msg::TasksFound`].
+    SearchTasks {
         query: String,
         seq: u64,
     },
@@ -285,6 +295,9 @@ pub struct App {
     /// Task details by task GID (several notifications can share a task).
     pub details: HashMap<String, Detail>,
     pub focus: Focus,
+    /// A task opened from workspace search: the task pane shows it instead
+    /// of the selected notification's task until focus returns to the list.
+    pub opened: Option<Named>,
     /// Image attachments of the tasks looked at, at most [`MAX_IMAGES`].
     pub images: HashMap<String, ImageState>,
     /// Keys of `images`, oldest first (the next to be forgotten).
@@ -544,8 +557,32 @@ impl App {
                         seq,
                     }]
                 }
+                Some(p) if p.stage == picker::Stage::Task && p.search_seq == seq => {
+                    if p.query.trim().is_empty() {
+                        p.accept_tasks(seq, Vec::new());
+                        return Vec::new();
+                    }
+                    p.loading = true;
+                    vec![Effect::SearchTasks {
+                        query: p.query.clone(),
+                        seq,
+                    }]
+                }
                 _ => Vec::new(),
             },
+            Msg::TasksFound { seq, result } => {
+                match (&mut self.picker, result) {
+                    (Some(p), Ok(tasks)) => {
+                        p.accept_tasks(seq, tasks);
+                    }
+                    (Some(p), Err(message)) if p.search_seq == seq => {
+                        p.loading = false;
+                        self.toast = Some(Toast::error(format!("Task search failed: {message}")));
+                    }
+                    _ => {}
+                }
+                Vec::new()
+            }
             Msg::ProjectsFound { seq, result } => {
                 match (&mut self.picker, result) {
                     (Some(p), Ok(projects)) => {
@@ -639,10 +676,22 @@ impl App {
             .map(|&i| &self.notifications[i])
     }
 
-    /// The task the selected notification is about, if it is about a task.
+    /// The task in the task pane: one opened from search, else the task the
+    /// selected notification is about (if it is about a task).
     pub fn selected_task_gid(&self) -> Option<&str> {
+        if let Some(opened) = &self.opened {
+            return Some(&opened.gid);
+        }
         let object = self.selected()?.work_objects.first()?;
         (object.resource_type == "task").then_some(object.gid.as_str())
+    }
+
+    /// The name of what the task pane shows, known before its details load.
+    pub fn shown_task_name(&self) -> Option<&str> {
+        if let Some(opened) = &self.opened {
+            return Some(&opened.name);
+        }
+        Some(self.selected()?.work_objects.first()?.name.as_str())
     }
 
     /// What's known about the selected task.
@@ -696,6 +745,7 @@ impl App {
                 self.move_to((self.cursor + step) % len);
             }
             Cmd::CommandLine => self.command = Some(String::new()),
+            Cmd::SearchTasks => self.picker = Some(Picker::tasks()),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.focus = Focus::List;
@@ -719,6 +769,9 @@ impl App {
             Cmd::Quit if self.focus == Focus::Detail => self.focus = Focus::List,
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
             _ => {}
+        }
+        if self.focus == Focus::List {
+            self.opened = None;
         }
         self.load_more_if_needed()
     }
@@ -940,12 +993,12 @@ impl App {
             vec![Effect::ScheduleSearch { seq }]
         };
         match outcome {
-            Outcome::Insert(c) if picker.stage == picker::Stage::Project => {
+            Outcome::Insert(c) if picker.has_query() => {
                 let query = format!("{}{c}", picker.query);
                 schedule(picker, query)
             }
             Outcome::Action(Action { cmd, .. }) => match cmd {
-                Cmd::DeleteChar if picker.stage == picker::Stage::Project => {
+                Cmd::DeleteChar if picker.has_query() => {
                     let mut query = picker.query.clone();
                     query.pop();
                     schedule(picker, query)
@@ -977,6 +1030,20 @@ impl App {
             return Vec::new();
         };
         match picker.stage.clone() {
+            picker::Stage::Task => {
+                self.picker = None;
+                let gid = item.gid.unwrap_or_default();
+                self.opened = Some(Named {
+                    gid: gid.clone(),
+                    name: item.name,
+                });
+                self.focus = Focus::Detail;
+                if self.details.contains_key(&gid) {
+                    return Vec::new();
+                }
+                self.details.insert(gid.clone(), Detail::Loading);
+                vec![Effect::LoadDetail { gid }]
+            }
             picker::Stage::Project => {
                 let project = Named {
                     gid: item.gid.unwrap_or_default(),
@@ -1130,6 +1197,11 @@ impl App {
         if let Some(Detail::Loaded(detail)) = self.selected_detail() {
             return vec![Effect::OpenUrl {
                 url: detail.task.permalink_url.clone(),
+            }];
+        }
+        if let Some(opened) = &self.opened {
+            return vec![Effect::OpenUrl {
+                url: format!("https://app.asana.com/0/0/{}", opened.gid),
             }];
         }
         let Some(object) = self.selected().and_then(|n| n.work_objects.first()) else {

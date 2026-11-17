@@ -18,7 +18,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::task::JoinSet;
 
 use crate::api::Client;
-use crate::config::Config;
+use crate::config::{Config, SearchMode};
 use crate::core;
 use crate::editor;
 use app::{App, Effect, Msg};
@@ -36,6 +36,7 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
     let theme = Theme::load(|key| std::env::var(key).ok())?;
     let client = Arc::new(client);
     let workspace: Arc<str> = config.workspace.into();
+    let search = config.search;
     let (tx, mut rx) = unbounded_channel();
     // Writes are awaited on quit so a change made just before `q` isn't lost.
     let mut writes = JoinSet::new();
@@ -55,7 +56,7 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
 
     let (mut app, effects) = App::new();
     app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
-    run_effects(effects, &client, &workspace, &tx, &mut writes);
+    run_effects(effects, &client, &workspace, search, &tx, &mut writes);
 
     let result = loop {
         let drawn = terminal.draw(|frame| {
@@ -89,7 +90,7 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
                 _ => {}
             }
         }
-        run_effects(effects, &client, &workspace, &tx, &mut writes);
+        run_effects(effects, &client, &workspace, search, &tx, &mut writes);
         while writes.try_join_next().is_some() {}
         if app.should_quit {
             break Ok(());
@@ -189,6 +190,7 @@ fn run_effects(
     effects: Vec<Effect>,
     client: &Arc<Client>,
     workspace: &Arc<str>,
+    search: SearchMode,
     tx: &UnboundedSender<Msg>,
     writes: &mut JoinSet<()>,
 ) {
@@ -293,6 +295,12 @@ fn run_effects(
                 Effect::SearchProjects { query, seq } => Msg::ProjectsFound {
                     seq,
                     result: core::search_projects(&client, &workspace, &query)
+                        .await
+                        .map_err(|e| e.to_string()),
+                },
+                Effect::SearchTasks { query, seq } => Msg::TasksFound {
+                    seq,
+                    result: core::search_tasks(&client, &workspace, &query, search)
                         .await
                         .map_err(|e| e.to_string()),
                 },

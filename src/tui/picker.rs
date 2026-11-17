@@ -1,7 +1,8 @@
-//! The "add to project" picker: search projects as you type, then choose a
-//! section. Pure state; the [`App`](super::app::App) turns its decisions into
-//! effects.
+//! The search-as-you-type picker: "add to project" (search projects, then
+//! choose a section) and workspace task search. Pure state; the
+//! [`App`](super::app::App) turns its decisions into effects.
 
+use crate::api::search::FoundTask;
 use crate::api::tasks::Named;
 
 /// How long typing must pause before the project search runs.
@@ -12,16 +13,23 @@ pub const SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_milli
 pub struct Item {
     pub gid: Option<String>,
     pub name: String,
+    /// A completed task (drawn with ✓).
+    pub done: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stage {
     Project,
-    Section { project: Named },
+    Section {
+        project: Named,
+    },
+    /// Finding a task in the workspace to show in the task pane.
+    Task,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Picker {
+    /// The task being added to a project (empty when searching tasks).
     pub task_gid: String,
     pub stage: Stage,
     pub query: String,
@@ -48,6 +56,20 @@ impl Picker {
         }
     }
 
+    /// Workspace task search, waiting for the first words.
+    pub fn tasks() -> Picker {
+        Picker {
+            stage: Stage::Task,
+            loading: false,
+            ..Picker::new(String::new(), Vec::new())
+        }
+    }
+
+    /// Whether the query is typed (rather than a list chosen from).
+    pub fn has_query(&self) -> bool {
+        matches!(self.stage, Stage::Project | Stage::Task)
+    }
+
     /// Changes the query; returns the new search number to schedule.
     pub fn set_query(&mut self, query: String) -> u64 {
         self.query = query;
@@ -66,6 +88,25 @@ impl Picker {
             .map(|p| Item {
                 gid: Some(p.gid),
                 name: p.name,
+                done: false,
+            })
+            .collect();
+        self.selected = 0;
+        self.loading = false;
+        true
+    }
+
+    /// Takes the tasks found by search `seq`, unless a newer one was started.
+    pub fn accept_tasks(&mut self, seq: u64, tasks: Vec<FoundTask>) -> bool {
+        if self.stage != Stage::Task || seq != self.search_seq {
+            return false;
+        }
+        self.items = tasks
+            .into_iter()
+            .map(|t| Item {
+                gid: Some(t.gid),
+                name: t.name,
+                done: t.completed,
             })
             .collect();
         self.selected = 0;
@@ -90,10 +131,12 @@ impl Picker {
         self.items = std::iter::once(Item {
             gid: None,
             name: "No section".into(),
+            done: false,
         })
         .chain(sections.into_iter().map(|s| Item {
             gid: Some(s.gid),
             name: s.name,
+            done: false,
         }))
         .collect();
         self.selected = 0;
@@ -323,7 +366,8 @@ mod tests {
             items[0],
             Item {
                 gid: None,
-                name: "No section".into()
+                name: "No section".into(),
+                done: false,
             }
         );
         assert_eq!(items[1].gid.as_deref(), Some("43"));

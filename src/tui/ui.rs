@@ -129,7 +129,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
     }
     if let Some(picker) = &app.picker {
         let mut hints = Vec::new();
-        if picker.stage == Stage::Project {
+        if picker.has_query() {
             hints.push((lit("type"), "to search"));
         }
         hints.extend([
@@ -192,6 +192,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         (normal(Cmd::AddToProject), "project"),
         (normal(Cmd::Search), "search"),
         (normal(Cmd::ToggleFilter), "filter"),
+        (normal(Cmd::SearchTasks), "search tasks"),
         (normal(Cmd::Refresh), "refresh"),
         (normal(Cmd::Help), "help"),
         (normal(Cmd::Quit), "quit"),
@@ -315,6 +316,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
     let title = match &picker.stage {
         Stage::Project => " Add to project ".to_owned(),
         Stage::Section { project } => format!(" Section in {} ", project.name),
+        Stage::Task => " Search tasks ".to_owned(),
     };
     let block = Block::new()
         .borders(Borders::ALL)
@@ -324,7 +326,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         .padding(Padding::horizontal(1));
 
     let mut lines = Vec::new();
-    if picker.stage == Stage::Project {
+    if picker.has_query() {
         lines.push(Line::from(vec![
             Span::styled("> ", theme.style(Role::PickerMatch)),
             Span::styled(picker.query.clone(), theme.style(Role::Text)),
@@ -332,22 +334,31 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         ]));
         lines.push(Line::default());
     }
+    let muted = theme.style(Role::TextMuted);
     if picker.loading && picker.items.is_empty() {
-        lines.push(Line::styled("Searching…", theme.style(Role::TextMuted)));
+        lines.push(Line::styled("Searching…", muted));
+    } else if picker.stage == Stage::Task && picker.query.trim().is_empty() {
+        lines.push(Line::styled("Type to search tasks", muted));
     } else if picker.items.is_empty() {
-        lines.push(Line::styled(
-            "No matching projects",
-            theme.style(Role::TextMuted),
-        ));
+        let what = if picker.stage == Stage::Task {
+            "tasks"
+        } else {
+            "projects"
+        };
+        lines.push(Line::styled(format!("No matching {what}"), muted));
     }
-    for (index, item) in picker.items.iter().enumerate() {
+    // Rows left for items inside the borders; scroll to keep the selection in.
+    let rows = usize::from(height.saturating_sub(2)).saturating_sub(lines.len());
+    let first = (picker.selected + 1).saturating_sub(rows.max(1));
+    for (index, item) in picker.items.iter().enumerate().skip(first).take(rows) {
         let style = if index == picker.selected {
             theme.style(Role::Selection)
         } else {
             theme.style(Role::Text)
         };
         let marker = if index == picker.selected { "▌" } else { " " };
-        lines.push(Line::styled(format!("{marker}{}", item.name), style));
+        let done = if item.done { "✓ " } else { "" };
+        lines.push(Line::styled(format!("{marker}{done}{}", item.name), style));
     }
     frame.render_widget(Clear, area);
     frame.render_widget(
@@ -498,12 +509,12 @@ fn render_detail(
     let inner = block.inner(area);
     let width = usize::from(area.width.saturating_sub(4));
     let muted = theme.style(Role::TextMuted);
-    let Some(n) = app.selected() else {
+    if app.selected().is_none() && app.opened.is_none() {
         frame.render_widget(block, area);
         return Vec::new();
-    };
+    }
     let mut slots = Vec::new();
-    let name = n.work_objects.first().map_or("-", |o| o.name.as_str());
+    let name = app.shown_task_name().unwrap_or("-");
     let title = || Line::styled(name.to_owned(), theme.style(Role::Title));
     let lines = match (app.selected_task_gid(), app.selected_detail()) {
         (Some(_), Some(Detail::Loaded(detail))) => {
@@ -525,9 +536,9 @@ fn render_detail(
             Line::styled("Loading task…", muted),
         ],
         (None, _) => {
-            let kind = n
-                .work_objects
-                .first()
+            let kind = app
+                .selected()
+                .and_then(|n| n.work_objects.first())
                 .map_or("item", |o| o.resource_type.as_str());
             vec![
                 title(),
@@ -1417,5 +1428,76 @@ mod tests {
         let (_, shown) = draw_images(&app);
 
         assert!(shown.is_empty());
+    }
+
+    // --- Task search ------------------------------------------------------------
+
+    fn app_searching(query: &str, results: usize) -> App {
+        let mut app = app_with(fixture("notifications_page.json"));
+        let mut picker = Picker::tasks();
+        let seq = picker.set_query(query.into());
+        let found = (0..results)
+            .map(|i| crate::api::search::FoundTask {
+                gid: i.to_string(),
+                name: format!("Task number {i}"),
+                completed: false,
+            })
+            .collect();
+        picker.accept_tasks(seq, found);
+        app.picker = Some(picker);
+        app
+    }
+
+    #[test]
+    fn the_task_search_overlay_asks_for_words_first() {
+        let app = app_searching("", 0);
+
+        let text = screen_text(&draw(&app, &terminal_theme()));
+
+        assert!(text.contains("Search tasks"), "{text}");
+        assert!(text.contains("Type to search tasks"));
+    }
+
+    #[test]
+    fn completed_tasks_in_the_results_are_marked() {
+        let mut app = app_searching("task", 2);
+        app.picker.as_mut().unwrap().items[1].done = true;
+
+        let text = screen_text(&draw(&app, &terminal_theme()));
+
+        assert!(text.contains("✓ Task number 1"), "{text}");
+        assert!(!text.contains("✓ Task number 0"));
+    }
+
+    #[test]
+    fn the_task_search_overlay_says_when_nothing_matched() {
+        let app = app_searching("zzz", 0);
+
+        assert!(screen_text(&draw(&app, &terminal_theme())).contains("No matching tasks"));
+    }
+
+    #[test]
+    fn the_picker_scrolls_to_keep_the_selection_visible() {
+        let mut app = app_searching("task", 30);
+        app.picker.as_mut().unwrap().move_by(25);
+
+        let text = screen_text(&draw(&app, &terminal_theme()));
+
+        assert!(text.contains("Task number 25"), "{text}");
+        assert!(!text.contains("Task number 0 "));
+    }
+
+    #[test]
+    fn a_found_task_shows_its_name_while_loading() {
+        let mut app = app_searching("task", 1);
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+
+        let text = screen_text(&draw(&app, &terminal_theme()));
+
+        assert!(text.contains("Task number 0"), "{text}");
+        assert!(text.contains("Loading task…"));
     }
 }

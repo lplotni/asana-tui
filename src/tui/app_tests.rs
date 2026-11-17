@@ -1613,3 +1613,211 @@ fn the_detail_pane_scrolls_past_the_image_space() {
     let (lines, _) = detail::lines_with_images(&task_with_attachments(), 60, app.now, IMAGE_ROWS);
     assert_eq!(app.detail_max_scroll(), lines.len() - 20);
 }
+
+// --- Workspace task search (`S`) ---------------------------------------------
+
+fn found(gid: &str, name: &str, completed: bool) -> crate::api::search::FoundTask {
+    crate::api::search::FoundTask {
+        gid: gid.into(),
+        name: name.into(),
+        completed,
+    }
+}
+
+/// Opens task search, types `query` and delivers `results` for it.
+fn searched(app: &mut App, query: &str, results: Vec<crate::api::search::FoundTask>) {
+    keys(app, "S");
+    keys(app, query);
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::SearchDue { seq });
+    app.update(Msg::TasksFound {
+        seq,
+        result: Ok(results),
+    });
+}
+
+#[test]
+fn capital_s_opens_an_empty_task_search() {
+    let mut app = loaded(3, 10);
+
+    let effects = keys(&mut app, "S");
+
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.stage, picker::Stage::Task);
+    assert_eq!(picker.query, "");
+    assert!(!picker.loading);
+    assert!(effects.is_empty());
+}
+
+#[test]
+fn typing_searches_the_workspace_after_a_pause() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "S");
+
+    let typed = keys(&mut app, "ab");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    let due = app.update(Msg::SearchDue { seq });
+
+    assert!(
+        typed
+            .iter()
+            .all(|e| matches!(e, Effect::ScheduleSearch { .. }))
+    );
+    assert_eq!(
+        due,
+        [Effect::SearchTasks {
+            query: "ab".into(),
+            seq
+        }]
+    );
+}
+
+#[test]
+fn a_blank_query_does_not_search() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "S");
+    keys(&mut app, " ");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+
+    let due = app.update(Msg::SearchDue { seq });
+
+    assert!(due.is_empty());
+    assert!(!app.picker.as_ref().unwrap().loading);
+}
+
+#[test]
+fn found_tasks_are_listed_and_completed_ones_marked() {
+    let mut app = loaded(3, 10);
+
+    searched(
+        &mut app,
+        "check",
+        vec![
+            found("11", "Open one", false),
+            found("12", "Done one", true),
+        ],
+    );
+
+    let items: Vec<(&str, bool)> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .map(|i| (i.name.as_str(), i.done))
+        .collect();
+    assert_eq!(items, [("Open one", false), ("Done one", true)]);
+}
+
+#[test]
+fn results_of_an_older_query_are_ignored() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "S");
+    keys(&mut app, "a");
+    let old = app.picker.as_ref().unwrap().search_seq;
+    keys(&mut app, "b");
+
+    app.update(Msg::TasksFound {
+        seq: old,
+        result: Ok(vec![found("11", "Stale", false)]),
+    });
+
+    assert!(app.picker.as_ref().unwrap().items.is_empty());
+}
+
+#[test]
+fn a_failed_task_search_says_why() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "S");
+    keys(&mut app, "a");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+
+    app.update(Msg::TasksFound {
+        seq,
+        result: Err("402 premium only".into()),
+    });
+
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "Task search failed: 402 premium only"
+    );
+    assert!(app.toast.as_ref().unwrap().is_error);
+}
+
+#[test]
+fn choosing_a_found_task_shows_it_in_the_task_pane() {
+    let mut app = loaded(3, 10);
+    searched(&mut app, "check", vec![found("11", "Open one", false)]);
+
+    let effects = key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert!(app.picker.is_none());
+    assert_eq!(app.focus, Focus::Detail);
+    assert_eq!(app.selected_task_gid(), Some("11"));
+    assert_eq!(app.shown_task_name(), Some("Open one"));
+    assert_eq!(effects, [Effect::LoadDetail { gid: "11".into() }]);
+    assert_eq!(app.selected_detail(), Some(&Detail::Loading));
+}
+
+#[test]
+fn choosing_a_task_already_loaded_does_not_load_it_again() {
+    let mut app = loaded(3, 10);
+    loaded_detail(&mut app, "t2");
+    searched(&mut app, "check", vec![found("t2", "Cached", false)]);
+
+    let effects = key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::LoadDetail { .. }))
+    );
+    assert!(matches!(app.selected_detail(), Some(Detail::Loaded(_))));
+}
+
+#[test]
+fn leaving_the_task_pane_returns_to_the_inbox_selection() {
+    for leave in ["h", "q"] {
+        let mut app = loaded(3, 10);
+        searched(&mut app, "check", vec![found("11", "Open one", false)]);
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+        keys(&mut app, leave);
+
+        assert_eq!(app.focus, Focus::List, "{leave}");
+        assert_eq!(app.selected_task_gid(), Some("t0"), "{leave}");
+    }
+}
+
+#[test]
+fn commenting_on_a_found_task_comments_on_that_task() {
+    let mut app = loaded(3, 10);
+    searched(&mut app, "check", vec![found("11", "Open one", false)]);
+    key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    let effects = keys(&mut app, "c");
+
+    assert_eq!(
+        effects,
+        [Effect::EditComment {
+            task_gid: "11".into(),
+            initial: String::new()
+        }]
+    );
+}
+
+#[test]
+fn a_found_task_that_is_still_loading_opens_by_its_gid_in_the_browser() {
+    let mut app = loaded(3, 10);
+    searched(&mut app, "check", vec![found("11", "Open one", false)]);
+    key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    let effects = keys(&mut app, "o");
+
+    assert_eq!(
+        effects,
+        [Effect::OpenUrl {
+            url: "https://app.asana.com/0/0/11".into()
+        }]
+    );
+}
