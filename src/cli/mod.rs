@@ -12,9 +12,15 @@ pub mod task;
 /// displayed, or break line- and tab-based output.
 pub fn terminal_safe(text: &str) -> String {
     text.chars()
-        .filter(|c| !matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
+        .filter(|&c| !is_bidi_control(c))
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect()
+}
+
+/// A bidi override or isolate (U+202A–202E, U+2066–2069): it would reorder
+/// what the terminal shows after it. The TUI strips these too.
+pub fn is_bidi_control(c: char) -> bool {
+    matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 
 /// One tab-separated line per item: `gid  name` (sections, people).

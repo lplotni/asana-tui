@@ -399,6 +399,28 @@ pub struct ShownImage {
 /// Draws the screen. Returns the loaded images that are fully in view and
 /// not covered by an overlay; drawing them is up to [`super::images`].
 pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<ShownImage> {
+    let shown = draw(frame, app, theme, now);
+    strip_bidi_controls(frame.buffer_mut());
+    shown
+}
+
+/// Removes bidi overrides from every drawn cell. Text from Asana can contain
+/// them, and ratatui's widgets pass them on (only its `set_stringn` drops
+/// zero-width graphemes); they would reorder what the terminal shows.
+fn strip_bidi_controls(buffer: &mut ratatui::buffer::Buffer) {
+    for cell in &mut buffer.content {
+        if cell.symbol().contains(crate::cli::is_bidi_control) {
+            let kept: String = cell
+                .symbol()
+                .chars()
+                .filter(|&c| !crate::cli::is_bidi_control(c))
+                .collect();
+            cell.set_symbol(if kept.is_empty() { " " } else { &kept });
+        }
+    }
+}
+
+fn draw(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<ShownImage> {
     let (header, body, status, hint_line) = split_screen(frame.area());
     if app.screen == Screen::Board {
         render_board_header(frame, header, app, theme);
@@ -1123,6 +1145,48 @@ mod tests {
         press(&mut app, "a");
 
         insta::assert_snapshot!(draw_at(&mut app, 100).backend());
+    }
+
+    /// Bidi overrides and isolates: text from Asana must not reorder what
+    /// the terminal shows (spec F9, as the CLI's `terminal_safe` does).
+    const BIDI: [char; 9] = [
+        '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}', '\u{202e}', '\u{2066}', '\u{2067}',
+        '\u{2068}', '\u{2069}',
+    ];
+
+    fn spoofed(name: &str) -> String {
+        format!("{name} \u{202e}gnp.exe\u{202c} \u{2066}x\u{2069}")
+    }
+
+    #[test]
+    fn bidi_overrides_from_asana_never_reach_the_inbox_or_task_pane() {
+        let mut notifications = fixture("notifications_page.json");
+        notifications[0].work_objects[0].name = spoofed("Invoice");
+        let mut app = app_with(notifications);
+        with_detail(&mut app);
+
+        let terminal = draw_at(&mut app, 120);
+
+        let screen = screen_text(&terminal);
+        assert!(!screen.contains(BIDI), "a bidi control was drawn");
+    }
+
+    #[test]
+    fn bidi_overrides_from_asana_never_reach_a_board_card() {
+        let mut board = sample_board();
+        board.columns[0].tasks[0].name = spoofed("Invoice");
+        board.columns[0].section.as_mut().unwrap().name = spoofed("Backlog");
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(board),
+        });
+
+        let terminal = draw_at(&mut app, 120);
+
+        let screen = screen_text(&terminal);
+        assert!(!screen.contains(BIDI), "a bidi control was drawn");
+        assert!(screen.contains("Invoice"), "the visible text stays");
     }
 
     #[test]
