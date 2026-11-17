@@ -1,7 +1,8 @@
 //! The TUI state machine: `update(msg)` changes state and returns effects for
 //! the event loop to run. No I/O happens here.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui_textarea::{CursorMove, TextArea};
 
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
@@ -197,6 +198,43 @@ pub enum Detail {
     Failed(String),
 }
 
+/// What the editor overlay writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorKind {
+    Comment,
+    Description,
+}
+
+/// The text editor overlay for a comment or a task description.
+#[derive(Debug, Clone)]
+pub struct Editor {
+    pub kind: EditorKind,
+    pub task_gid: String,
+    pub textarea: TextArea<'static>,
+}
+
+impl Editor {
+    /// Starts with `text`: a comment draft continues at its end, a
+    /// description is edited from the top.
+    fn new(kind: EditorKind, task_gid: String, text: &str) -> Editor {
+        let mut textarea = TextArea::new(text.split('\n').map(str::to_owned).collect());
+        textarea.set_cursor_line_style(ratatui::style::Style::default());
+        if kind == EditorKind::Comment {
+            textarea.move_cursor(CursorMove::Bottom);
+            textarea.move_cursor(CursorMove::End);
+        }
+        Editor {
+            kind,
+            task_gid,
+            textarea,
+        }
+    }
+
+    pub fn text(&self) -> String {
+        self.textarea.lines().join("\n")
+    }
+}
+
 /// An image attachment, by attachment GID.
 #[derive(Debug, Clone)]
 pub enum ImageState {
@@ -295,6 +333,8 @@ pub struct App {
     /// Task details by task GID (several notifications can share a task).
     pub details: HashMap<String, Detail>,
     pub focus: Focus,
+    /// The comment or description being written, when the editor is open.
+    pub editor: Option<Editor>,
     /// A task opened from workspace search: the task pane shows it instead
     /// of the selected notification's task until focus returns to the list.
     pub opened: Option<Named>,
@@ -349,13 +389,16 @@ impl App {
                 self.help = false;
                 Vec::new()
             }
+            Msg::Key(event) if self.editor.is_some() => self.editor_key(event),
             Msg::Key(event) if self.confirm.is_some() => {
                 let confirm = self.confirm.take().expect("checked above");
                 if matches!(event.code, KeyCode::Char('y' | 'Y')) {
-                    vec![Effect::EditDescription {
-                        task_gid: confirm.task_gid,
-                        initial: confirm.initial,
-                    }]
+                    self.editor = Some(Editor::new(
+                        EditorKind::Description,
+                        confirm.task_gid,
+                        &confirm.initial,
+                    ));
+                    Vec::new()
                 } else {
                     self.toast = Some(Toast {
                         text: "Description not edited".into(),
@@ -1106,7 +1149,8 @@ impl App {
             });
             return Vec::new();
         }
-        vec![Effect::EditDescription { task_gid, initial }]
+        self.editor = Some(Editor::new(EditorKind::Description, task_gid, &initial));
+        Vec::new()
     }
 
     /// Shows the new description right away and saves it, remembering the old
@@ -1161,7 +1205,60 @@ impl App {
             return Vec::new();
         };
         let initial = self.drafts.remove(&task_gid).unwrap_or_default();
-        vec![Effect::EditComment { task_gid, initial }]
+        self.editor = Some(Editor::new(EditorKind::Comment, task_gid, &initial));
+        Vec::new()
+    }
+
+    /// A key in the editor overlay: `Ctrl-s` posts or saves, `Esc`/`Ctrl-c`
+    /// cancel (a comment is kept as a draft), `Ctrl-o` continues in
+    /// `$EDITOR`; everything else edits the text.
+    fn editor_key(&mut self, event: KeyEvent) -> Vec<Effect> {
+        if event.kind == KeyEventKind::Release {
+            return Vec::new();
+        }
+        self.toast = None;
+        let ctrl = |c: char| {
+            event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char(c)
+        };
+        let (save, external) = (ctrl('s'), ctrl('o'));
+        let cancel = ctrl('c') || event.code == KeyCode::Esc;
+        if !(save || external || cancel) {
+            if let Some(editor) = &mut self.editor {
+                editor.textarea.input(event);
+            }
+            return Vec::new();
+        }
+        let Some(editor) = self.editor.take() else {
+            return Vec::new();
+        };
+        let text = editor.text();
+        let task_gid = editor.task_gid;
+        match (editor.kind, save, external) {
+            (EditorKind::Comment, true, _) if text.trim().is_empty() => {
+                self.toast = Some(Toast {
+                    text: "Empty comment; nothing posted".into(),
+                    is_error: false,
+                });
+                Vec::new()
+            }
+            (EditorKind::Comment, true, _) => self.show_and_post_comment(task_gid, text),
+            (EditorKind::Description, true, _) => self.show_and_save_description(task_gid, text),
+            (EditorKind::Comment, _, true) => vec![Effect::EditComment {
+                task_gid,
+                initial: text,
+            }],
+            (EditorKind::Description, _, true) => vec![Effect::EditDescription {
+                task_gid,
+                initial: text,
+            }],
+            (EditorKind::Comment, _, _) => {
+                if !text.trim().is_empty() {
+                    self.drafts.insert(task_gid, text);
+                }
+                Vec::new()
+            }
+            (EditorKind::Description, _, _) => Vec::new(),
+        }
     }
 
     /// Shows the comment right away (if the task is on screen) and posts it.

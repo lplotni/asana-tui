@@ -7,7 +7,7 @@ use ratatui::widgets::{
     Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
-use super::app::{App, Detail, Focus, IMAGE_ROWS, ImageState, Sizes};
+use super::app::{App, Detail, Editor, EditorKind, Focus, IMAGE_ROWS, ImageState, Sizes};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -60,9 +60,29 @@ pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
     lines
 }
 
-/// The help overlay over the whole body, in two columns.
+/// A `width` × `height` rectangle in the middle of `area`, shrunk to fit.
+pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
+    let (width, height) = (width.min(area.width), height.min(area.height));
+    Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    )
+}
+
+/// The help overlay, centered: two columns when they fit, else one.
 fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
-    let area = over;
+    let lines = help_lines(theme);
+    let line_width = lines.iter().map(Line::width).max().unwrap_or(0) as u16;
+    // Borders and padding take 4 columns; two columns add a 2-column gap.
+    let two_columns = over.width >= 2 * line_width + 6;
+    let (width, height) = if two_columns {
+        (2 * line_width + 6, lines.len().div_ceil(2) as u16 + 2)
+    } else {
+        (line_width + 4, lines.len() as u16 + 2)
+    };
+    let area = centered(over, width, height);
     let block = Block::new()
         .borders(Borders::ALL)
         .border_type(ratatui::widgets::BorderType::Thick)
@@ -74,21 +94,18 @@ fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
     frame.render_widget(Clear, area);
     frame.render_widget(block.style(theme.style(Role::Text)), area);
 
-    let lines = help_lines(theme);
-    let rows = usize::from(inner.height.max(1));
-    let columns = if inner.width >= 80 { 2 } else { 1 };
-    let [left, right] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(inner);
-    let split = if columns == 2 {
-        lines.len().div_ceil(2).min(rows)
-    } else {
-        lines.len()
-    };
-    let (first, second) = lines.split_at(split.min(lines.len()));
-    let first_area = if columns == 2 { left } else { inner };
-    frame.render_widget(Paragraph::new(first.to_vec()), first_area);
-    if columns == 2 {
+    if two_columns {
+        let [left, _, right] = Layout::horizontal([
+            Constraint::Length(line_width),
+            Constraint::Length(2),
+            Constraint::Length(line_width),
+        ])
+        .areas(inner);
+        let (first, second) = lines.split_at(lines.len().div_ceil(2));
+        frame.render_widget(Paragraph::new(first.to_vec()), left);
         frame.render_widget(Paragraph::new(second.to_vec()), right);
+    } else {
+        frame.render_widget(Paragraph::new(lines), inner);
     }
 }
 
@@ -123,6 +140,17 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
 
     if app.help {
         return vec![(lit("any key"), "close")];
+    }
+    if let Some(editor) = &app.editor {
+        let save = match editor.kind {
+            EditorKind::Comment => "post",
+            EditorKind::Description => "save",
+        };
+        return vec![
+            (lit("Ctrl-s"), save),
+            (lit("Esc"), "cancel"),
+            (lit("Ctrl-o"), "open in $EDITOR"),
+        ];
     }
     if app.confirm.is_some() {
         return vec![(lit("y"), "yes"), (lit("any other key"), "no")];
@@ -296,23 +324,62 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
     }
     render_status(frame, status, app, theme);
     render_hints(frame, hint_line, app, theme);
+    let screen = frame.area();
     if app.help {
-        render_help(frame, body, theme);
+        render_help(frame, screen, theme);
     }
     if let Some(picker) = &app.picker {
-        render_picker(frame, detail, picker, theme);
+        render_picker(frame, screen, picker, theme);
     }
-    if app.help || app.picker.is_some() {
+    if let Some(editor) = &app.editor {
+        render_editor(frame, screen, editor, app, theme);
+    }
+    if app.help || app.picker.is_some() || app.editor.is_some() {
         images.clear();
     }
     images
 }
 
 /// The project/section picker, drawn over the task pane.
+/// The comment or description editor, centered.
+fn render_editor(frame: &mut Frame, over: Rect, editor: &Editor, app: &App, theme: &Theme) {
+    let area = centered(
+        over,
+        over.width.saturating_sub(4).min(80),
+        over.height.saturating_sub(2).min(18),
+    );
+    let name = app.shown_task_name().unwrap_or("task");
+    let title = match editor.kind {
+        EditorKind::Comment => format!(" Comment on {name} "),
+        EditorKind::Description => format!(" Description of {name} "),
+    };
+    let save = match editor.kind {
+        EditorKind::Comment => "post",
+        EditorKind::Description => "save",
+    };
+    let block = Block::new()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Thick)
+        .border_style(theme.style(Role::BorderFocused))
+        .title(Span::styled(title, theme.style(Role::Title)))
+        .title_bottom(Span::styled(
+            format!(" Ctrl-s {save} · Esc cancel · Ctrl-o $EDITOR "),
+            theme.style(Role::Keyhint),
+        ))
+        .padding(Padding::horizontal(1));
+    let inner = block.inner(area);
+    frame.render_widget(Clear, area);
+    frame.render_widget(block.style(theme.style(Role::Text)), area);
+    frame.render_widget(&editor.textarea, inner);
+}
+
 fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) {
-    let width = over.width.saturating_sub(4).min(56);
-    let height = over.height.saturating_sub(2).min(14);
-    let area = Rect::new(over.x + (over.width - width) / 2, over.y + 2, width, height);
+    let area = centered(
+        over,
+        over.width.saturating_sub(4).min(56),
+        over.height.saturating_sub(2).min(14),
+    );
+    let height = area.height;
     let title = match &picker.stage {
         Stage::Project => " Add to project ".to_owned(),
         Stage::Section { project } => format!(" Section in {} ", project.name),
@@ -1499,5 +1566,117 @@ mod tests {
 
         assert!(text.contains("Task number 0"), "{text}");
         assert!(text.contains("Loading task…"));
+    }
+
+    // --- Overlays ---------------------------------------------------------------
+
+    #[test]
+    fn overlays_are_centered_and_never_larger_than_the_screen() {
+        let screen = Rect::new(0, 0, 100, 24);
+
+        assert_eq!(centered(screen, 60, 10), Rect::new(20, 7, 60, 10));
+        assert_eq!(centered(screen, 200, 50), screen);
+        assert_eq!(
+            centered(Rect::new(10, 5, 40, 10), 20, 4),
+            Rect::new(20, 8, 20, 4)
+        );
+    }
+
+    /// Checks that the overlay titled `title` is centered on the screen.
+    fn assert_centered(terminal: &Terminal<TestBackend>, title: &str) {
+        let buffer = terminal.backend().buffer();
+        let (w, h) = (buffer.area.width, buffer.area.height);
+        let row = |y: u16| -> Vec<&str> { (0..w).map(|x| buffer[(x, y)].symbol()).collect() };
+        let (top, left) = (0..h)
+            .find_map(|y| {
+                let cells = row(y);
+                let text: String = cells.concat();
+                let at = text.find(title)?;
+                // Column of the title's first character (cells are 1 wide here).
+                let column = text[..at].chars().count() as u16;
+                Some((y, column - 1))
+            })
+            .unwrap_or_else(|| panic!("no overlay titled {title:?}"));
+        assert_eq!(buffer[(left, top)].symbol(), "┏");
+        let right = (left..w)
+            .find(|&x| buffer[(x, top)].symbol() == "┓")
+            .unwrap();
+        let bottom = (top..h)
+            .find(|&y| buffer[(left, y)].symbol() == "┗")
+            .unwrap();
+        let (width, height) = (right - left + 1, bottom - top + 1);
+        assert!(
+            left.abs_diff(w - left - width) <= 1,
+            "not centered horizontally: x={left} w={width}"
+        );
+        assert!(
+            top.abs_diff(h - top - height) <= 1,
+            "not centered vertically: y={top} h={height}"
+        );
+    }
+
+    fn draw_sized(app: &App, width: u16, height: u16) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|f| {
+                render(f, app, &terminal_theme(), NOW);
+            })
+            .unwrap();
+        terminal
+    }
+
+    fn app_editing_a_comment(text: &str) -> App {
+        let mut app = app_with(fixture("notifications_page.json"));
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('c'),
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+        for c in text.chars() {
+            app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+                ratatui::crossterm::event::KeyCode::Char(c),
+                ratatui::crossterm::event::KeyModifiers::NONE,
+            )));
+        }
+        app
+    }
+
+    #[test]
+    fn the_comment_editor_is_a_centered_overlay_with_the_text() {
+        let app = app_editing_a_comment("Ship it");
+
+        let terminal = draw(&app, &terminal_theme());
+        let text = screen_text(&terminal);
+
+        assert!(text.contains("Comment"), "{text}");
+        assert!(text.contains("Ship it"));
+        assert!(text.contains("Ctrl-s"));
+        assert_centered(&terminal, " Comment on ");
+    }
+
+    #[test]
+    fn the_editor_hints_say_how_to_save_cancel_and_use_editor() {
+        let app = app_editing_a_comment("x");
+
+        let hints: Vec<&str> = key_hints(&app).into_iter().map(|(_, what)| what).collect();
+
+        assert_eq!(hints, ["post", "cancel", "open in $EDITOR"]);
+    }
+
+    #[test]
+    fn the_picker_is_centered() {
+        let app = app_searching("task", 3);
+
+        assert_centered(&draw(&app, &terminal_theme()), " Search tasks ");
+    }
+
+    #[test]
+    fn the_help_is_centered_and_sized_to_its_keys() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        app.help = true;
+
+        let terminal = draw_sized(&app, 160, 40);
+
+        assert_centered(&terminal, " Keys ");
+        assert!(screen_text(&terminal).contains("search tasks in the workspace"));
     }
 }

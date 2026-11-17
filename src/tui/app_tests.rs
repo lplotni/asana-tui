@@ -912,25 +912,132 @@ fn comments_of(app: &App, gid: &str) -> Vec<(String, String)> {
     }
 }
 
+/// What the editor overlay is editing: (kind, task, text).
+fn editing(app: &App) -> Option<(EditorKind, &str, String)> {
+    app.editor
+        .as_ref()
+        .map(|e| (e.kind, e.task_gid.as_str(), e.text()))
+}
+
+fn ctrl(app: &mut App, c: char) -> Vec<Effect> {
+    key(app, KeyCode::Char(c), KeyModifiers::CONTROL)
+}
+
 #[test]
 fn c_and_tab_c_open_the_editor_for_the_selected_task() {
     let mut app = loaded(3, 10);
 
+    assert!(keys(&mut app, "c").is_empty());
     assert_eq!(
-        keys(&mut app, "c"),
-        [Effect::EditComment {
-            task_gid: "t0".into(),
-            initial: String::new()
-        }]
+        editing(&app),
+        Some((EditorKind::Comment, "t0", String::new()))
     );
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
     key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    assert!(keys(&mut app, "c").is_empty());
     assert_eq!(
-        keys(&mut app, "c"),
-        [Effect::EditComment {
+        editing(&app),
+        Some((EditorKind::Comment, "t0", String::new()))
+    );
+}
+
+#[test]
+fn keys_typed_in_the_editor_are_text_not_commands() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+
+    let effects = keys(&mut app, "qjx");
+
+    assert!(effects.is_empty());
+    assert!(!app.should_quit);
+    assert_eq!(editing(&app).unwrap().2, "qjx");
+}
+
+#[test]
+fn enter_starts_a_new_line_in_the_editor() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+
+    keys(&mut app, "a");
+    key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+    keys(&mut app, "b");
+
+    assert_eq!(editing(&app).unwrap().2, "a\nb");
+}
+
+#[test]
+fn ctrl_s_posts_the_comment_and_closes_the_editor() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+    keys(&mut app, "Hi");
+
+    let effects = ctrl(&mut app, 's');
+
+    assert_eq!(
+        effects,
+        [Effect::PostComment {
             task_gid: "t0".into(),
-            initial: String::new()
+            local_gid: "local-1".into(),
+            text: "Hi".into()
         }]
     );
+    assert!(app.editor.is_none());
+}
+
+#[test]
+fn an_empty_comment_is_not_posted() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+    keys(&mut app, "  ");
+
+    let effects = ctrl(&mut app, 's');
+
+    assert!(effects.is_empty());
+    assert!(app.editor.is_none());
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "Empty comment; nothing posted"
+    );
+}
+
+#[test]
+fn cancelling_a_comment_keeps_it_as_a_draft() {
+    for cancel in [KeyCode::Esc, KeyCode::Char('c')] {
+        let mut app = loaded(3, 10);
+        keys(&mut app, "c");
+        keys(&mut app, "Hi");
+
+        let modifiers = if cancel == KeyCode::Esc {
+            KeyModifiers::NONE
+        } else {
+            KeyModifiers::CONTROL
+        };
+        let effects = key(&mut app, cancel, modifiers);
+
+        assert!(effects.is_empty());
+        assert!(app.editor.is_none());
+        assert!(!app.should_quit, "Ctrl-c in the editor cancels, not quits");
+        keys(&mut app, "c");
+        assert_eq!(editing(&app).unwrap().2, "Hi");
+    }
+}
+
+#[test]
+fn ctrl_o_hands_the_comment_to_the_external_editor() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "c");
+    keys(&mut app, "Hi");
+
+    let effects = ctrl(&mut app, 'o');
+
+    assert_eq!(
+        effects,
+        [Effect::EditComment {
+            task_gid: "t0".into(),
+            initial: "Hi".into()
+        }]
+    );
+    assert!(app.editor.is_none());
 }
 
 #[test]
@@ -1025,12 +1132,10 @@ fn a_failed_post_removes_the_comment_and_keeps_the_text_as_a_draft() {
 
     assert_eq!(comments_of(&app, "t0").len(), before);
     assert!(app.toast.as_ref().unwrap().is_error);
+    keys(&mut app, "c");
     assert_eq!(
-        keys(&mut app, "c"),
-        [Effect::EditComment {
-            task_gid: "t0".into(),
-            initial: "Ship it\n".into()
-        }]
+        editing(&app),
+        Some((EditorKind::Comment, "t0", "Ship it\n".into()))
     );
 }
 
@@ -1272,8 +1377,53 @@ fn tab_e_opens_the_editor_with_the_plain_description() {
     let mut app = loaded(3, 10);
     with_notes(&mut app, "Old text", "<body>Old text</body>");
 
+    assert!(tab_e(&mut app).is_empty());
     assert_eq!(
-        tab_e(&mut app),
+        editing(&app),
+        Some((EditorKind::Description, "t0", "Old text".into()))
+    );
+}
+
+#[test]
+fn ctrl_s_saves_the_edited_description() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    tab_e(&mut app);
+    keys(&mut app, "!");
+
+    let effects = ctrl(&mut app, 's');
+
+    assert!(
+        matches!(&effects[..], [Effect::SaveNotes { task_gid, text, .. }] if task_gid == "t0" && text == "!Old text"),
+        "{effects:?}"
+    );
+    assert!(app.editor.is_none());
+    assert_eq!(notes_of(&app), "!Old text");
+}
+
+#[test]
+fn cancelling_a_description_edit_discards_it() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    tab_e(&mut app);
+    keys(&mut app, "!");
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    tab_e(&mut app);
+
+    assert_eq!(editing(&app).unwrap().2, "Old text");
+}
+
+#[test]
+fn ctrl_o_hands_the_description_to_the_external_editor() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    tab_e(&mut app);
+
+    let effects = ctrl(&mut app, 'o');
+
+    assert_eq!(
+        effects,
         [Effect::EditDescription {
             task_gid: "t0".into(),
             initial: "Old text".into()
@@ -1305,12 +1455,10 @@ fn a_formatted_description_asks_before_editing() {
     assert!(app.confirm.is_none());
 
     tab_e(&mut app);
+    assert!(keys(&mut app, "y").is_empty());
     assert_eq!(
-        keys(&mut app, "y"),
-        [Effect::EditDescription {
-            task_gid: "t0".into(),
-            initial: "Old text".into()
-        }]
+        editing(&app),
+        Some((EditorKind::Description, "t0", "Old text".into()))
     );
 }
 
@@ -1795,14 +1943,11 @@ fn commenting_on_a_found_task_comments_on_that_task() {
     searched(&mut app, "check", vec![found("11", "Open one", false)]);
     key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
 
-    let effects = keys(&mut app, "c");
+    keys(&mut app, "c");
 
     assert_eq!(
-        effects,
-        [Effect::EditComment {
-            task_gid: "11".into(),
-            initial: String::new()
-        }]
+        editing(&app),
+        Some((EditorKind::Comment, "11", String::new()))
     );
 }
 
