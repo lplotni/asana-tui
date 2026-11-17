@@ -223,6 +223,35 @@ pub async fn add_to_project(
     client.add_project(task_gid, project_gid, section_gid).await
 }
 
+/// A task made by [`create_task`], and why it isn't in the section asked
+/// for, if it isn't. The task exists either way.
+#[derive(Debug)]
+pub struct CreatedTask {
+    pub task: Named,
+    pub section_error: Option<ApiError>,
+}
+
+/// Creates an unassigned task in the project, then puts it in `section_gid`
+/// (at the top) if given. Only a failure to create is an error: a task that
+/// exists but couldn't be put in the section is returned with that error, so
+/// nobody creates it twice.
+pub async fn create_task(
+    client: &Client,
+    project_gid: &str,
+    section_gid: Option<&str>,
+    name: &str,
+) -> Result<CreatedTask, ApiError> {
+    let task = client.create_task(project_gid, name).await?;
+    let section_error = match section_gid {
+        Some(section) => client.add_task_to_section(section, &task.gid).await.err(),
+        None => None,
+    };
+    Ok(CreatedTask {
+        task,
+        section_error,
+    })
+}
+
 /// Moves the task to another section of a project it's already in.
 pub async fn move_to_section(
     client: &Client,

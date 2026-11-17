@@ -81,6 +81,17 @@ impl Client {
             .await
     }
 
+    /// Creates an unassigned task named `name` in the project.
+    pub async fn create_task(&self, project_gid: &str, name: &str) -> Result<Named, ApiError> {
+        #[derive(Deserialize)]
+        struct Data {
+            data: Named,
+        }
+        let body = serde_json::json!({ "data": { "name": name, "projects": [project_gid] } });
+        let created: Data = self.post("/tasks", &[], &body).await?;
+        Ok(created.data)
+    }
+
     pub async fn add_project(
         &self,
         task_gid: &str,

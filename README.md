@@ -11,7 +11,7 @@ I built `asn` to get a simple terminal UI for the way I work with Asana:
 - **The Inbox:** go through notifications, read the task, comment, and mark them read.
 - **Projects as boards:** see where every task of a project stands, section by section, and act on any card.
 
-The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
+The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`, `project new`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
 
 > v0.2 adds project boards ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
 
@@ -101,6 +101,7 @@ asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open 
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
 asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
 asn project move <task-gid> <section-gid>    # move the task to another section of a project it's in
+asn project new <project-gid> [--section <gid>] Write the launch post   # create an unassigned task; prints its gid
 asn board <project-gid>                 # open tasks by section: section lines, then indented gid, name, assignee, due (--json too)
 asn --project <project-gid>             # open the TUI on that project's board
 asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
@@ -121,6 +122,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
 | Move to a section | `GET /projects/{project}/sections`, `POST /sections/{section}/addTask` |
+| New task (`asn project new`) | `POST /tasks`, then `POST /sections/{section}/addTask` |
 | Boards (`P`, `b`, `asn board`) | `GET /projects/{project}`, `GET /projects/{project}/sections`, `GET /projects/{project}/tasks?completed_since=now`; projects are found with `GET /workspaces/{workspace}/typeahead` |
 | Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
 

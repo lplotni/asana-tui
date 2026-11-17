@@ -102,7 +102,7 @@ fn project_help_lists_add_move_and_sections() {
     let output = asn(&["project", "--help"], &[]);
     let help = String::from_utf8_lossy(&output.stdout);
 
-    for sub in ["add", "move", "sections"] {
+    for sub in ["add", "move", "sections", "new"] {
         assert!(help.contains(sub), "missing `{sub}` in help:\n{help}");
     }
 }

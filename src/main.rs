@@ -130,6 +130,17 @@ enum ProjectCommand {
         #[arg(value_name = "PROJECT_GID")]
         project: String,
     },
+    /// Create an unassigned task in a project and print its gid
+    New {
+        #[arg(value_name = "PROJECT_GID")]
+        project: String,
+        /// Put it in this section (at the top)
+        #[arg(long, value_name = "SECTION_GID")]
+        section: Option<String>,
+        /// The task's name
+        #[arg(required = true, value_name = "NAME")]
+        name: Vec<String>,
+    },
 }
 
 /// Default for `asn inbox --limit`.
@@ -272,6 +283,29 @@ async fn main() -> ExitCode {
             }
             Err(err) => fail(&err, err.exit_code()),
         },
+        Some(Command::Project {
+            command:
+                ProjectCommand::New {
+                    project,
+                    section,
+                    name,
+                },
+        }) => {
+            let name = name.join(" ");
+            match core::create_task(&client, &project, section.as_deref(), &name).await {
+                Ok(created) => {
+                    println!("{}", created.task.gid);
+                    match created.section_error {
+                        None => ExitCode::SUCCESS,
+                        Some(err) => fail(
+                            &format!("Created, but not put in the section: {err}"),
+                            err.exit_code(),
+                        ),
+                    }
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
+        }
         Some(Command::Desc {
             gid,
             file,

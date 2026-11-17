@@ -227,16 +227,16 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 3b: New task (F14, added after Checkpoint C)
 
-### - [ ] T11: `asn project new`
+### - [x] T11: `asn project new`
 
 **Description:** `core::create_task(client, project_gid, section_gid, name)` creates the task unassigned in the project (`POST /tasks`). With a section, it then adds the task to it (`POST /sections/{gid}/addTask`). It returns the new task, plus the section error if only that step failed. `asn project new <project-gid> [--section <gid>] <name…>` prints the GID.
 
 **Acceptance criteria:**
-- [ ] `POST /tasks` sends `{name, projects: [project]}` and no assignee. With `--section`, `addTask` follows for the new GID.
-- [ ] If the section step fails, the GID is still printed, stderr says why, and the exit code is 1. If creating fails, nothing is printed to stdout, and the exit code follows F7.
+- [x] `POST /tasks` sends `{name, projects: [project]}` and no assignee. With `--section`, `addTask` follows for the new GID.
+- [x] If the section step fails, the GID is still printed, stderr says why, and the exit code is 1. If creating fails, nothing is printed to stdout, and the exit code follows F7.
 
 **Verification:**
-- [ ] Tests: `wiremock` tests in `tests/api_project.rs` (create only, create + section, section refused). A CLI help test for `project new`.
+- [x] Tests: `wiremock` tests in `tests/api_project.rs` (create only, create + section, section refused). A CLI help test for `project new`.
 
 **Dependencies:** None
 

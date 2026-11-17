@@ -212,3 +212,87 @@ async fn a_board_loads_open_tasks_from_every_page_grouped_by_section() {
         assert!(opt_fields.split(',').any(|f| f == field), "{opt_fields}");
     }
 }
+
+#[tokio::test]
+async fn a_new_task_is_created_unassigned_in_the_project() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .and(body_json(
+            json!({ "data": { "name": "Write the launch post", "projects": ["42"] } }),
+        ))
+        .respond_with(
+            ResponseTemplate::new(201).set_body_json(
+                json!({ "data": { "gid": "900", "name": "Write the launch post" } }),
+            ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = core::create_task(&client(&server), "42", None, "Write the launch post")
+        .await
+        .unwrap();
+
+    assert_eq!(created.task.gid, "900");
+    assert!(created.section_error.is_none());
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn a_new_task_is_then_put_in_the_section() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .respond_with(
+            ResponseTemplate::new(201)
+                .set_body_json(json!({ "data": { "gid": "900", "name": "Post" } })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/sections/77/addTask"))
+        .and(body_json(json!({ "data": { "task": "900" } })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = core::create_task(&client(&server), "42", Some("77"), "Post")
+        .await
+        .unwrap();
+
+    assert_eq!(created.task.gid, "900");
+    assert!(created.section_error.is_none());
+}
+
+#[tokio::test]
+async fn a_task_created_but_refused_by_the_section_is_still_returned() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .respond_with(
+            ResponseTemplate::new(201)
+                .set_body_json(json!({ "data": { "gid": "900", "name": "Post" } })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/sections/77/addTask"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "errors": [{ "message": "Forbidden" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let created = core::create_task(&client(&server), "42", Some("77"), "Post")
+        .await
+        .unwrap();
+
+    assert_eq!(created.task.gid, "900");
+    assert!(
+        created
+            .section_error
+            .is_some_and(|e| e.to_string().contains("Forbidden"))
+    );
+}
