@@ -271,7 +271,7 @@ One `TestBackend` render snapshot per screen with the `terminal` theme, plus one
 
 ## Not Doing (and Why)
 
-- **Project and board views** come in v0.2 (board only, as decided). The Inbox slice proves the core and the keymap first.
+- **Project and board views** come in v0.2 (board only, as decided; see [SPEC-board.md](SPEC-board.md)). The Inbox slice proves the core and the keymap first.
 - **Local SQLite mirror / offline** is not needed: the Inbox is polled with about 1 request per minute, and an in-memory cache covers task detail. Revisit with board views, where it matters.
 - **OAuth and config files:** a PAT in an env var covers our team, and OAuth means registering an app and hosting a redirect for no MVP gain.
 - **An in-TUI text editor:** `$EDITOR` is better at this than anything we'd build.

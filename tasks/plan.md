@@ -1,111 +1,88 @@
-# Implementation Plan: asn v0.1 (Inbox MVP)
+# Implementation Plan: asn v0.2 (Board view)
 
-Source of truth for behavior: [`docs/SPEC.md`](../docs/SPEC.md). Tasks with full acceptance criteria are in [`tasks/todo.md`](todo.md).
+Source of truth for behavior: [`docs/SPEC-board.md`](../docs/SPEC-board.md) (F9–F13). Tasks with full acceptance criteria are in [`tasks/todo.md`](todo.md). The v0.1 plan is archived in [`tasks/v0.1/`](v0.1/plan.md).
 
 ## Overview
 
-Build `asn`, a Rust single-binary Asana client. With no arguments it opens a ratatui TUI on the user's Asana Inbox. From there the user can open a task, comment on it, edit its description and add it to projects, using vim keys plus Asana web aliases, with a theme that follows their terminal colors. Every action also exists as a scriptable CLI subcommand with `--json` output.
+Add a columns board for any Asana project as a second top-level screen next to the Inbox. Sections are columns, and open tasks are cards (name, assignee initials, due date). You reach a board with `P` (project switcher), with `b` from an Inbox task, or with `asn --project <gid>`. `asn board <gid> [--json]` prints the same data. The board polls every 60 s, keeps its cursor across refreshes, and supports the existing task actions plus a full-width detail view.
 
 ## Architecture Decisions
 
-- **One crate, a library plus one binary.** `src/lib.rs` exposes `api`, `core`, `cli` and `tui`, and `src/main.rs` is a thin clap entry point. The library split makes integration tests possible without a Cargo workspace. We'll split into multiple crates only when a second consumer needs it.
-- **The CLI comes before the TUI for every operation.** Each slice lands first as `core::*` plus an `asn <cmd>`, and then gets a key binding. This keeps principle 2 ("scriptable core") enforced by the order of work, and gives each slice a way to test against real Asana before any UI exists.
-- **The TUI state machine is pure.** `tui/app.rs` takes `(App, Action)` and returns `(App, Vec<Effect>)`, with no I/O. The event loop runs effects (API calls, launching the editor) as tokio tasks and feeds results back as actions. Nearly all TUI behavior is unit-testable without a terminal.
-- **Fixtures come from real responses.** Task 0 captures anonymized Asana JSON into `tests/fixtures/`. All `wiremock` tests use those fixtures, so parsing is tested against what Asana actually returns, not what we guess it returns.
-- **Theme and keymap are data, built before the first screen.** No rendering code exists before `Theme` and the key table, so no hard-coded colors or ad-hoc key handling ever land.
-- **Terminal safety from the first TUI commit.** Raw mode and the alternate screen are always restored, including on panic (a panic hook) and when the editor is launched (suspend/resume).
+- **The CLI comes first, as in v0.1.** `api` → `core::board` → `asn board` lands before any TUI code (principle 2). It is also how assumption A1 (board order) gets checked against real projects before columns are drawn.
+- **Board state is its own pure module, `tui/board.rs`,** in the style of `tui/picker.rs`. It owns columns, the cursor (column + row), per-column scroll, horizontal paging and cursor-by-GID on reload. It has no I/O and no rendering. `app.rs` (already about 1600 lines) only holds `screen`, the boards opened this session, `recent_projects`, and the dispatch into it. That keeps new logic out of the Inbox code and testable on its own.
+- **`App` gets a `Screen { Inbox, Board }`.** The Inbox fields stay where they are. Moving them into a sub-struct would be a large refactor with no behavior gained; the screen enum is enough for two peers.
+- **Detail and actions reuse the task-GID seam.** `selected_task_gid()` and `shown_task_name()` (`tui/app.rs:748`) already resolve either the selected notification or `opened: Option<Named>` (a task opened from search). On the board they resolve the selected card. Comment, description, `p`, `m` and `o` then work with no changes, and so do the per-GID detail cache and image loading. Assumption A5 is confirmed by reading the code, so no refactor task comes first.
+- **The full-width detail view reuses the narrow-terminal rendering path,** which already draws the task alone when it has focus (snapshot `narrow_terminals_show_only_the_task_when_it_has_focus`).
+- **The project switcher is a new picker stage,** reusing the typeahead search, debounce and fzf keys of `Stage::Project`. With an empty query it lists session recents instead of results.
+- **Polling:** the existing 60 s `Msg::Tick` loads the Inbox as now, and also the active board when the board screen is visible. No second timer.
+- **Card text belongs in `present/`.** Initials and the short due date (with overdue) are pure functions there, next to the detail pane's date formatting, so the CLI and TUI can never diverge.
 
 ## Dependency Graph
 
 ```
-T0 API spike + fixtures
- └── T1 scaffold + env config
-      ├── T2 api client + `asn inbox` ──── T3 `asn read`
-      ├── T4 theme loader ── T5 terminal tints
-      └── T6 keymap
-                │
-   T2,T3,T4,T6 ─┴─ T7 TUI inbox list ── T8 TUI read actions, filter, polling
-                                              │
-                         T9 task detail (CLI + pane)
-                          ├── T10 editor + comment ── T11 edit description
-                          └── T12 add-to-project picker
-                                              │
-                         T13 search + command line   T14 help overlay + narrow layout
-                                              │
-                                    T15 CI, release, README
+api::project_tasks (paginated)
+  └── core::board (group by this project's membership, keep empty sections)
+        ├── cli board + `asn board` ............................ T1
+        └── tui/board.rs pure state (nav, paging, cursor by GID) T2
+              └── Screen::Board + render + `--project` ......... T3
+                    ├── polling, R, session cache .............. T4
+                    ├── Enter detail + actions on cards ........ T5
+                    ├── P switcher + Tab i peers ............... T6
+                    │     └── b from Inbox ..................... T7
+                    └── / n N jump ............................. T8
+                          └── docs, help, README ............... T9 → release T10
 ```
 
-**Parallelizable after T1:** {T2→T3}, {T4→T5} and {T6} are independent of each other. After T9: {T10→T11} and {T12} are independent. T13 and T14 are independent.
+T1 and T2 are independent (T2 only needs the `core::Board` type, which is defined at the start of T1). Everything after T3 touches `app.rs` and runs sequentially.
 
 ## Task List
 
-### Phase 0: De-risk (no Rust)
-- [x] T0: Validate Notifications API access and capture fixtures
+### Phase 1: Data and de-risk
+- [ ] T1: `asn board <gid> [--json]` (F13, API surface)
+- [ ] T2: Pure board state in `tui/board.rs` (F9 navigation, paging, cursor)
 
-### Phase 1: Scriptable core
-- [x] T1: Cargo scaffold, env config, error and exit-code contract
-- [x] T2: API client and `asn inbox`
-- [x] T3: `asn read` (mark read/unread, batched)
+### Checkpoint A: data is right
+- [ ] A1 checked: `asn board --json` matches the web board on 2–3 real projects (or switch to per-section loading)
+- [ ] A 300-task project loads in < 2 s
+- [ ] fmt, clippy and tests are clean
 
-### Checkpoint A: core works against real Asana
-- [x] `asn inbox --unread --json | jq '.[].work_objects[0].name'` lists real items
-- [x] `asn read <gid>` shows as read in the web Inbox, and `--unread` reverts it
-- [x] `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` are clean
+### Phase 2: A board you can look at
+- [ ] T3: Board screen opened with `asn --project` (F9 render, F11 startup)
+- [ ] T4: Polling, `R`, session cache (F9 refresh)
 
-### Phase 2: TUI foundation
-- [x] T4: Theme loader (roles, built-ins, user file, NO_COLOR)
-- [x] T5: Terminal color query and tints
-- [x] T6: Keymap table and key parser
-- [x] T7: TUI Inbox list with navigation
-- [x] T8: TUI read actions, visual mode, filter, polling, pagination
+### Checkpoint B: glance works
+- [ ] The user dogfoods `asn --project` at 80, 120 and 200 columns (success criterion 6, A2, A3)
+- [ ] Human review before Phase 3
 
-### Checkpoint B: daily triage possible
-- [x] Open `asn` and get through a real Inbox to empty using only `j`/`k`/`e`/`V` (confirmed by the user, 2026-11-17)
-- [x] Looks right in Rex with `terminal`, `dark`, `light` and `NO_COLOR` (confirmed by the user, 2026-11-17)
-- [x] The terminal is always restored (`q` and Ctrl-C verified in Rex; panics via ratatui's restore hook, not triggered manually)
-- [x] **Human review before Phase 3** (done by the user, 2026-11-17)
-
-### Phase 3: Act on tasks
-- [x] T9: Task detail (`asn task` and the detail pane)
-- [x] T10: `$EDITOR` round-trip and add comment
-- [x] T11: Edit description with rich-text and concurrency guards
-- [x] T12: Add to project (fuzzy project picker, then section picker)
+### Phase 3: Act and navigate
+- [ ] T5: `Enter` → full-width detail, and actions on cards (F10)
+- [ ] T6: `P` project switcher and Inbox ↔ board peers (F11)
+- [ ] T7: `b` from an Inbox task (F11)
+- [ ] T8: `/`, `n`, `N` jump on the board (F12)
 
 ### Checkpoint C: feature complete
-- [x] The full spec flow works: Inbox, open, comment, edit description, add to project, mark read
-- [x] Every TUI action has a matching CLI subcommand that passes its tests
-- [x] **Human review before Phase 4** (covered by the user's checks of comments, descriptions, projects, Homebrew and themes, 2026-11-17)
+- [ ] Success criteria 1–8 of SPEC-board.md hold
+- [ ] Human review
 
-### Phase 4: Finish and ship
-- [x] T13: `/` search and the `:` command line
-- [x] T14: `?` help overlay and the narrow (<100 cols) layout
-- [x] T15: CI, release binaries, README
-
-### Checkpoint D: v0.1 released
-- [ ] Every acceptance criterion in the spec is met
-- [x] Tagged `v0.1.0`, binaries attached, Homebrew install verified by the user (a teammate on a clean machine is still open)
-- [ ] Handed to 3 teammates for dogfooding (the spec's success metric)
-
-### After v0.1 (from use)
-- [x] Commenting marks the task's unread notifications read
-- [x] A hint line always shows the shortcuts for the current context
-- [x] Review leftovers (2026-11-17): partial mark-read failures undo only the failed batch; refresh fetches the newest 30 and merges (was: everything loaded); task-view content moved to `present` (CLI and state machine no longer use TUI rendering); local-date overdue; wrap keeps indentation; clearer token-command error
+### Phase 4: Ship
+- [ ] T9: Help, README and spec updates
+- [ ] T10: Release v0.2.0 (ask first)
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| A PAT can't read `/users/me/notifications` on our plan | High: the core feature is dead | T0 checks this before any code. If it fails, stop and rethink. |
-| Fixtures don't cover real-world variety (unknown `story_resource_subtype`, non-task `work_objects`, `null` story or actor) | Med: parse errors crash the Inbox | Capture about 200 notifications from several users in T0. Unknown enum values are kept as strings, and there's a test for a fixture with all fields `null`. |
-| Editing `notes` strips formatting | Med: data loss in user content | T11 adds the rich-text guard and confirmation, and stops for a decision if T0 shows most descriptions are rich. |
-| Terminal left broken after a panic or editor crash | Med: users won't trust the tool | A panic hook and a restore guard from T7. T10 tests suspend/resume, including the editor exiting non-zero. |
-| Rex doesn't answer OSC 10/11 | Low: falls back to the palette-only theme | Checked in T0. The fallback is designed to look intentional (T5). |
-| Rate limit (~150/min on the free plan) during fast cursor movement | Low | 250 ms dwell debounce and a per-task cache (T9), plus Retry-After handling (T2). |
-| The Asana alias keys differ from the current web app | Low | Checked in T0, and all keys live in one table (T6). |
+| A1: `/projects/{gid}/tasks` isn't in board order | High (the board looks wrong) | Checked at Checkpoint A, before any TUI work. The fallback (`GET /sections/{gid}/tasks` per section) only changes `core::board`. |
+| `app.rs` grows into a second god-object | Med | All board logic lives in `tui/board.rs`. `app.rs` only switches screens and dispatches. |
+| Inbox-only keys and focus rules (`e`/`u`/`x`/`V`/`f`, `Esc`, `q`) misbehave on the board | Med | `run()` checks the screen first. Each T3/T5/T6 task has app tests for those keys on the board. |
+| Columns too narrow at 80 cols | Med | The one-column fallback is in T3. Checkpoint B is a human dogfood gate before more is built on it. |
+| Rate limit with Inbox + board polling | Low | Only the visible board polls, and 1 + ⌈n/100⌉ requests is about 4/min for 300 tasks. The existing 429 `Retry-After` handling applies. |
+| Real project names or GIDs leak into fixtures | Med (public repo) | New fixtures are anonymized like the v0.1 ones, and fixture grep is a T1 verification step. |
+
+## Parallelization
+
+T1 and T2 can run in parallel. T3 onward is sequential: each task edits `app.rs`, `keys.rs` and `ui.rs`.
 
 ## Open Questions
 
-- ~~Should a mutation mark the notification read?~~ **Decided:** commenting marks the task's notifications read (done 2026-11-17).
-- ~~`U` web key~~ Dropped: not needed.
-- ~~Publishing~~ **Decided:** repo `github.com/lplotni/asana-tui`; v0.1 ships as GitHub Releases (macOS arm64/x86_64, Linux) plus a Homebrew formula in the same repo (`brew tap lplotni/asn https://github.com/lplotni/asana-tui && brew install lplotni/asn/asn`). No crates.io.
-- ~~Rich descriptions~~ **Decided (T11):** edit plain text; a description with formatting asks for confirmation before it's replaced.
+- `asn --project` takes a GID only in v0.2 (spec open question 1). Name lookup can follow.

@@ -13,7 +13,7 @@ I built `asn` to get a simple terminal UI for the way I work with Asana:
 
 The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
 
-> v0.1: the Inbox, read state, task details, comments, description editing and adding to projects work ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
+> v0.1: the Inbox, read state, task details, comments, description editing and adding to projects work ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
 
 ## Install
 
