@@ -22,7 +22,7 @@ fn help_lists_every_subcommand_from_the_spec() {
 
     assert!(output.status.success());
     for sub in [
-        "inbox", "read", "task", "comment", "desc", "project", "search", "board",
+        "inbox", "read", "task", "comment", "desc", "project", "search", "board", "users",
     ] {
         assert!(help.contains(sub), "missing `{sub}` in help:\n{help}");
     }

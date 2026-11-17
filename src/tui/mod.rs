@@ -295,7 +295,7 @@ fn run_effects(
                     local_gid,
                     text,
                 } => {
-                    let result = core::comment(&client, &task_gid, &text)
+                    let result = core::comment(&client, &task_gid, &text, &[])
                         .await
                         .map(Box::new)
                         .map_err(|e| e.to_string());
@@ -312,19 +312,21 @@ fn run_effects(
                     text,
                     expected_modified_at,
                 } => {
-                    let result =
-                        core::set_notes(&client, &task_gid, &text, expected_modified_at.as_deref())
-                            .await
-                            .map_err(|err| app::SaveFailure {
-                                message: err.to_string(),
-                                // Never lose what the user wrote.
-                                kept_at: editor::save_recovery(
-                                    &format!("description-{task_gid}"),
-                                    &text,
-                                )
-                                .ok()
-                                .map(|path| path.display().to_string()),
-                            });
+                    let result = core::set_notes(
+                        &client,
+                        &task_gid,
+                        &text,
+                        &[],
+                        expected_modified_at.as_deref(),
+                    )
+                    .await
+                    .map_err(|err| app::SaveFailure {
+                        message: err.to_string(),
+                        // Never lose what the user wrote.
+                        kept_at: editor::save_recovery(&format!("description-{task_gid}"), &text)
+                            .ok()
+                            .map(|path| path.display().to_string()),
+                    });
                     Msg::NotesSaved { task_gid, result }
                 }
                 Effect::ScheduleSearch { seq } => {

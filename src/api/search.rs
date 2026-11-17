@@ -40,6 +40,16 @@ impl Client {
 
     /// Typeahead for tasks: names, ranked like the web search box. Works on
     /// every plan.
+    /// People in the workspace whose name matches `query`.
+    pub async fn typeahead_users(
+        &self,
+        workspace: &str,
+        query: &str,
+    ) -> Result<Vec<crate::api::tasks::Named>, ApiError> {
+        self.typeahead(workspace, "user", query, SEARCH_LIMIT, "name")
+            .await
+    }
+
     pub async fn typeahead_tasks(
         &self,
         workspace: &str,

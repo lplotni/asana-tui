@@ -269,7 +269,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 3c: @-mentions (F15)
 
-### - [ ] T13: Mentions in the core and CLI
+### - [x] T13: Mentions in the core and CLI
 
 **Description:**
 - A pure `core` function turns text plus mentions (`@Label` → GID) into Asana rich text (`<body>`, HTML-escaped, mention tags). It returns `None` when no mention is left, so the text saves plain.
@@ -278,12 +278,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - `asn users <query…>` lists people from the typeahead.
 
 **Acceptance criteria:**
-- [ ] Text with a mention becomes `<body>…<a data-asana-gid="…"/>…</body>`, with `&`, `<` and `>` escaped and line breaks kept. Text without one stays plain.
-- [ ] `asn comment <task> -m 'hi @1200000000000011'` posts `html_text`, and `-m 'hi @3pm'` posts plain `text`.
-- [ ] `asn users ada` prints `gid  name` lines.
+- [x] Text with a mention becomes `<body>…<a data-asana-gid="…"/>…</body>`, with `&`, `<` and `>` escaped and line breaks kept. Text without one stays plain.
+- [x] `asn comment <task> -m 'hi @1200000000000011'` posts `html_text`, and `-m 'hi @3pm'` posts plain `text`.
+- [x] `asn users ada` prints `gid  name` lines.
 
 **Verification:**
-- [ ] Tests: unit tests for the rich-text function (escaping, several mentions, a mention that was edited away, line breaks). `wiremock` tests for `html_text`/`html_notes` versus plain bodies, and for the user typeahead.
+- [x] Tests: unit tests for the rich-text function (escaping, several mentions, a mention that was edited away, line breaks). `wiremock` tests for `html_text`/`html_notes` versus plain bodies, and for the user typeahead.
 - [ ] **Checkpoint M1 (user):** post a comment with a mention and a line break on a test task, and check it in the web app.
 
 **Dependencies:** None

@@ -2,7 +2,6 @@
 
 pub mod board;
 pub mod inbox;
-pub mod project;
 pub mod search;
 pub mod task;
 
@@ -18,6 +17,11 @@ pub fn terminal_safe(text: &str) -> String {
         .collect()
 }
 
+/// One tab-separated line per item: `gid  name` (sections, people).
+pub fn render_named(items: &[crate::api::tasks::Named]) -> String {
+    items.iter().map(|i| tsv_line(&[&i.gid, &i.name])).collect()
+}
+
 /// One line of tab-separated output, every field made [`terminal_safe`]
 /// (so a field can't contain a tab or newline that breaks the columns).
 pub fn tsv_line(fields: &[&str]) -> String {
@@ -28,6 +32,23 @@ pub fn tsv_line(fields: &[&str]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_items_are_listed_one_per_line_as_gid_and_name() {
+        use crate::api::tasks::Named;
+        let items = [
+            Named {
+                gid: "1".into(),
+                name: "To do".into(),
+            },
+            Named {
+                gid: "2".into(),
+                name: "Done\u{1b}[2J".into(),
+            },
+        ];
+
+        assert_eq!(render_named(&items), "1\tTo do\n2\tDone [2J\n");
+    }
 
     #[test]
     fn escape_sequences_lose_their_escape_character() {

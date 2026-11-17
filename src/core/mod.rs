@@ -1,12 +1,15 @@
 //! Operations shared by the CLI and the TUI.
 
+pub mod mention;
+
 use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
 use crate::api::projects::BoardTask;
 use crate::api::search::FoundTask;
-use crate::api::tasks::{Named, Task, TaskStory};
+use crate::api::tasks::{Named, Task, TaskStory, Text};
 use crate::api::{ApiError, Client, Page};
 use crate::config::SearchMode;
+use mention::Mention;
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
 const PAGE_SIZE: u32 = 100;
@@ -93,8 +96,26 @@ pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiEr
 }
 
 /// Adds a comment to a task and returns it as Asana stored it.
-pub async fn comment(client: &Client, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
-    client.add_comment(task_gid, text).await
+/// Mentions in `text` make it rich text; without any it stays plain.
+pub async fn comment(
+    client: &Client,
+    task_gid: &str,
+    text: &str,
+    mentions: &[Mention],
+) -> Result<TaskStory, ApiError> {
+    match mention::rich_text(text, mentions) {
+        Some(html) => client.add_comment(task_gid, Text::Rich(&html)).await,
+        None => client.add_comment(task_gid, Text::Plain(text)).await,
+    }
+}
+
+/// People in the workspace whose name matches `query` (Asana's typeahead).
+pub async fn search_users(
+    client: &Client,
+    workspace: &str,
+    query: &str,
+) -> Result<Vec<Named>, ApiError> {
+    client.typeahead_users(workspace, query).await
 }
 
 /// Projects matching `query` (Asana's typeahead; works on every plan).
@@ -283,12 +304,14 @@ pub fn has_formatting(html_notes: &str) -> bool {
     })
 }
 
-/// Replaces the task's description with plain `text`, unless the task was
-/// modified after `expected_modified_at` (then nothing is written).
+/// Replaces the task's description with `text` (rich text if it has
+/// mentions, else plain), unless the task was modified after
+/// `expected_modified_at` (then nothing is written).
 pub async fn set_notes(
     client: &Client,
     task_gid: &str,
     text: &str,
+    mentions: &[Mention],
     expected_modified_at: Option<&str>,
 ) -> Result<(), SaveNotesError> {
     if let Some(expected) = expected_modified_at {
@@ -297,7 +320,10 @@ pub async fn set_notes(
             return Err(SaveNotesError::Conflict);
         }
     }
-    client.set_notes(task_gid, text).await?;
+    match mention::rich_text(text, mentions) {
+        Some(html) => client.set_notes(task_gid, Text::Rich(&html)).await?,
+        None => client.set_notes(task_gid, Text::Plain(text)).await?,
+    }
     Ok(())
 }
 

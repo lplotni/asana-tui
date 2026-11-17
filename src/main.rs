@@ -57,7 +57,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Add a comment to a task (opens $EDITOR without -m or -)
+    /// Add a comment to a task (opens $EDITOR without -m or -); @<gid> mentions
     Comment {
         #[arg(value_name = "TASK_GID")]
         gid: String,
@@ -68,7 +68,7 @@ enum Command {
         #[arg(value_name = "-", value_parser = ["-"])]
         stdin: Option<String>,
     },
-    /// Replace a task's description (opens $EDITOR without --file or -)
+    /// Replace a task's description (opens $EDITOR without --file or -); @<gid> mentions
     Desc {
         #[arg(value_name = "TASK_GID")]
         gid: String,
@@ -90,6 +90,12 @@ enum Command {
         /// Print JSON
         #[arg(long)]
         json: bool,
+    },
+    /// Find people in the workspace (gid and name), e.g. for @<gid> mentions
+    Users {
+        /// Part of a name
+        #[arg(required = true, value_name = "QUERY")]
+        query: Vec<String>,
     },
     /// List a project's open tasks by section, in board order
     Board {
@@ -229,7 +235,8 @@ async fn main() -> ExitCode {
                 eprintln!("Empty comment; nothing posted");
                 return ExitCode::FAILURE;
             };
-            match core::comment(&client, &gid, &text).await {
+            let mentions = core::mention::gid_mentions(&text);
+            match core::comment(&client, &gid, &text, &mentions).await {
                 Ok(story) => {
                     println!("{}", story.gid);
                     ExitCode::SUCCESS
@@ -245,6 +252,15 @@ async fn main() -> ExitCode {
                 Err(err) => return fail(&err, err.exit_code()),
             }
             ExitCode::SUCCESS
+        }
+        Some(Command::Users { query }) => {
+            match core::search_users(&client, &config.workspace, &query.join(" ")).await {
+                Ok(people) => {
+                    print!("{}", asn::cli::render_named(&people));
+                    ExitCode::SUCCESS
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
         }
         Some(Command::Board { project, json }) => match core::board(&client, &project).await {
             Ok(board) if json => {
@@ -278,7 +294,7 @@ async fn main() -> ExitCode {
             command: ProjectCommand::Sections { project },
         }) => match core::sections(&client, &project).await {
             Ok(sections) => {
-                print!("{}", asn::cli::project::render_sections(&sections));
+                print!("{}", asn::cli::render_named(&sections));
                 ExitCode::SUCCESS
             }
             Err(err) => fail(&err, err.exit_code()),
@@ -365,7 +381,8 @@ async fn edit_description(
         eprintln!("No changes");
         return ExitCode::SUCCESS;
     }
-    match core::set_notes(client, gid, &text, task.modified_at.as_deref()).await {
+    let mentions = core::mention::gid_mentions(&text);
+    match core::set_notes(client, gid, &text, &mentions, task.modified_at.as_deref()).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             match asn::editor::save_recovery(&format!("description-{gid}"), &text) {

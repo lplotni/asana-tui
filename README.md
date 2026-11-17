@@ -99,6 +99,8 @@ asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
 asn search checkout redirect           # find tasks: gid, ✓ if completed, name (tab-separated; --json too)
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
+asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project
+asn users ada                           # people in the workspace: gid and name (tab-separated)
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
 asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
 asn project move <task-gid> <section-gid>    # move the task to another section of a project it's in
@@ -118,7 +120,8 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 |---|---|
 | Inbox | `GET /users/me/notifications`, `POST /users/me/notifications/markRead` (and `markUnread`) |
 | Task and description | `GET /tasks/{task}`, `PUT /tasks/{task}` |
-| Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` |
+| Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` (`html_text` when there's an @-mention, as for descriptions with `html_notes`) |
+| People (`asn users`, @-mentions) | `GET /workspaces/{workspace}/typeahead?resource_type=user` |
 | Attachments | `GET /attachments?parent={task}` |
 | Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |

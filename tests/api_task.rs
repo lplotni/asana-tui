@@ -151,7 +151,7 @@ async fn comment_posts_the_text_and_returns_the_new_story() {
         .mount(&server)
         .await;
 
-    let story = core::comment(&client(&server), TASK, "Ship it\n")
+    let story = core::comment(&client(&server), TASK, "Ship it\n", &[])
         .await
         .unwrap();
 
@@ -186,6 +186,7 @@ async fn set_notes_writes_the_text_when_the_task_is_unchanged() {
         &client(&server),
         TASK,
         "New text",
+        &[],
         Some("2026-11-16T10:00:00.000Z"),
     )
     .await
@@ -212,6 +213,7 @@ async fn set_notes_refuses_when_the_task_changed_meanwhile() {
         &client(&server),
         TASK,
         "New text",
+        &[],
         Some("2026-11-16T10:00:00.000Z"),
     )
     .await
@@ -381,4 +383,67 @@ async fn a_failed_download_never_shows_the_signed_link() {
         .unwrap_err();
 
     assert!(!err.to_string().contains("X-Amz-Signature"), "{err}");
+}
+
+// --- @-mentions (F15) -------------------------------------------------------
+
+fn ada() -> core::mention::Mention {
+    core::mention::Mention {
+        label: "@Ada Lovelace".into(),
+        gid: "1200000000000011".into(),
+    }
+}
+
+#[tokio::test]
+async fn a_comment_with_a_mention_is_posted_as_rich_text() {
+    let server = MockServer::start().await;
+    let created = fixture("stories_thread.json")["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["type"] == "comment")
+        .unwrap()
+        .clone();
+    Mock::given(method("POST"))
+        .and(path(format!("/tasks/{TASK}/stories")))
+        .and(wiremock::matchers::body_json(json!({ "data": {
+            "html_text": "<body>Thanks <a data-asana-gid=\"1200000000000011\"/> &amp; team</body>"
+        } })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({ "data": created })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    core::comment(
+        &client(&server),
+        TASK,
+        "Thanks @Ada Lovelace & team",
+        &[ada()],
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_description_with_a_mention_is_saved_as_rich_text() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(wiremock::matchers::body_json(json!({ "data": {
+            "html_notes": "<body>Owner: <a data-asana-gid=\"1200000000000011\"/></body>"
+        } })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    core::set_notes(
+        &client(&server),
+        TASK,
+        "Owner: @Ada Lovelace",
+        &[ada()],
+        None,
+    )
+    .await
+    .unwrap();
 }

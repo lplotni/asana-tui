@@ -13,6 +13,24 @@ tags.name,custom_fields.name,custom_fields.display_value,parent.name,num_subtask
 pub const STORY_FIELDS: &str = "type,resource_subtype,text,created_at,created_by.name,\
 reaction_summary.variant,reaction_summary.count";
 
+/// Text to write: plain, or Asana rich text (`<body>…</body>`), which goes
+/// to the field's `html_` twin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Text<'a> {
+    Plain(&'a str),
+    Rich(&'a str),
+}
+
+impl Text<'_> {
+    /// `{field: text}` or `{html_field: html}`.
+    fn field(self, field: &str) -> serde_json::Value {
+        match self {
+            Text::Plain(text) => serde_json::json!({ field: text }),
+            Text::Rich(html) => serde_json::json!({ format!("html_{field}"): html }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Named {
     pub gid: String,
@@ -125,20 +143,22 @@ impl Client {
     }
 
     /// Replaces the description with plain text (Asana derives `html_notes`).
-    pub async fn set_notes(&self, gid: &str, notes: &str) -> Result<(), ApiError> {
-        let body = serde_json::json!({ "data": { "notes": notes } });
+    /// Replaces the description: `notes`, or `html_notes` for rich text.
+    pub async fn set_notes(&self, gid: &str, notes: Text<'_>) -> Result<(), ApiError> {
+        let body = serde_json::json!({ "data": notes.field("notes") });
         let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &body).await?;
         Ok(())
     }
 
-    /// Adds a comment; returns the created story.
-    pub async fn add_comment(&self, task_gid: &str, text: &str) -> Result<TaskStory, ApiError> {
+    /// Adds a comment (`text`, or `html_text` for rich text); returns the
+    /// created story.
+    pub async fn add_comment(&self, task_gid: &str, text: Text<'_>) -> Result<TaskStory, ApiError> {
         #[derive(Deserialize)]
         struct Response {
             data: TaskStory,
         }
         let query = [("opt_fields", STORY_FIELDS.to_owned())];
-        let body = serde_json::json!({ "data": { "text": text } });
+        let body = serde_json::json!({ "data": text.field("text") });
         let response: Response = self
             .post(&format!("/tasks/{task_gid}/stories"), &query, &body)
             .await?;

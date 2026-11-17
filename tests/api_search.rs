@@ -100,3 +100,29 @@ async fn a_blank_query_finds_nothing_without_asking_asana() {
 
     assert!(tasks.is_empty());
 }
+
+#[tokio::test]
+async fn people_are_found_with_the_user_typeahead() {
+    let server = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("GET"))
+        .and(wiremock::matchers::path(
+            "/workspaces/1234567890123456/typeahead",
+        ))
+        .and(wiremock::matchers::query_param("resource_type", "user"))
+        .and(wiremock::matchers::query_param("query", "ada"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [{ "gid": "1200000000000011", "name": "Ada Lovelace" }]
+            })),
+        )
+        .mount(&server)
+        .await;
+    let client = asn::api::Client::new(&asn::config::Token::new("t"), server.uri());
+
+    let people = asn::core::search_users(&client, "1234567890123456", "ada")
+        .await
+        .unwrap();
+
+    assert_eq!(people.len(), 1);
+    assert_eq!(people[0].name, "Ada Lovelace");
+}
