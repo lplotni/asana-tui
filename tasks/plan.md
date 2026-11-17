@@ -74,7 +74,7 @@ T0 API spike + fixtures
 ### Checkpoint C: feature complete
 - [x] The full spec flow works: Inbox, open, comment, edit description, add to project, mark read
 - [x] Every TUI action has a matching CLI subcommand that passes its tests
-- [ ] **Human review before Phase 4**
+- [x] **Human review before Phase 4** (covered by the user's checks of comments, descriptions, projects, Homebrew and themes, 2026-11-17)
 
 ### Phase 4: Finish and ship
 - [x] T13: `/` search and the `:` command line
