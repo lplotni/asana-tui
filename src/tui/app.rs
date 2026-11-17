@@ -15,8 +15,12 @@ use crate::api::notifications::Notification;
 use crate::api::tasks::{Membership, Named, TaskStory};
 use crate::core::TaskDetail;
 
-/// Notifications fetched on start and the minimum fetched on refresh.
-pub const INITIAL_LOAD: usize = 100;
+/// Notifications fetched on start. Asana returns ~10 per page, so this is a
+/// few requests; scrolling loads more.
+pub const INITIAL_LOAD: usize = 30;
+/// Notifications re-fetched on refresh (the newest ones); older loaded ones
+/// are kept and merged.
+pub const REFRESH_WINDOW: usize = 30;
 /// Load the next page when the cursor is this close to the end.
 const LOAD_MORE_MARGIN: usize = 10;
 
@@ -230,6 +234,8 @@ pub struct App {
     pub loading: bool,
     pub loading_more: bool,
     next_offset: Option<String>,
+    /// The running inbox load is a refresh, to be merged with what's loaded.
+    merging_refresh: bool,
     /// A failed "load more" already triggered a reload from the first page.
     recovering: bool,
     /// Why the Inbox couldn't be loaded (shown when there is nothing to show).
@@ -346,14 +352,19 @@ impl App {
                 self.load_more_if_needed()
             }
             Msg::Tick => self.refresh(),
-            Msg::InboxLoaded(Ok((notifications, next))) => {
+            Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
                 self.recovering = false;
                 self.error = None;
-                self.next_offset = next;
                 self.visual_anchor = None;
+                let merge = std::mem::take(&mut self.merging_refresh) && next.is_some();
                 self.replace_keeping_selection(|app| {
-                    app.notifications = notifications;
+                    if merge {
+                        app.merge_refresh(fresh, next);
+                    } else {
+                        app.notifications = fresh;
+                        app.next_offset = next;
+                    }
                     app.apply_pending_marks();
                 });
                 let mut effects = self.reload_shown_detail();
@@ -403,6 +414,7 @@ impl App {
                 self.recovering = true;
                 self.next_offset = None;
                 self.loading = true;
+                self.merging_refresh = false;
                 vec![Effect::LoadInbox {
                     target: self.notifications.len().max(INITIAL_LOAD),
                 }]
@@ -1123,9 +1135,31 @@ impl App {
             return Vec::new();
         }
         self.loading = true;
+        self.merging_refresh = true;
         vec![Effect::LoadInbox {
-            target: self.notifications.len().max(INITIAL_LOAD),
+            target: REFRESH_WINDOW,
         }]
+    }
+
+    /// Puts the newest notifications from a refresh in front of the older
+    /// ones already loaded. Loaded items as new as the refreshed ones are
+    /// replaced (so archived ones disappear); older ones are kept, and so is
+    /// the offset that continues after them.
+    fn merge_refresh(&mut self, fresh: Vec<Notification>, fresh_next: Option<String>) {
+        let Some(oldest) = fresh.last().map(|n| n.created_at.clone()) else {
+            self.notifications = fresh;
+            self.next_offset = fresh_next;
+            return;
+        };
+        let tail: Vec<Notification> = std::mem::take(&mut self.notifications)
+            .into_iter()
+            .filter(|n| n.created_at < oldest && !fresh.iter().any(|f| f.gid == n.gid))
+            .collect();
+        if tail.is_empty() {
+            self.next_offset = fresh_next;
+        }
+        self.notifications = fresh;
+        self.notifications.extend(tail);
     }
 
     fn load_more_if_needed(&mut self) -> Vec<Effect> {

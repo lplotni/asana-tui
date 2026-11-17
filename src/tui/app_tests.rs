@@ -16,6 +16,8 @@ fn inbox(n: usize, read: impl Fn(usize) -> bool) -> Vec<Notification> {
                 ..template.clone()
             };
             n.work_objects[0].gid = format!("t{i}");
+            // Newest first, one minute apart.
+            n.created_at = crate::tui::format::timestamp(1_794_834_000 - 60 * i as i64);
             n
         })
         .collect()
@@ -359,12 +361,66 @@ fn f_toggles_the_filter_and_keeps_the_selected_notification() {
 // --- Refresh -------------------------------------------------------------
 
 #[test]
-fn r_and_the_timer_refresh_at_least_as_much_as_is_loaded() {
+fn r_and_the_timer_refresh_only_the_newest_notifications() {
     let mut app = loaded(150, 10);
 
-    assert_eq!(keys(&mut app, "R"), [Effect::LoadInbox { target: 150 }]);
+    assert_eq!(
+        keys(&mut app, "R"),
+        [Effect::LoadInbox {
+            target: REFRESH_WINDOW
+        }]
+    );
     app.update(Msg::InboxLoaded(Ok((inbox(150, |_| false), None))));
-    assert_eq!(app.update(Msg::Tick), [Effect::LoadInbox { target: 150 }]);
+    assert_eq!(
+        app.update(Msg::Tick),
+        [Effect::LoadInbox {
+            target: REFRESH_WINDOW
+        }]
+    );
+}
+
+#[test]
+fn a_refresh_merges_with_the_older_notifications_already_loaded() {
+    let mut app = loaded_with(inbox(50, |_| false), Some("old-offset"), 10);
+    keys(&mut app, "R");
+    // The newest 30 again: one new notification on top, "5" archived on the web.
+    let mut fresh: Vec<Notification> = inbox(30, |_| false)
+        .into_iter()
+        .filter(|n| n.gid != "5")
+        .collect();
+    let mut newest = fresh[0].clone();
+    newest.gid = "new".into();
+    newest.created_at = crate::tui::format::timestamp(1_794_834_000 + 60);
+    fresh.insert(0, newest);
+
+    app.update(Msg::InboxLoaded(Ok((fresh, Some("fresh-offset".into())))));
+
+    let gids = visible_gids(&app);
+    assert_eq!(
+        gids.len(),
+        1 + 29 + 20,
+        "new + refreshed 0..29 without 5 + kept 30..49"
+    );
+    assert_eq!(gids[0], "new");
+    assert!(!gids.contains(&"5"));
+    assert_eq!(gids.last(), Some(&"49"));
+    assert_eq!(
+        keys(&mut app, "G"),
+        [Effect::LoadMore {
+            offset: "old-offset".into()
+        }],
+        "more loads continue after the kept older items"
+    );
+}
+
+#[test]
+fn a_refresh_that_reaches_the_end_replaces_the_list() {
+    let mut app = loaded(50, 10);
+    keys(&mut app, "R");
+
+    app.update(Msg::InboxLoaded(Ok((inbox(10, |_| false), None))));
+
+    assert_eq!(app.visible_len(), 10);
 }
 
 #[test]
