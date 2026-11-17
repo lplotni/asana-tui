@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "gid": "1200000000000301",
+      "name": "Checkout flow.png",
+      "resource_subtype": "asana",
+      "size": 123456,
+      "download_url": "https://asana-user-private-us-east-1.s3.amazonaws.com/assets/1200000000000301/Checkout%20flow.png?X-Amz-Signature=abc"
+    },
+    {
+      "gid": "1200000000000302",
+      "name": "Spec.pdf",
+      "resource_subtype": "asana",
+      "size": 2411724,
+      "download_url": "https://asana-user-private-us-east-1.s3.amazonaws.com/assets/1200000000000302/Spec.pdf?X-Amz-Signature=def"
+    },
+    {
+      "gid": "1200000000000303",
+      "name": "Roadmap",
+      "resource_subtype": "gdrive",
+      "size": null,
+      "download_url": null
+    }
+  ],
+  "next_page": null
+}

@@ -1,5 +1,6 @@
 //! Asana REST API client: auth, pagination, rate limits, error mapping.
 
+pub mod attachments;
 pub mod notifications;
 pub mod projects;
 pub mod tasks;

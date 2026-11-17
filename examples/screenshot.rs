@@ -104,6 +104,7 @@ fn demo_task() -> TaskDetail {
             ),
         ],
         activity_count: 6,
+        attachments: Vec::new(),
     }
 }
 

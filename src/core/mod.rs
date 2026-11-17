@@ -1,8 +1,9 @@
 //! Operations shared by the CLI and the TUI.
 
+use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
 use crate::api::tasks::{Named, Task, TaskStory};
-use crate::api::{ApiError, Client};
+use crate::api::{ApiError, Client, Page};
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
 const PAGE_SIZE: u32 = 100;
@@ -49,24 +50,31 @@ pub async fn inbox_pages(
     }
 }
 
-/// A task with all its comments, oldest first.
+/// A task with all its comments (oldest first) and attachments.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct TaskDetail {
     pub task: Task,
     pub comments: Vec<TaskStory>,
     /// System stories (activity) not shown as comments.
     pub activity_count: usize,
+    pub attachments: Vec<Attachment>,
 }
 
-/// Fetches the task and every page of its stories at the same time.
+/// Fetches the task, every page of its stories and every page of its
+/// attachments at the same time.
 pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiError> {
-    let (task, stories) = tokio::join!(client.task(gid), all_stories(client, gid));
+    let (task, stories, attachments) = tokio::join!(
+        client.task(gid),
+        all_pages(|offset| async move { client.stories_page(gid, offset.as_deref()).await }),
+        all_pages(|offset| async move { client.attachments_page(gid, offset.as_deref()).await }),
+    );
     let (comments, activity): (Vec<TaskStory>, Vec<TaskStory>) =
         stories?.into_iter().partition(TaskStory::is_comment);
     Ok(TaskDetail {
         task: task?,
         comments,
         activity_count: activity.len(),
+        attachments: attachments?,
     })
 }
 
@@ -140,15 +148,21 @@ pub async fn set_notes(
     Ok(())
 }
 
-async fn all_stories(client: &Client, gid: &str) -> Result<Vec<TaskStory>, ApiError> {
-    let mut stories = Vec::new();
+/// Every item of a paginated list: calls `fetch` with each page's offset
+/// (`None` first) until Asana reports the end.
+async fn all_pages<T, F, Fut>(mut fetch: F) -> Result<Vec<T>, ApiError>
+where
+    F: FnMut(Option<String>) -> Fut,
+    Fut: std::future::Future<Output = Result<Page<T>, ApiError>>,
+{
+    let mut items = Vec::new();
     let mut offset: Option<String> = None;
     loop {
-        let page = client.stories_page(gid, offset.as_deref()).await?;
-        stories.extend(page.data);
+        let page = fetch(offset.take()).await?;
+        items.extend(page.data);
         match page.next_page {
             Some(next) => offset = Some(next.offset),
-            None => return Ok(stories),
+            None => return Ok(items),
         }
     }
 }

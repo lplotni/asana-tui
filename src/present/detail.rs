@@ -5,7 +5,8 @@
 use unicode_width::UnicodeWidthStr;
 
 use super::Role;
-use super::format::{is_before_today, relative_time, short_date};
+use super::format::{file_size, is_before_today, relative_time, short_date};
+use crate::api::attachments::Attachment;
 use crate::core::TaskDetail;
 
 /// A run of text with one role.
@@ -79,6 +80,18 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
         push(task.notes.trim_end(), Role::Text, &mut out);
     }
 
+    if !detail.attachments.is_empty() {
+        out.push(Vec::new());
+        push(
+            &format!("Attachments ({})", detail.attachments.len()),
+            Role::Title,
+            &mut out,
+        );
+        for attachment in &detail.attachments {
+            push(&attachment_line(attachment), Role::Text, &mut out);
+        }
+    }
+
     out.push(Vec::new());
     let mut header = vec![Segment::new(
         format!("Comments ({})", detail.comments.len()),
@@ -122,6 +135,28 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
         }
     }
     out
+}
+
+/// "🖼 shot.png · 121 KB", or "📎 Roadmap · Google Drive" for a link.
+fn attachment_line(attachment: &Attachment) -> String {
+    let icon = if attachment.is_image() {
+        "🖼"
+    } else {
+        "📎"
+    };
+    let source = match attachment.resource_subtype.as_str() {
+        "asana" => attachment.size.map(file_size),
+        "gdrive" => Some("Google Drive".to_owned()),
+        "onedrive" => Some("OneDrive".to_owned()),
+        "dropbox" => Some("Dropbox".to_owned()),
+        "box" => Some("Box".to_owned()),
+        "vimeo" => Some("Vimeo".to_owned()),
+        _ => Some("link".to_owned()),
+    };
+    match source {
+        Some(source) => format!("{icon} {} · {source}", attachment.name),
+        None => format!("{icon} {}", attachment.name),
+    }
 }
 
 /// "☐ Incomplete · Ada · Due Wed 4 Nov (overdue)", breaking between the
@@ -240,6 +275,7 @@ pub fn plain(line: &TextLine) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::attachments::Attachment;
     use crate::api::tasks::{Task, TaskStory};
     use crate::present::format::parse_timestamp;
 
@@ -262,7 +298,12 @@ mod tests {
             task,
             comments,
             activity_count: activity.len(),
+            attachments: Vec::new(),
         }
+    }
+
+    fn attachments() -> Vec<Attachment> {
+        serde_json::from_value(fixture("attachments.json")["data"].clone()).unwrap()
     }
 
     fn text(detail: &TaskDetail, width: usize) -> Vec<String> {
@@ -423,6 +464,37 @@ mod tests {
         let lines = text(&d, 200);
 
         assert_eq!(lines.last().unwrap(), &format!("  {body}"));
+    }
+
+    #[test]
+    fn attachments_are_listed_between_description_and_comments() {
+        let mut d = detail("task_full.json");
+        d.attachments = attachments();
+
+        let lines = text(&d, 60);
+
+        let start = lines.iter().position(|l| l == "Attachments (3)").unwrap();
+        assert_eq!(
+            lines[start + 1..start + 4],
+            [
+                "🖼 Checkout flow.png · 121 KB",
+                "📎 Spec.pdf · 2.3 MB",
+                "📎 Roadmap · Google Drive",
+            ]
+        );
+        let comments = lines
+            .iter()
+            .position(|l| l.starts_with("Comments"))
+            .unwrap();
+        let description = lines.iter().position(|l| l == "Description").unwrap();
+        assert!(description < start && start < comments);
+    }
+
+    #[test]
+    fn no_attachments_means_no_attachments_section() {
+        let d = detail("task_full.json");
+
+        assert!(!text(&d, 60).iter().any(|l| l.starts_with("Attachments")));
     }
 
     #[test]

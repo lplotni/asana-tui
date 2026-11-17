@@ -1,6 +1,7 @@
 //! `core::task_detail` against a fake Asana serving the task fixtures.
 
 use asn::api::Client;
+use asn::api::attachments::ATTACHMENT_FIELDS;
 use asn::api::tasks::{STORY_FIELDS, TASK_FIELDS};
 use asn::config::Token;
 use asn::core;
@@ -19,11 +20,34 @@ fn client(server: &MockServer) -> Client {
     Client::new(&Token::new("test-token"), server.uri())
 }
 
+/// Serves the task, and (unless a test mounts its own) no attachments.
 async fn serve_task(server: &MockServer, body: Value) {
     Mock::given(method("GET"))
         .and(path(format!("/tasks/{TASK}")))
         .and(query_param("opt_fields", TASK_FIELDS))
         .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/attachments"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "data": [], "next_page": null })),
+        )
+        .with_priority(10)
+        .mount(server)
+        .await;
+}
+
+async fn serve_attachments(server: &MockServer, offset: Option<&str>, body: Value) {
+    let mock = Mock::given(method("GET"))
+        .and(path("/attachments"))
+        .and(query_param("parent", TASK))
+        .and(query_param("opt_fields", ATTACHMENT_FIELDS));
+    let mock = match offset {
+        Some(offset) => mock.and(query_param("offset", offset)),
+        None => mock.and(query_param_is_missing("offset")),
+    };
+    mock.respond_with(ResponseTemplate::new(200).set_body_json(body))
         .mount(server)
         .await;
 }
@@ -248,4 +272,38 @@ async fn comment_reactions_are_parsed() {
 fn story_fields_request_reactions() {
     assert!(STORY_FIELDS.contains("reaction_summary.variant"));
     assert!(STORY_FIELDS.contains("reaction_summary.count"));
+}
+
+// --- Attachments ------------------------------------------------------------
+
+#[tokio::test]
+async fn task_detail_includes_the_attachments() {
+    let server = MockServer::start().await;
+    serve_task(&server, fixture("task_full.json")).await;
+    serve_stories(&server, None, json!({ "data": [], "next_page": null })).await;
+    serve_attachments(&server, None, fixture("attachments.json")).await;
+
+    let detail = core::task_detail(&client(&server), TASK).await.unwrap();
+
+    let names: Vec<&str> = detail.attachments.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, ["Checkout flow.png", "Spec.pdf", "Roadmap"]);
+    assert_eq!(detail.attachments[0].size, Some(123_456));
+    assert!(detail.attachments[0].download_url.is_some());
+    assert_eq!(detail.attachments[2].resource_subtype, "gdrive");
+    assert_eq!(detail.attachments[2].size, None);
+}
+
+#[tokio::test]
+async fn task_detail_follows_attachment_pages() {
+    let server = MockServer::start().await;
+    serve_task(&server, fixture("task_full.json")).await;
+    serve_stories(&server, None, json!({ "data": [], "next_page": null })).await;
+    let mut first = fixture("attachments.json");
+    first["next_page"] = json!({ "offset": "a2", "path": "/x", "uri": "https://x" });
+    serve_attachments(&server, None, first).await;
+    serve_attachments(&server, Some("a2"), fixture("attachments.json")).await;
+
+    let detail = core::task_detail(&client(&server), TASK).await.unwrap();
+
+    assert_eq!(detail.attachments.len(), 6);
 }

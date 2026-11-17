@@ -155,8 +155,33 @@ pub fn describe(subtype: &str) -> String {
     .to_owned()
 }
 
+/// A byte count as "999 B", "121 KB", "2.3 MB" or "3.0 GB" (1024-based).
+pub fn file_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    let b = bytes as f64;
+    if b < KB {
+        format!("{bytes} B")
+    } else if b < KB * KB {
+        format!("{} KB", (b / KB).round())
+    } else if b < KB * KB * KB {
+        format!("{:.1} MB", b / (KB * KB))
+    } else {
+        format!("{:.1} GB", b / (KB * KB * KB))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn file_sizes_are_human_readable() {
+        assert_eq!(file_size(0), "0 B");
+        assert_eq!(file_size(999), "999 B");
+        assert_eq!(file_size(1024), "1 KB");
+        assert_eq!(file_size(123_456), "121 KB");
+        assert_eq!(file_size(2_411_724), "2.3 MB");
+        assert_eq!(file_size(3 * 1024 * 1024 * 1024), "3.0 GB");
+    }
+
     use super::*;
 
     #[test]

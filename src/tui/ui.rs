@@ -805,6 +805,7 @@ mod tests {
             task,
             comments,
             activity_count: activity.len(),
+            attachments: Vec::new(),
         };
         app.update(Msg::DetailDue { gid: gid.clone() });
         app.update(Msg::DetailLoaded {

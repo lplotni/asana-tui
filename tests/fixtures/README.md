@@ -11,6 +11,7 @@ Real Asana API responses captured on 2026-11-16 (T0), then anonymized. Every GID
 | `task_rich.json` | same | headings, lists, links and bold in `html_notes` |
 | `task_no_projects.json` | same | `projects: []`, so "add to project" gives it its first project |
 | `stories.json` | `GET /tasks/{gid}/stories` | 1 comment and 15 system stories |
+| `attachments.json` | **synthetic**, shaped like `GET /attachments?parent={gid}` | an image, a PDF, and a Google Drive link without `size` or `download_url` |
 | `typeahead_projects.json` | `GET /workspaces/{gid}/typeahead?resource_type=project` | |
 | `sections.json` | `GET /projects/{gid}/sections` | 8 sections |
 | `mark_read_ok.json` | `POST …/markRead` | `failed_gids: []` |

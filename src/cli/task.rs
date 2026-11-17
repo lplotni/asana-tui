@@ -39,6 +39,7 @@ mod tests {
             task,
             comments,
             activity_count: activity.len(),
+            attachments: Vec::new(),
         }
     }
 
