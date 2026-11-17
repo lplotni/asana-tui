@@ -73,6 +73,108 @@ pub fn gid_mentions(text: &str) -> Vec<Mention> {
     found
 }
 
+/// Where Asana's own links start; mentions show as these in plain text.
+const ASANA_URL: &str = "https://app.asana.com/";
+
+/// `text` (Asana's plain `text` or `notes`) with each mention shown by its
+/// label: Asana writes a mention there as a URL ending in the mentioned GID,
+/// and `html` (the matching `html_text` or `html_notes`) names it. URLs that
+/// aren't mentions stay; without `html` the text is unchanged.
+pub fn readable(text: &str, html: Option<&str>) -> String {
+    let labels = html.map(mention_labels).unwrap_or_default();
+    if labels.is_empty() {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(ASANA_URL) {
+        out.push_str(&rest[..at]);
+        let url = rest[at..]
+            .split(char::is_whitespace)
+            .next()
+            .unwrap_or_default();
+        // Sentence punctuation after a link isn't part of it.
+        let link = url.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '"', '\'']);
+        match last_gid(link).and_then(|gid| labels.iter().find(|(g, _)| g == gid)) {
+            Some((_, label)) => {
+                out.push_str(label);
+                out.push_str(&url[link.len()..]);
+            }
+            None => out.push_str(url),
+        }
+        rest = &rest[at + url.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The last all-digit path segment of an Asana URL: the object it links to.
+fn last_gid(url: &str) -> Option<&str> {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    path.split('/')
+        .rev()
+        .find(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// (gid, label) of every mention link (`<a … data-asana-gid="…">label</a>`)
+/// in Asana rich text. A person's label always starts with `@`.
+fn mention_labels(html: &str) -> Vec<(String, String)> {
+    let mut labels = Vec::new();
+    let mut rest = html;
+    while let Some(start) = rest.find("<a ") {
+        rest = &rest[start..];
+        let Some(open_end) = rest.find('>') else {
+            break;
+        };
+        let tag = &rest[..open_end];
+        let inner_end = rest.find("</a>").unwrap_or(rest.len());
+        let inner = rest.get(open_end + 1..inner_end).unwrap_or_default();
+        rest = &rest[open_end..];
+        let Some(gid) = attribute(tag, "data-asana-gid") else {
+            continue;
+        };
+        let mut label = unescape(&strip_tags(inner));
+        if label.trim().is_empty() {
+            continue;
+        }
+        if attribute(tag, "data-asana-type") == Some("user") && !label.starts_with('@') {
+            label.insert(0, '@');
+        }
+        labels.push((gid.to_owned(), label));
+    }
+    labels
+}
+
+/// The value of `name="…"` in an HTML tag.
+fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let start = tag.find(&format!("{name}=\""))? + name.len() + 2;
+    let len = tag[start..].find('"')?;
+    Some(&tag[start..start + len])
+}
+
+fn strip_tags(html: &str) -> String {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    text
+}
+
+fn unescape(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&amp;", "&")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,6 +230,52 @@ mod tests {
             rich_text("thanks @Ada Love", &[mention("@Ada Lovelace", "7")]),
             None
         );
+    }
+
+    const ADA_HTML: &str = r#"<body>Thanks <a href="https://app.asana.com/1/1200000000000001/profile/1200000000000011" data-asana-gid="1200000000000011" data-asana-accessible="true" data-asana-type="user" data-asana-dynamic="true">@Ada Lovelace</a>!</body>"#;
+
+    #[test]
+    fn a_profile_url_reads_as_the_persons_name() {
+        let text = "Thanks https://app.asana.com/1/1200000000000001/profile/1200000000000011!";
+
+        assert_eq!(readable(text, Some(ADA_HTML)), "Thanks @Ada Lovelace!");
+    }
+
+    #[test]
+    fn the_old_profile_url_format_reads_as_the_name_too() {
+        let text = "cc https://app.asana.com/0/profile/1200000000000011";
+
+        assert_eq!(readable(text, Some(ADA_HTML)), "cc @Ada Lovelace");
+    }
+
+    #[test]
+    fn a_task_url_reads_as_the_task_name_and_keeps_punctuation() {
+        let html = r#"<body>see <a href="https://app.asana.com/0/1200000000000042/1200000000000031/f" data-asana-gid="1200000000000031" data-asana-type="task">Cookie banner</a>.</body>"#;
+        let text = "see https://app.asana.com/0/1200000000000042/1200000000000031/f.";
+
+        assert_eq!(readable(text, Some(html)), "see Cookie banner.");
+    }
+
+    #[test]
+    fn labels_are_unescaped_and_people_always_get_an_at_sign() {
+        let html = r#"<body><a data-asana-gid="1200000000000012" data-asana-type="user">Tom &amp; Jerry</a></body>"#;
+        let text = "https://app.asana.com/0/profile/1200000000000012";
+
+        assert_eq!(readable(text, Some(html)), "@Tom & Jerry");
+    }
+
+    #[test]
+    fn urls_that_are_not_mentions_stay() {
+        let text = "docs at https://app.asana.com/0/1200000000000099/list and https://example.com/1200000000000011";
+
+        assert_eq!(readable(text, Some(ADA_HTML)), text);
+    }
+
+    #[test]
+    fn without_html_the_text_is_unchanged() {
+        let text = "Thanks https://app.asana.com/0/profile/1200000000000011";
+
+        assert_eq!(readable(text, None), text);
     }
 
     #[test]

@@ -1937,6 +1937,7 @@ impl App {
                 gid: local_gid.clone(),
                 kind: "comment".into(),
                 resource_subtype: Some("comment_added".into()),
+                html_text: None,
                 text: Some(text.clone()),
                 created_at: format::timestamp(self.now),
                 created_by: Some(Named {

@@ -10,7 +10,7 @@ notes,html_notes,permalink_url,modified_at,memberships.project.name,memberships.
 tags.name,custom_fields.name,custom_fields.display_value,parent.name,num_subtasks";
 
 /// Story fields: enough to show comments and count the rest.
-pub const STORY_FIELDS: &str = "type,resource_subtype,text,created_at,created_by.name,\
+pub const STORY_FIELDS: &str = "type,resource_subtype,text,html_text,created_at,created_by.name,\
 reaction_summary.variant,reaction_summary.count";
 
 /// Text to write: plain, or Asana rich text (`<body>…</body>`), which goes
@@ -94,6 +94,10 @@ pub struct TaskStory {
     pub resource_subtype: Option<String>,
     #[serde(default)]
     pub text: Option<String>,
+    /// The comment as rich text: names its @-mentions, which `text` shows
+    /// as URLs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub html_text: Option<String>,
     pub created_at: String,
     #[serde(default)]
     pub created_by: Option<Named>,

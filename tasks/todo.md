@@ -294,16 +294,16 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T15: Show mentions as @Name when reading
+### - [x] T15: Show mentions as @Name when reading
 
 **Description:** Comments are fetched with `html_text`. A pure `core::mention::readable(text, html)` replaces each Asana URL in the plain text whose GID matches a mention link in the HTML with that link's label. Punctuation after the URL is kept, entities are decoded, and a person's label always starts with `@`. The task view uses it for comments and the description.
 
 **Acceptance criteria:**
-- [ ] A person's profile URL (old and new formats) shows as `@Name`, and a task or project URL as its name.
-- [ ] URLs without a matching mention, and text without HTML, are unchanged.
+- [x] A person's profile URL (old and new formats) shows as `@Name`, and a task or project URL as its name.
+- [x] URLs without a matching mention, and text without HTML, are unchanged.
 
 **Verification:**
-- [ ] Tests: unit tests for `readable`. A `present::detail` test showing a comment and a description with a mention.
+- [x] Tests: unit tests for `readable`. A `present::detail` test showing a comment and a description with a mention.
 - [ ] Manual: a task with mentions shows names in `asn` and `asn task`.
 
 **Dependencies:** T13

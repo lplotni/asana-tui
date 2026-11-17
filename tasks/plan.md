@@ -71,7 +71,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 ### Phase 3c: @-mentions (F15)
 - [x] T13: Mentions in the core and CLI (`@<gid>`, `asn users`, rich-text writes)
 - [x] Checkpoint M1: the user verifies a mention and a line break on real Asana
-- [ ] T15: Show mentions as @Name when reading (comments and descriptions)
+- [x] T15: Show mentions as @Name when reading (comments and descriptions)
 - [ ] T14: `@` in the editor (mention picker, recorded mentions, drafts)
 
 ### Phase 4: Ship

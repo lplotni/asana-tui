@@ -152,6 +152,7 @@ fn demo_task() -> TaskDetail {
         gid: gid.into(),
         kind: "comment".into(),
         resource_subtype: Some("comment_added".into()),
+        html_text: None,
         text: Some(text.into()),
         created_at: when.into(),
         created_by: Some(named("2", who)),

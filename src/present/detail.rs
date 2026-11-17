@@ -7,7 +7,7 @@ use unicode_width::UnicodeWidthStr;
 use super::Role;
 use super::format::{file_size, is_before_today, relative_time, short_date};
 use crate::api::attachments::Attachment;
-use crate::core::TaskDetail;
+use crate::core::{TaskDetail, mention};
 
 /// A run of text with one role.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +96,8 @@ pub fn lines_with_images(
     if task.notes.trim().is_empty() {
         push("No description", Role::TextMuted, &mut out);
     } else {
-        push(task.notes.trim_end(), Role::Text, &mut out);
+        let notes = mention::readable(&task.notes, task.html_notes.as_deref());
+        push(notes.trim_end(), Role::Text, &mut out);
     }
 
     if !detail.attachments.is_empty() {
@@ -152,8 +153,11 @@ pub fn lines_with_images(
                 Role::Timestamp,
             ),
         ]);
-        let text = comment.text.as_deref().unwrap_or("").trim_end();
-        for line in wrap(text, width.saturating_sub(2)) {
+        let text = mention::readable(
+            comment.text.as_deref().unwrap_or(""),
+            comment.html_text.as_deref(),
+        );
+        for line in wrap(text.trim_end(), width.saturating_sub(2)) {
             out.push(vec![Segment::new(format!("  {line}"), Role::Text)]);
         }
         if !comment.reaction_summary.is_empty() {
@@ -489,6 +493,36 @@ mod tests {
         let lines = text(&d, 60);
 
         assert_eq!(lines.last().unwrap(), "  👍 3 · 🎉 1");
+    }
+
+    const MENTION_URL: &str = "https://app.asana.com/1/1200000000000001/profile/1200000000000011";
+    const MENTION_HTML: &str = r#"<a href="https://app.asana.com/1/1200000000000001/profile/1200000000000011" data-asana-gid="1200000000000011" data-asana-type="user">@Ada Lovelace</a>"#;
+
+    #[test]
+    fn a_mention_in_a_comment_shows_the_persons_name() {
+        let mut d = detail("task_full.json");
+        d.comments.truncate(1);
+        d.comments[0].text = Some(format!("Thanks {MENTION_URL}!"));
+        d.comments[0].html_text = Some(format!("<body>Thanks {MENTION_HTML}!</body>"));
+
+        let lines = text(&d, 200);
+
+        assert_eq!(lines.last().unwrap(), "  Thanks @Ada Lovelace!");
+    }
+
+    #[test]
+    fn a_mention_in_the_description_shows_the_persons_name() {
+        let mut d = detail("task_full.json");
+        d.task.notes = format!("Owner: {MENTION_URL}");
+        d.task.html_notes = Some(format!("<body>Owner: {MENTION_HTML}</body>"));
+
+        let lines = text(&d, 200);
+
+        assert!(
+            lines.iter().any(|l| l == "Owner: @Ada Lovelace"),
+            "{lines:#?}"
+        );
+        assert!(!lines.iter().any(|l| l.contains("profile/")), "{lines:#?}");
     }
 
     #[test]
