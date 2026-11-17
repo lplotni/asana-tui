@@ -4,7 +4,16 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
-> Early development (v0.1). All v0.1 features work: Inbox, read state, task details, comments, description editing and adding to projects. Releases are next ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
+## Why asn?
+
+I built `asn` to get a simple terminal UI for the way I work with Asana:
+
+- **The Inbox:** go through notifications, read the task, comment, and mark them read.
+- **Specific projects in board view:** planned for the next version.
+
+The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
+
+> v0.1: the Inbox, read state, task details, comments, description editing and adding to projects work ([spec](docs/SPEC.md), [plan](tasks/plan.md)).
 
 ## Install
 
