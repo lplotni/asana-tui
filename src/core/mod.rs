@@ -2,6 +2,7 @@
 
 use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
+use crate::api::projects::BoardTask;
 use crate::api::search::FoundTask;
 use crate::api::tasks::{Named, Task, TaskStory};
 use crate::api::{ApiError, Client, Page};
@@ -140,6 +141,75 @@ pub async fn sections(client: &Client, project_gid: &str) -> Result<Vec<Named>, 
     client.sections(project_gid).await
 }
 
+/// A project's open tasks as board columns, in the project's section order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Board {
+    pub columns: Vec<Column>,
+}
+
+/// One section of a board and its tasks in board order. `section` is `None`
+/// for the leading column of tasks whose section isn't known.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Column {
+    pub section: Option<Named>,
+    pub tasks: Vec<BoardTask>,
+}
+
+/// Loads the project's sections and every page of its open tasks at the same
+/// time, and groups the tasks into columns.
+pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError> {
+    let (sections, tasks) = tokio::try_join!(
+        client.sections(project_gid),
+        all_pages(|offset| async move {
+            client
+                .project_tasks_page(project_gid, offset.as_deref())
+                .await
+        }),
+    )?;
+    Ok(group_board(project_gid, sections, tasks))
+}
+
+/// One column per section, keeping empty ones. Each task goes to its section
+/// in *this* project (a task can be in several). Tasks without a known
+/// section go to a leading column that exists only when it has tasks.
+fn group_board(project_gid: &str, sections: Vec<Named>, tasks: Vec<BoardTask>) -> Board {
+    let mut columns: Vec<Column> = sections
+        .into_iter()
+        .map(|section| Column {
+            section: Some(section),
+            tasks: Vec::new(),
+        })
+        .collect();
+    let mut unsectioned = Vec::new();
+    for task in tasks {
+        let section_gid = task
+            .memberships
+            .iter()
+            .find(|m| m.project.gid == project_gid)
+            .and_then(|m| m.section.as_ref())
+            .map(|s| s.gid.clone());
+        let column = section_gid.and_then(|gid| {
+            columns
+                .iter_mut()
+                .find(|c| c.section.as_ref().is_some_and(|s| s.gid == gid))
+        });
+        match column {
+            Some(column) => column.tasks.push(task),
+            None => unsectioned.push(task),
+        }
+    }
+    if !unsectioned.is_empty() {
+        columns.insert(
+            0,
+            Column {
+                section: None,
+                tasks: unsectioned,
+            },
+        );
+    }
+    Board { columns }
+}
+
 /// Adds the task to a project (and optionally a section), keeping the
 /// projects it's already in.
 pub async fn add_to_project(
@@ -264,4 +334,105 @@ pub async fn mark_read(
         }
     }
     outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::tasks::Membership;
+
+    fn named(gid: &str, name: &str) -> Named {
+        Named {
+            gid: gid.into(),
+            name: name.into(),
+        }
+    }
+
+    /// A task that is in `memberships`, given as (project, section) GIDs.
+    fn task(gid: &str, memberships: &[(&str, Option<&str>)]) -> BoardTask {
+        BoardTask {
+            gid: gid.into(),
+            name: format!("Task {gid}"),
+            assignee: None,
+            due_on: None,
+            due_at: None,
+            memberships: memberships
+                .iter()
+                .map(|(project, section)| Membership {
+                    project: named(project, "Project"),
+                    section: section.map(|s| named(s, "Section")),
+                })
+                .collect(),
+        }
+    }
+
+    fn gids(column: &Column) -> Vec<&str> {
+        column.tasks.iter().map(|t| t.gid.as_str()).collect()
+    }
+
+    #[test]
+    fn tasks_land_in_their_section_in_board_order() {
+        let sections = vec![named("s1", "To do"), named("s2", "Doing")];
+        let tasks = vec![
+            task("t1", &[("p", Some("s2"))]),
+            task("t2", &[("p", Some("s1"))]),
+            task("t3", &[("p", Some("s2"))]),
+        ];
+
+        let board = group_board("p", sections, tasks);
+
+        assert_eq!(board.columns.len(), 2);
+        assert_eq!(board.columns[0].section, Some(named("s1", "To do")));
+        assert_eq!(gids(&board.columns[0]), ["t2"]);
+        assert_eq!(gids(&board.columns[1]), ["t1", "t3"]);
+    }
+
+    #[test]
+    fn a_task_in_two_projects_is_placed_by_this_projects_section() {
+        let sections = vec![named("s1", "To do"), named("s2", "Doing")];
+        let tasks = vec![task("t1", &[("other", Some("s1")), ("p", Some("s2"))])];
+
+        let board = group_board("p", sections, tasks);
+
+        assert!(board.columns[0].tasks.is_empty());
+        assert_eq!(gids(&board.columns[1]), ["t1"]);
+    }
+
+    #[test]
+    fn empty_sections_are_kept() {
+        let sections = vec![named("s1", "To do"), named("s2", "Done")];
+
+        let board = group_board("p", sections, vec![task("t1", &[("p", Some("s1"))])]);
+
+        assert_eq!(board.columns.len(), 2);
+        assert!(board.columns[1].tasks.is_empty());
+    }
+
+    #[test]
+    fn tasks_without_a_known_section_go_to_a_leading_no_section_column() {
+        let sections = vec![named("s1", "To do")];
+        let tasks = vec![
+            task("t1", &[("p", Some("unknown"))]),
+            task("t2", &[("p", None)]),
+            task("t3", &[("p", Some("s1"))]),
+        ];
+
+        let board = group_board("p", sections, tasks);
+
+        assert_eq!(board.columns[0].section, None);
+        assert_eq!(gids(&board.columns[0]), ["t1", "t2"]);
+        assert_eq!(gids(&board.columns[1]), ["t3"]);
+    }
+
+    #[test]
+    fn there_is_no_no_section_column_when_every_task_has_a_section() {
+        let board = group_board(
+            "p",
+            vec![named("s1", "To do")],
+            vec![task("t1", &[("p", Some("s1"))])],
+        );
+
+        assert_eq!(board.columns.len(), 1);
+        assert!(board.columns[0].section.is_some());
+    }
 }

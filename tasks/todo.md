@@ -14,7 +14,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 1: Data and de-risk
 
-### - [ ] T1: `asn board <gid> [--json]`
+### - [x] T1: `asn board <gid> [--json]`
 
 **Description:** Load a project's open tasks grouped by section, and print them. This adds:
 - `api`: a paginated `GET /projects/{gid}/tasks` (`completed_since=now`, `limit=100`, `opt_fields=name,assignee.name,due_on,due_at,memberships.project.gid,memberships.section.gid`), following `next_page` until `null`
@@ -22,13 +22,13 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - `cli/board.rs`: text and JSON rendering, wired into `main.rs`
 
 **Acceptance criteria:**
-- [ ] `asn board <gid>` prints each section (`gid  name`) in board order, followed by one indented TSV line per task (`gid  name  assignee  due_on`, with empty fields for missing values), neutralized with `terminal_safe`.
-- [ ] `asn board <gid> --json` prints `{"sections": [...], "tasks": [...]}` with Asana's `data` objects unchanged. Exit codes follow F7.
-- [ ] A task in two projects lands only in this project's section. Empty sections appear with no tasks.
+- [x] `asn board <gid>` prints each section (`gid  name`) in board order, followed by one indented TSV line per task (`gid  name  assignee  due_on`, with empty fields for missing values), neutralized with `terminal_safe`.
+- [x] `asn board <gid> --json` prints `{"sections": [...], "tasks": [...]}` with Asana's `data` objects unchanged. Exit codes follow F7.
+- [x] A task in two projects lands only in this project's section. Empty sections appear with no tasks.
 
 **Verification:**
-- [ ] Tests: `wiremock` test in `tests/api_project.rs` following 3 pages and asserting the query parameters. `core::board` grouping tests (two-project task, unknown section, empty section). CLI rendering tests for text and JSON. Run with `cargo test board`.
-- [ ] New fixtures (`project_tasks_page*.json`) are anonymized. Grep them for real names and GIDs.
+- [x] Tests: `wiremock` test in `tests/api_project.rs` following `next_page` and asserting the query parameters. `core::board` grouping tests (two-project task, unknown section, empty section). CLI rendering tests for text and JSON. Run with `cargo test board`.
+- [x] New fixtures (`project_tasks_page*.json`) are anonymized. Grep them for real names and GIDs.
 - [ ] Manual (Checkpoint A): compare `asn board <gid> --json` with the web board on 2–3 real projects, and time a ~300-task project.
 
 **Dependencies:** None

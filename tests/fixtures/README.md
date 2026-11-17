@@ -14,6 +14,9 @@ Real Asana API responses captured on 2026-11-16 (T0), then anonymized. Every GID
 | `attachments.json` | **synthetic**, shaped like `GET /attachments?parent={gid}` | an image, a PDF, and a Google Drive link without `size` or `download_url` |
 | `typeahead_projects.json` | `GET /workspaces/{gid}/typeahead?resource_type=project` | |
 | `sections.json` | `GET /projects/{gid}/sections` | 8 sections |
+| `board_sections.json` | **synthetic**, shaped like `GET /projects/{gid}/sections` | 3 sections; the last stays empty on the board |
+| `project_tasks_page1.json` | **synthetic**, shaped like `GET /projects/{gid}/tasks?completed_since=now&opt_fields=…` | 2 tasks (one also in another project), has `next_page` |
+| `project_tasks_page2.json` | the `next_page` of the above | 1 task with `due_at`, `next_page: null` |
 | `mark_read_ok.json` | `POST …/markRead` | `failed_gids: []` |
 | `mark_read_partial.json` | `POST …/markRead` with an unknown GID | `failed_gids: ["1"]` |
 | `error_401.json` | invalid token | HTTP **401** |

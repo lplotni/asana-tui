@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "gid": "1200000000000203",
+      "name": "Romeo uniform",
+      "assignee": { "gid": "1200000000000012", "name": "Grace Hopper" },
+      "due_on": "2026-11-18",
+      "due_at": "2026-11-18T15:00:00.000Z",
+      "memberships": [
+        {
+          "project": { "gid": "1200000000000042", "name": "Maple willow mike" },
+          "section": { "gid": "1200000000000072", "name": "Foxtrot victor" }
+        }
+      ]
+    }
+  ],
+  "next_page": null
+}

@@ -38,7 +38,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 ## Task List
 
 ### Phase 1: Data and de-risk
-- [ ] T1: `asn board <gid> [--json]` (F13, API surface)
+- [x] T1: `asn board <gid> [--json]` (F13, API surface)
 - [ ] T2: Pure board state in `tui/board.rs` (F9 navigation, paging, cursor)
 
 ### Checkpoint A: data is right

@@ -1,11 +1,33 @@
-//! Project search, sections, adding a task to a project and moving it
-//! between sections.
+//! Project search, sections, a project's open tasks, adding a task to a
+//! project and moving it between sections.
 
-use super::tasks::Named;
+use serde::{Deserialize, Serialize};
+
+use super::tasks::{Membership, Named};
 use super::{ApiError, Client, Page};
 
 /// How many projects the typeahead returns.
 const TYPEAHEAD_COUNT: u32 = 20;
+
+/// Fields of a board card: what it shows, and its memberships to find its
+/// column.
+const BOARD_TASK_FIELDS: &str =
+    "name,assignee.name,due_on,due_at,memberships.project.name,memberships.section.name";
+
+/// An open task of a project, as a card on its board.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BoardTask {
+    pub gid: String,
+    pub name: String,
+    #[serde(default)]
+    pub assignee: Option<Named>,
+    #[serde(default)]
+    pub due_on: Option<String>,
+    #[serde(default)]
+    pub due_at: Option<String>,
+    #[serde(default)]
+    pub memberships: Vec<Membership>,
+}
 
 impl Client {
     pub async fn typeahead_projects(
@@ -26,6 +48,24 @@ impl Client {
             .get(&format!("/projects/{project_gid}/sections"), &query)
             .await?;
         Ok(page.data)
+    }
+
+    /// One page of the project's incomplete tasks, in the project's order.
+    pub async fn project_tasks_page(
+        &self,
+        project_gid: &str,
+        offset: Option<&str>,
+    ) -> Result<Page<BoardTask>, ApiError> {
+        let mut query = vec![
+            ("completed_since", "now".to_owned()),
+            ("limit", "100".to_owned()),
+            ("opt_fields", BOARD_TASK_FIELDS.to_owned()),
+        ];
+        if let Some(offset) = offset {
+            query.push(("offset", offset.to_owned()));
+        }
+        self.get(&format!("/projects/{project_gid}/tasks"), &query)
+            .await
     }
 
     pub async fn add_project(

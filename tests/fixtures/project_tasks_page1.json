@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "gid": "1200000000000201",
+      "name": "Lima tango echo",
+      "assignee": { "gid": "1200000000000011", "name": "Ada Lovelace" },
+      "due_on": "2026-11-20",
+      "due_at": null,
+      "memberships": [
+        {
+          "project": { "gid": "1200000000000099", "name": "Oak delta" },
+          "section": { "gid": "1200000000000081", "name": "Pine kilo" }
+        },
+        {
+          "project": { "gid": "1200000000000042", "name": "Maple willow mike" },
+          "section": { "gid": "1200000000000072", "name": "Foxtrot victor" }
+        }
+      ]
+    },
+    {
+      "gid": "1200000000000202",
+      "name": "Sierra hotel",
+      "assignee": null,
+      "due_on": null,
+      "due_at": null,
+      "memberships": [
+        {
+          "project": { "gid": "1200000000000042", "name": "Maple willow mike" },
+          "section": { "gid": "1200000000000071", "name": "Zulu golf river" }
+        }
+      ]
+    }
+  ],
+  "next_page": {
+    "offset": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.page2",
+    "path": "/projects/1200000000000042/tasks?limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.page2",
+    "uri": "https://app.asana.com/api/1.0/projects/1200000000000042/tasks?limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.page2"
+  }
+}

@@ -78,6 +78,14 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List a project's open tasks by section, in board order
+    Board {
+        #[arg(value_name = "PROJECT_GID")]
+        project: String,
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Manage a task's projects
     Project {
         #[command(subcommand)]
@@ -214,6 +222,17 @@ async fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        Some(Command::Board { project, json }) => match core::board(&client, &project).await {
+            Ok(board) if json => {
+                println!("{}", asn::cli::board::render_json(&board));
+                ExitCode::SUCCESS
+            }
+            Ok(board) => {
+                print!("{}", asn::cli::board::render_text(&board));
+                ExitCode::SUCCESS
+            }
+            Err(err) => fail(&err, err.exit_code()),
+        },
         Some(Command::Project {
             command:
                 ProjectCommand::Add {
