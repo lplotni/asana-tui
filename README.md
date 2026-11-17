@@ -160,6 +160,8 @@ cargo run --example screenshot > docs/screenshot.svg            # regenerate the
 cargo run --example screenshot -- board > docs/board.svg
 ```
 
+Why it's built this way: [architecture decisions](docs/decisions/README.md). Specs: [v0.1](docs/SPEC.md), [v0.2](docs/SPEC-board.md).
+
 Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.
 
 ## License
