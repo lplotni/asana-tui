@@ -209,6 +209,7 @@ fn run_effects(
             Effect::MarkRead { .. }
                 | Effect::CreateTask { .. }
                 | Effect::SetCompleted { .. }
+                | Effect::Assign { .. }
                 | Effect::PostComment { .. }
                 | Effect::AddToProject { .. }
                 | Effect::MoveToSection { .. }
@@ -336,6 +337,18 @@ fn run_effects(
                     tokio::time::sleep(picker::SEARCH_DEBOUNCE).await;
                     Msg::SearchDue { seq }
                 }
+                Effect::Assign { task_gid, assignee } => {
+                    let result = core::assign(&client, &task_gid, assignee.as_deref())
+                        .await
+                        .map_err(|e| e.to_string());
+                    Msg::Assigned { task_gid, result }
+                }
+                Effect::SearchPeople { query, seq } => Msg::PeopleFound {
+                    seq,
+                    result: core::search_users(&client, &workspace, &query)
+                        .await
+                        .map_err(|e| e.to_string()),
+                },
                 Effect::SetCompleted {
                     task_gid,
                     name,

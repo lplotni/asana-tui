@@ -3593,3 +3593,176 @@ fn a_failed_completion_puts_the_card_back_and_says_so() {
             .is_some_and(|t| t.is_error && t.text.contains("Forbidden"))
     );
 }
+
+// --- Tab a: assign (F17) -----------------------------------------------------
+
+fn tab_a(app: &mut App) -> Vec<Effect> {
+    key(app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(app, "a")
+}
+
+fn backspace(app: &mut App) {
+    key(app, KeyCode::Backspace, KeyModifiers::NONE);
+}
+
+#[test]
+fn tab_a_offers_me_and_unassigned_without_searching() {
+    let mut app = on_board(&[1]);
+
+    let effects = tab_a(&mut app);
+
+    assert_eq!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(&picker::Stage::Assign)
+    );
+    assert_eq!(picker_names(&app), ["Me", "Unassigned"]);
+    assert!(effects.is_empty(), "{effects:?}");
+}
+
+#[test]
+fn choosing_me_assigns_the_card_to_me() {
+    let mut app = on_board(&[1]);
+    tab_a(&mut app);
+
+    let effects = ignoring_detail(enter(&mut app));
+
+    assert!(app.picker.is_none());
+    assert_eq!(
+        effects,
+        vec![Effect::Assign {
+            task_gid: "c0-0".into(),
+            assignee: Some("me".into()),
+        }]
+    );
+}
+
+#[test]
+fn choosing_unassigned_clears_the_assignee() {
+    let mut app = on_board(&[1]);
+    tab_a(&mut app);
+    key(&mut app, KeyCode::Down, KeyModifiers::NONE);
+
+    let effects = ignoring_detail(enter(&mut app));
+
+    assert_eq!(
+        effects,
+        vec![Effect::Assign {
+            task_gid: "c0-0".into(),
+            assignee: None,
+        }]
+    );
+}
+
+#[test]
+fn typing_searches_people_to_assign() {
+    let mut app = on_board(&[1]);
+    tab_a(&mut app);
+
+    let effects = search(&mut app, "ada");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::PeopleFound {
+        seq,
+        result: Ok(vec![named("1200000000000011", "Ada Lovelace")]),
+    });
+    let chosen = ignoring_detail(enter(&mut app));
+
+    assert_eq!(
+        effects,
+        vec![Effect::SearchPeople {
+            query: "ada".into(),
+            seq
+        }]
+    );
+    assert_eq!(
+        chosen,
+        vec![Effect::Assign {
+            task_gid: "c0-0".into(),
+            assignee: Some("1200000000000011".into()),
+        }]
+    );
+}
+
+#[test]
+fn people_found_for_an_older_query_are_ignored() {
+    let mut app = on_board(&[1]);
+    tab_a(&mut app);
+    search(&mut app, "a");
+    let old = app.picker.as_ref().unwrap().search_seq;
+    search(&mut app, "d");
+
+    app.update(Msg::PeopleFound {
+        seq: old,
+        result: Ok(vec![named("9", "Someone else")]),
+    });
+
+    assert!(!picker_names(&app).contains(&"Someone else"));
+}
+
+#[test]
+fn clearing_the_query_offers_me_and_unassigned_again() {
+    let mut app = on_board(&[1]);
+    tab_a(&mut app);
+    search(&mut app, "ad");
+
+    backspace(&mut app);
+    backspace(&mut app);
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    let effects = app.update(Msg::SearchDue { seq });
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(picker_names(&app), ["Me", "Unassigned"]);
+}
+
+#[test]
+fn an_assignment_shows_the_new_assignee_and_reloads_the_board() {
+    let mut app = on_board(&[1]);
+    load_task(&mut app, "c0-0", card_detail("42"));
+
+    let effects = app.update(Msg::Assigned {
+        task_gid: "c0-0".into(),
+        result: Ok(Some(named("1200000000000011", "Ada Lovelace"))),
+    });
+
+    assert_eq!(board_loads(&effects), 1);
+    assert!(matches!(
+        app.details.get("c0-0"),
+        Some(Detail::Loaded(d)) if d.task.assignee.as_ref().map(|a| a.name.as_str()) == Some("Ada Lovelace")
+    ));
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("Assigned to Ada Lovelace"))
+    );
+}
+
+#[test]
+fn a_failed_assignment_says_so() {
+    let mut app = loaded(3, 10);
+
+    app.update(Msg::Assigned {
+        task_gid: "t0".into(),
+        result: Err("Forbidden".into()),
+    });
+
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.is_error && t.text.contains("Forbidden"))
+    );
+}
+
+#[test]
+fn tab_a_works_on_an_inbox_task_too() {
+    let mut app = loaded(3, 10);
+
+    tab_a(&mut app);
+    let effects = ignoring_detail(enter(&mut app));
+
+    assert_eq!(
+        effects,
+        vec![Effect::Assign {
+            task_gid: "t0".into(),
+            assignee: Some("me".into()),
+        }]
+    );
+}

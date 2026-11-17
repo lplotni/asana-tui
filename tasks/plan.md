@@ -77,7 +77,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 ### Phase 3d: Complete and assign (F16, F17)
 - [x] T16: `asn task done` and `asn task assign` (core and CLI)
 - [x] T17: `d` completes, with undo (board cards leave at once)
-- [ ] T18: `Tab a` assigns ("Me" and "Unassigned" first, then people search)
+- [x] T18: `Tab a` assigns ("Me" and "Unassigned" first, then people search)
 
 ### Phase 4: Ship
 - [x] T9: Help, README and spec updates

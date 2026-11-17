@@ -62,6 +62,8 @@ pub enum Cmd {
     NewTask,
     /// Complete the task, or reopen a completed one.
     ToggleComplete,
+    /// Assign the task to someone (or nobody).
+    Assign,
     OpenInBrowser,
     ToggleFilter,
     Refresh,
@@ -257,6 +259,7 @@ pub const BINDINGS: &[Binding] = &[
         Asn,
         "complete / reopen",
     ),
+    bind(Normal, &[Tab, Char('a')], Cmd::Assign, Asana, "assign"),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),
     bind(

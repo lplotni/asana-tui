@@ -381,16 +381,16 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T18: `Tab a` assigns
+### - [x] T18: `Tab a` assigns
 
 **Description:** `Tab a` opens a people picker with "Me" and "Unassigned" first, and typing searches people. `Enter` sends the assignment. The task pane shows the assignee Asana returns, and a board reloads.
 
 **Acceptance criteria:**
-- [ ] `Tab a`, then `Enter` on "Me", assigns to me. "Unassigned" clears the assignee. Typing a name and choosing a person assigns them.
-- [ ] Results arrive for the latest query only. A failure says so.
+- [x] `Tab a`, then `Enter` on "Me", assigns to me. "Unassigned" clears the assignee. Typing a name and choosing a person assigns them.
+- [x] Results arrive for the latest query only. A failure says so.
 
 **Verification:**
-- [ ] Tests: `app_tests.rs` for each criterion. A picker snapshot. Hints and help.
+- [x] Tests: `app_tests.rs` for each criterion. A picker snapshot. Hints and help.
 - [ ] Manual (with T17): complete, undo and assign on a real board and in the Inbox.
 
 **Dependencies:** T16

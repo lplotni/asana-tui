@@ -41,6 +41,16 @@ pub enum Msg {
     Key(KeyEvent),
     /// How much fits on screen (sent on start and resize).
     Resize(Sizes),
+    /// Whom task `task_gid` is assigned to now, or why it wasn't assigned.
+    Assigned {
+        task_gid: String,
+        result: Result<Option<Named>, String>,
+    },
+    /// People found for assign search `seq`.
+    PeopleFound {
+        seq: u64,
+        result: Result<Vec<Named>, String>,
+    },
     /// A task was marked complete (or incomplete again), or why not.
     CompletedSet {
         task_gid: String,
@@ -202,6 +212,17 @@ pub enum Effect {
         seq: u64,
     },
     SearchProjects {
+        query: String,
+        seq: u64,
+    },
+    /// Assign the task (`me`, a user GID, or nobody), then send
+    /// [`Msg::Assigned`].
+    Assign {
+        task_gid: String,
+        assignee: Option<String>,
+    },
+    /// Find people to assign, then send [`Msg::PeopleFound`].
+    SearchPeople {
         query: String,
         seq: u64,
     },
@@ -737,6 +758,33 @@ impl App {
                 completed,
                 result,
             } => self.completed_set(task_gid, name, completed, result),
+            Msg::PeopleFound { seq, result } => {
+                match result {
+                    Ok(people) => {
+                        if let Some(p) = &mut self.picker {
+                            p.accept_people(seq, people);
+                        }
+                    }
+                    Err(message) => self.search_failed(seq, "People", &message),
+                }
+                Vec::new()
+            }
+            Msg::Assigned { task_gid, result } => match result {
+                Ok(assignee) => {
+                    self.toast = Some(Toast::info(match &assignee {
+                        Some(person) => format!("Assigned to {}", person.name),
+                        None => "Unassigned".to_owned(),
+                    }));
+                    if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
+                        detail.task.assignee = assignee;
+                    }
+                    self.reload_board()
+                }
+                Err(message) => {
+                    self.toast = Some(Toast::error(format!("Not assigned: {message}")));
+                    Vec::new()
+                }
+            },
             Msg::MentionsFound { seq, result } => {
                 match result {
                     Ok(targets) => {
@@ -821,6 +869,11 @@ impl App {
                         return Vec::new();
                     }
                     picker::Stage::Board => Effect::SearchProjects { query, seq },
+                    picker::Stage::Assign if query.trim().is_empty() => {
+                        p.show_assign_defaults();
+                        return Vec::new();
+                    }
+                    picker::Stage::Assign => Effect::SearchPeople { query, seq },
                     picker::Stage::Mention if query.trim().is_empty() => {
                         p.accept_mentions(seq, Vec::new());
                         return Vec::new();
@@ -1049,6 +1102,7 @@ impl App {
             Cmd::SwitchProject => return self.open_switcher(),
             Cmd::OpenTaskBoard => return self.open_task_board(),
             Cmd::ToggleComplete => return self.toggle_complete(),
+            Cmd::Assign => return self.open_assign(),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.set_focus(Focus::List);
@@ -1134,6 +1188,7 @@ impl App {
             Cmd::MoveToSection => return self.open_move(),
             Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::ToggleComplete => return self.toggle_complete(),
+            Cmd::Assign => return self.open_assign(),
             Cmd::SwitchProject => return self.open_switcher(),
             Cmd::GoToInbox => {
                 self.screen = Screen::Inbox;
@@ -1362,6 +1417,16 @@ impl App {
         vec![Effect::LoadBoard {
             project_gid: project_gid.to_owned(),
         }]
+    }
+
+    /// `Tab a`: whom to assign the shown task to.
+    fn open_assign(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast::info("Only tasks can be assigned"));
+            return Vec::new();
+        };
+        self.picker = Some(Picker::assignees(task_gid));
+        Vec::new()
     }
 
     /// `d`: completes the shown task, or reopens it if it's complete. A board
@@ -1932,6 +1997,14 @@ impl App {
             picker::Stage::Board => {
                 self.picker = None;
                 self.open_board(item.into_named())
+            }
+            picker::Stage::Assign => {
+                let task_gid = picker.task_gid.clone();
+                self.picker = None;
+                vec![Effect::Assign {
+                    task_gid,
+                    assignee: item.gid,
+                }]
             }
             picker::Stage::Mention => {
                 self.picker = None;

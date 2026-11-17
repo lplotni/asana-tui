@@ -221,6 +221,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
             (normal(Cmd::ToggleComplete), "done"),
+            (normal(Cmd::Assign), "assign"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Help), "help"),
@@ -245,9 +246,10 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
             (normal(Cmd::ToggleComplete), "done"),
+            (normal(Cmd::NewTask), "new task"),
+            (normal(Cmd::Assign), "assign"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
-            (normal(Cmd::NewTask), "new task"),
             (normal(Cmd::Search), "find"),
             (normal(Cmd::SwitchProject), "projects"),
             (normal(Cmd::Refresh), "refresh"),
@@ -272,6 +274,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::Comment), "comment"),
             (normal(Cmd::MarkRead), "read"),
             (normal(Cmd::ToggleComplete), "done"),
+            (normal(Cmd::Assign), "assign"),
             (normal(Cmd::OpenTaskBoard), "board"),
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
@@ -294,6 +297,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         (normal(Cmd::MarkUnread), "unread"),
         (normal(Cmd::Comment), "comment"),
         (normal(Cmd::ToggleComplete), "done"),
+        (normal(Cmd::Assign), "assign"),
         (normal(Cmd::OpenTaskBoard), "board"),
         (normal(Cmd::SwitchProject), "projects"),
         (normal(Cmd::MoveToSection), "move"),
@@ -618,6 +622,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::Board => " Open a project's board ".to_owned(),
         Stage::TaskBoard => " Open which project's board? ".to_owned(),
         Stage::Mention => " Mention someone ".to_owned(),
+        Stage::Assign => " Assign to ".to_owned(),
     };
     let mut lines = Vec::new();
     if picker.has_query() {
@@ -641,7 +646,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
     } else if picker.items.is_empty() {
         let message = match picker.stage {
             Stage::Task => "No matching tasks",
-            Stage::Mention => "Nobody matches",
+            Stage::Mention | Stage::Assign => "Nobody matches",
             Stage::MoveSection { .. } => "This project has no sections",
             _ => "No matching projects",
         };
@@ -1108,6 +1113,15 @@ mod tests {
 
         let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
         assert_eq!(labels, ["to search", "move", "choose", "cancel"]);
+        insta::assert_snapshot!(draw_at(&mut app, 100).backend());
+    }
+
+    #[test]
+    fn the_assign_picker_offers_me_and_unassigned() {
+        let mut app = board_app();
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Tab));
+        press(&mut app, "a");
+
         insta::assert_snapshot!(draw_at(&mut app, 100).backend());
     }
 
@@ -2032,7 +2046,7 @@ mod tests {
         let mut inbox = app_with(fixture("notifications_page.json"));
         let wanted = [
             "read", "unread", "comment", "board", "projects", "project", "move", "edit", "browser",
-            "done",
+            "done", "assign",
         ];
         assert_eq!(
             missing(&labels(&inbox), &wanted),
@@ -2042,7 +2056,7 @@ mod tests {
 
         press(&mut inbox, "l");
         let wanted = [
-            "back", "comment", "edit", "project", "move", "board", "browser", "done",
+            "back", "comment", "edit", "project", "move", "board", "browser", "done", "assign",
         ];
         assert_eq!(
             missing(&labels(&inbox), &wanted),
@@ -2053,13 +2067,13 @@ mod tests {
         let mut board = board_app();
         let wanted = [
             "open", "column", "comment", "move", "project", "edit", "browser", "new task", "find",
-            "projects", "refresh", "done",
+            "projects", "refresh", "done", "assign",
         ];
         assert_eq!(missing(&labels(&board), &wanted), [] as [&str; 0], "board");
 
         board.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
         let wanted = [
-            "back", "comment", "edit", "project", "move", "browser", "done",
+            "back", "comment", "edit", "project", "move", "browser", "done", "assign",
         ];
         assert_eq!(
             missing(&labels(&board), &wanted),

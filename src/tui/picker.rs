@@ -65,6 +65,9 @@ pub enum Stage {
     TaskBoard,
     /// Choosing whom (or which project or task) to @-mention in the editor.
     Mention,
+    /// Choosing whom to assign the task to: "Me" and "Unassigned" while the
+    /// query is empty, else people found.
+    Assign,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,6 +111,42 @@ impl Picker {
         };
         picker.show_recents();
         picker
+    }
+
+    /// Assigning `task_gid`: "Me" and "Unassigned" until a name is typed.
+    pub fn assignees(task_gid: String) -> Picker {
+        let mut picker = Picker {
+            stage: Stage::Assign,
+            loading: false,
+            ..Picker::new(task_gid, Vec::new())
+        };
+        picker.show_assign_defaults();
+        picker
+    }
+
+    /// "Me" (gid `me`, which Asana understands) and "Unassigned" (no gid).
+    pub fn show_assign_defaults(&mut self) {
+        let item = |gid: Option<&str>, name: &str| Item {
+            gid: gid.map(str::to_owned),
+            name: name.to_owned(),
+            checked: false,
+            note: None,
+        };
+        self.items = vec![item(Some("me"), "Me"), item(None, "Unassigned")];
+        self.selected = 0;
+        self.loading = false;
+    }
+
+    /// Takes the people found by search `seq`, unless a newer one was
+    /// started.
+    pub fn accept_people(&mut self, seq: u64, people: Vec<Named>) -> bool {
+        if self.stage != Stage::Assign || seq != self.search_seq {
+            return false;
+        }
+        self.items = people.into_iter().map(Item::from).collect();
+        self.selected = 0;
+        self.loading = false;
+        true
     }
 
     /// @-mentioning in the editor: waits for the first letters of a name.
@@ -197,7 +236,7 @@ impl Picker {
     pub fn has_query(&self) -> bool {
         matches!(
             self.stage,
-            Stage::Project | Stage::Task | Stage::Board | Stage::Mention
+            Stage::Project | Stage::Task | Stage::Board | Stage::Mention | Stage::Assign
         )
     }
 
