@@ -69,6 +69,15 @@ enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Find tasks in the workspace (ASN_SEARCH picks the API)
+    Search {
+        /// Words to search for
+        #[arg(required = true, value_name = "QUERY")]
+        query: Vec<String>,
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Manage a task's projects
     Project {
         #[command(subcommand)]
@@ -183,6 +192,15 @@ async fn main() -> ExitCode {
                 }
                 Err(err) => fail(&err, err.exit_code()),
             }
+        }
+        Some(Command::Search { query, json }) => {
+            let query = query.join(" ");
+            match core::search_tasks(&client, &config.workspace, &query, config.search).await {
+                Ok(tasks) if json => println!("{}", asn::cli::search::render_json(&tasks)),
+                Ok(tasks) => print!("{}", asn::cli::search::render_text(&tasks)),
+                Err(err) => return fail(&err, err.exit_code()),
+            }
+            ExitCode::SUCCESS
         }
         Some(Command::Project {
             command:

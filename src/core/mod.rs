@@ -2,8 +2,10 @@
 
 use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
+use crate::api::search::FoundTask;
 use crate::api::tasks::{Named, Task, TaskStory};
 use crate::api::{ApiError, Client, Page};
+use crate::config::SearchMode;
 
 /// Page size requested from Asana. Pages can still come back shorter or empty.
 const PAGE_SIZE: u32 = 100;
@@ -101,6 +103,41 @@ pub async fn search_projects(
     query: &str,
 ) -> Result<Vec<Named>, ApiError> {
     client.typeahead_projects(workspace, query).await
+}
+
+/// Tasks in the workspace matching `query`, using the `ASN_SEARCH` backend.
+/// A blank query finds nothing (task search would return every task).
+pub async fn search_tasks(
+    client: &Client,
+    workspace: &str,
+    query: &str,
+    mode: SearchMode,
+) -> Result<Vec<FoundTask>, ApiError> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    match mode {
+        SearchMode::Tasks => client
+            .search_tasks(workspace, query)
+            .await
+            .map_err(search_plan_hint),
+        SearchMode::Typeahead => client.typeahead_tasks(workspace, query).await,
+    }
+}
+
+/// Task search needs a paid plan; Asana answers 402 otherwise.
+fn search_plan_hint(err: ApiError) -> ApiError {
+    match err {
+        ApiError::Status {
+            status: 402,
+            message,
+        } => ApiError::Status {
+            status: 402,
+            message: format!("{message} — set ASN_SEARCH=typeahead to search task names instead"),
+        },
+        other => other,
+    }
 }
 
 /// The sections of a project, in board order.

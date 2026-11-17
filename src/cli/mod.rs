@@ -1,6 +1,7 @@
 //! Output formatting for CLI subcommands.
 
 pub mod inbox;
+pub mod search;
 pub mod task;
 
 /// `text` made safe to print to a terminal. Asana text (names, comments,

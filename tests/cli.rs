@@ -21,7 +21,9 @@ fn help_lists_every_subcommand_from_the_spec() {
     let help = String::from_utf8_lossy(&output.stdout);
 
     assert!(output.status.success());
-    for sub in ["inbox", "read", "task", "comment", "desc", "project"] {
+    for sub in [
+        "inbox", "read", "task", "comment", "desc", "project", "search",
+    ] {
         assert!(help.contains(sub), "missing `{sub}` in help:\n{help}");
     }
 }
@@ -78,4 +80,19 @@ fn usage_errors_exit_1_not_the_auth_code_2() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(stderr(&output).contains("NOTIFICATION_GID"));
+}
+
+#[test]
+fn an_unknown_search_backend_exits_1_with_guidance() {
+    let output = asn(
+        &["search", "checkout"],
+        &[
+            ("ASANA_TOKEN", "secret-pat"),
+            ("ASANA_WORKSPACE", "1234567890123456"),
+            ("ASN_SEARCH", "fulltext"),
+        ],
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("ASN_SEARCH must be"));
 }

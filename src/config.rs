@@ -28,6 +28,17 @@ impl fmt::Debug for Token {
 pub struct Config {
     pub token: Token,
     pub workspace: String,
+    pub search: SearchMode,
+}
+
+/// Which Asana API finds tasks (`ASN_SEARCH`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchMode {
+    /// Full-text task search (`tasks/search`); paid plans only.
+    #[default]
+    Tasks,
+    /// Name matches as in the web search box (`typeahead`); every plan.
+    Typeahead,
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -52,6 +63,8 @@ pub enum ConfigError {
         suggestion(got)
     )]
     InvalidWorkspace { got: String },
+    #[error("ASN_SEARCH must be \"tasks\" or \"typeahead\", got \"{got}\"")]
+    InvalidSearch { got: String },
 }
 
 fn exit_description(exit: Option<i32>) -> String {
@@ -78,18 +91,25 @@ impl ConfigError {
             | Self::TokenCmdFailed { .. }
             | Self::TokenCmdEmpty
             | Self::TokenCmdNotRun { .. } => 2,
-            Self::MissingWorkspace | Self::InvalidWorkspace { .. } => 1,
+            Self::MissingWorkspace | Self::InvalidWorkspace { .. } | Self::InvalidSearch { .. } => {
+                1
+            }
         }
     }
 }
 
 impl Config {
-    /// Resolves the config from `env`. The workspace is validated first, so a
-    /// misconfigured workspace never makes the user unlock a password manager.
+    /// Resolves the config from `env`. The token comes last, so a
+    /// misconfiguration never makes the user unlock a password manager.
     pub fn from_env(env: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
         let workspace = workspace(&env)?;
+        let search = search(&env)?;
         let token = token(&env)?;
-        Ok(Self { token, workspace })
+        Ok(Self {
+            token,
+            workspace,
+            search,
+        })
     }
 }
 
@@ -103,6 +123,16 @@ fn workspace(env: &impl Fn(&str) -> Option<String>) -> Result<String, ConfigErro
         Ok(workspace)
     } else {
         Err(ConfigError::InvalidWorkspace { got: workspace })
+    }
+}
+
+fn search(env: &impl Fn(&str) -> Option<String>) -> Result<SearchMode, ConfigError> {
+    match non_empty(env, "ASN_SEARCH").as_deref() {
+        None | Some("tasks") => Ok(SearchMode::Tasks),
+        Some("typeahead") => Ok(SearchMode::Typeahead),
+        Some(other) => Err(ConfigError::InvalidSearch {
+            got: other.to_owned(),
+        }),
     }
 }
 
@@ -305,5 +335,59 @@ mod tests {
             "ASANA_TOKEN_CMD couldn't be run: No such file or directory"
         );
         assert_eq!(err.exit_code(), 2);
+    }
+
+    // --- ASN_SEARCH ----------------------------------------------------------
+
+    fn with_search(value: Option<&str>) -> Result<Config, ConfigError> {
+        let mut pairs = vec![
+            ("ASANA_TOKEN", "secret-pat"),
+            ("ASANA_WORKSPACE", "1234567890123456"),
+        ];
+        if let Some(value) = value {
+            pairs.push(("ASN_SEARCH", value));
+        }
+        Config::from_env(env(&pairs))
+    }
+
+    #[test]
+    fn search_defaults_to_task_search() {
+        assert_eq!(with_search(None).unwrap().search, SearchMode::Tasks);
+        assert_eq!(with_search(Some("")).unwrap().search, SearchMode::Tasks);
+    }
+
+    #[test]
+    fn search_can_be_set_to_either_backend() {
+        assert_eq!(
+            with_search(Some("tasks")).unwrap().search,
+            SearchMode::Tasks
+        );
+        assert_eq!(
+            with_search(Some("typeahead")).unwrap().search,
+            SearchMode::Typeahead
+        );
+    }
+
+    #[test]
+    fn an_unknown_search_backend_is_rejected() {
+        let err = with_search(Some("fulltext")).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "ASN_SEARCH must be \"tasks\" or \"typeahead\", got \"fulltext\""
+        );
+        assert_eq!(err.exit_code(), 1);
+    }
+
+    #[test]
+    fn an_unknown_search_backend_is_reported_before_running_token_cmd() {
+        let err = Config::from_env(env(&[
+            ("ASANA_TOKEN_CMD", "exit 1"),
+            ("ASANA_WORKSPACE", "1234567890123456"),
+            ("ASN_SEARCH", "nope"),
+        ]))
+        .unwrap_err();
+
+        assert_eq!(err, ConfigError::InvalidSearch { got: "nope".into() });
     }
 }

@@ -3,6 +3,7 @@
 pub mod attachments;
 pub mod notifications;
 pub mod projects;
+pub mod search;
 pub mod tasks;
 
 use std::time::Duration;
