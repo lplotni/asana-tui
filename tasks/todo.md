@@ -156,18 +156,18 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T6: `P` project switcher and Inbox ↔ board peers
+### - [x] T6: `P` project switcher and Inbox ↔ board peers
 
 **Description:** Boards opened this session stay in memory with their cursors, keyed by project GID (moved here from T4). Reopening one shows it at once and reloads it in the background. `P` (bound in `keys.rs` on both screens) opens a new picker stage that reuses the project typeahead, debounce and fzf keys. With an empty query it lists the projects opened this session, most recent first. `Enter` opens the board (from the cache if present). `Tab i` from the board shows the Inbox with its cursor unchanged. The Inbox keeps polling, and `P Enter` returns to the last board.
 
 **Acceptance criteria:**
-- [ ] `P`, type, `Enter` opens any project's board. `P` with an empty query lists recents first, and `P Enter` reopens the last board with its cursor.
-- [ ] `Tab i` and back keeps both screens' cursors and data.
-- [ ] Reopening a cached board shows its old data and cursor immediately and emits one `LoadBoard`.
-- [ ] The no-collision key test passes, and `P` appears in the help overlay.
+- [x] `P`, type, `Enter` opens any project's board. `P` with an empty query lists recents first, and `P Enter` reopens the last board with its cursor.
+- [x] `Tab i` and back keeps both screens' cursors and data.
+- [x] Reopening a cached board shows its old data and cursor immediately and emits one `LoadBoard`.
+- [x] The no-collision key test passes, and `P` appears in the help overlay.
 
 **Verification:**
-- [ ] Tests: picker stage tests in `picker.rs` (recents on an empty query, results replacing them as you type). `app_tests.rs` for screen switching and keeping cursors. A snapshot of the switcher with recents. The `keys.rs` collision test.
+- [x] Tests: switcher tests in `app_tests.rs` (recents on an empty query, results replacing them as you type, recents again when the query is cleared). `app_tests.rs` for screen switching and keeping cursors. A snapshot of the switcher with recents. The `keys.rs` collision test.
 - [ ] Manual: switch between three projects and the Inbox.
 
 **Dependencies:** T5

@@ -1,6 +1,6 @@
 //! The search-as-you-type picker: "add to project" (search projects, then
 //! choose a section), "move to section" (choose one of the task's projects,
-//! then a section) and workspace task search. Pure state; the
+//! then a section), workspace task search, and opening a project's board. Pure state; the
 //! [`App`](super::app::App) turns its decisions into effects.
 
 use crate::api::search::FoundTask;
@@ -55,6 +55,9 @@ pub enum Stage {
         project: Named,
         current: Option<String>,
     },
+    /// Choosing a project to open as a board: the boards opened this
+    /// session while the query is empty, else projects found.
+    Board,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,6 +73,8 @@ pub struct Picker {
     pub search_seq: u64,
     /// Projects the task is already in; never offered.
     exclude: Vec<String>,
+    /// Boards opened this session, offered while the query is empty.
+    recents: Vec<Named>,
 }
 
 impl Picker {
@@ -83,7 +88,31 @@ impl Picker {
             loading: true,
             search_seq: 0,
             exclude,
+            recents: Vec::new(),
         }
+    }
+
+    /// Opening a board: `recents` (most recent first) until a query is typed.
+    pub fn boards(recents: Vec<Named>) -> Picker {
+        let mut picker = Picker {
+            stage: Stage::Board,
+            recents,
+            ..Picker::new(String::new(), Vec::new())
+        };
+        picker.show_recents();
+        picker
+    }
+
+    /// Whether there are recent boards to show for an empty query.
+    pub fn has_recents(&self) -> bool {
+        !self.recents.is_empty()
+    }
+
+    /// Lists the recent boards (for an empty query).
+    pub fn show_recents(&mut self) {
+        self.items = self.recents.iter().cloned().map(Item::from).collect();
+        self.selected = 0;
+        self.loading = false;
     }
 
     /// Workspace task search, waiting for the first words.
@@ -116,7 +145,7 @@ impl Picker {
 
     /// Whether the query is typed (rather than a list chosen from).
     pub fn has_query(&self) -> bool {
-        matches!(self.stage, Stage::Project | Stage::Task)
+        matches!(self.stage, Stage::Project | Stage::Task | Stage::Board)
     }
 
     /// Changes the query; returns the new search number to schedule.
@@ -128,7 +157,7 @@ impl Picker {
 
     /// Takes the results of search `seq`, unless a newer one was started.
     pub fn accept_projects(&mut self, seq: u64, projects: Vec<Named>) -> bool {
-        if self.stage != Stage::Project || seq != self.search_seq {
+        if !matches!(self.stage, Stage::Project | Stage::Board) || seq != self.search_seq {
             return false;
         }
         self.items = projects

@@ -2253,7 +2253,7 @@ fn on_board(sizes: &[usize]) -> App {
 }
 
 fn selected_card(app: &App) -> Option<&str> {
-    match &app.board.as_ref()?.state {
+    match &app.board()?.state {
         BoardState::Loaded(view) => view.selected_task().map(|t| t.gid.as_str()),
         _ => None,
     }
@@ -2273,7 +2273,7 @@ fn starting_on_a_project_loads_its_board_and_the_inbox() {
             .any(|e| matches!(e, Effect::LoadInbox { .. }))
     );
     assert!(matches!(
-        app.board.as_ref().map(|b| &b.state),
+        app.board().map(|b| &b.state),
         Some(BoardState::Loading)
     ));
 }
@@ -2295,7 +2295,7 @@ fn a_board_that_fails_to_load_shows_why() {
     });
 
     assert!(matches!(
-        app.board.as_ref().map(|b| &b.state),
+        app.board().map(|b| &b.state),
         Some(BoardState::Failed(message)) if message.contains("404")
     ));
 }
@@ -2310,7 +2310,7 @@ fn a_board_loaded_for_another_project_is_ignored() {
     });
 
     assert!(matches!(
-        app.board.as_ref().map(|b| &b.state),
+        app.board().map(|b| &b.state),
         Some(BoardState::Loading)
     ));
 }
@@ -2397,7 +2397,7 @@ fn the_board_gets_the_space_from_a_resize() {
         ..Sizes::default()
     }));
 
-    let Some(BoardState::Loaded(view)) = app.board.as_ref().map(|b| &b.state) else {
+    let Some(BoardState::Loaded(view)) = app.board().map(|b| &b.state) else {
         panic!("board not loaded");
     };
     assert_eq!(view.visible_columns(), 0..2);
@@ -2672,5 +2672,188 @@ fn a_comment_posted_from_the_board_marks_that_tasks_notifications_read() {
             read: true
         }),
         "{effects:?}"
+    );
+}
+
+// --- Project switcher and screens ------------------------------------------
+
+/// Types `query` into the open picker and lets its search run.
+fn search(app: &mut App, query: &str) -> Vec<Effect> {
+    keys(app, query);
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::SearchDue { seq })
+}
+
+/// Opens project `gid` ("Project <gid>") with `P` from wherever the app is,
+/// and loads its board with one column of `cards` cards.
+fn open_with_switcher(app: &mut App, gid: &str, cards: usize) {
+    keys(app, "P");
+    search(app, gid);
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::ProjectsFound {
+        seq,
+        result: Ok(vec![named(gid, &format!("Project {gid}"))]),
+    });
+    enter(app);
+    let mut board = project_board(&[cards]);
+    board.project = named(gid, &format!("Project {gid}"));
+    app.update(Msg::BoardLoaded {
+        project_gid: gid.into(),
+        result: Ok(board),
+    });
+}
+
+fn picker_names(app: &App) -> Vec<&str> {
+    app.picker
+        .as_ref()
+        .map(|p| p.items.iter().map(|i| i.name.as_str()).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn p_in_the_inbox_searches_projects_to_open_as_a_board() {
+    let mut app = loaded(3, 10);
+
+    keys(&mut app, "P");
+    let effects = search(&mut app, "web");
+
+    assert_eq!(
+        app.picker.as_ref().map(|p| &p.stage),
+        Some(&picker::Stage::Board)
+    );
+    assert_eq!(
+        effects,
+        vec![Effect::SearchProjects {
+            query: "web".into(),
+            seq: app.picker.as_ref().unwrap().search_seq
+        }]
+    );
+}
+
+#[test]
+fn choosing_a_project_shows_its_board_and_loads_it() {
+    let mut app = loaded(3, 10);
+    keys(&mut app, "P");
+    search(&mut app, "web");
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    app.update(Msg::ProjectsFound {
+        seq,
+        result: Ok(vec![named("7", "Website")]),
+    });
+
+    let effects = enter(&mut app);
+
+    assert!(app.picker.is_none());
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(
+        ignoring_detail(effects),
+        vec![Effect::LoadBoard {
+            project_gid: "7".into()
+        }]
+    );
+}
+
+#[test]
+fn tab_i_from_a_board_shows_the_inbox_where_it_was() {
+    let mut app = loaded(5, 10);
+    keys(&mut app, "jj");
+    open_with_switcher(&mut app, "7", 3);
+
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "i");
+
+    assert_eq!(app.screen, Screen::Inbox);
+    assert_eq!(selected_gid(&app), "2");
+}
+
+#[test]
+fn p_with_no_query_lists_this_sessions_boards_most_recent_first() {
+    let mut app = loaded(3, 10);
+    open_with_switcher(&mut app, "7", 1);
+    open_with_switcher(&mut app, "8", 1);
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "i");
+
+    let effects = keys(&mut app, "P");
+
+    assert_eq!(picker_names(&app), ["Project 8", "Project 7"]);
+    assert!(effects.is_empty(), "no search for recents: {effects:?}");
+}
+
+#[test]
+fn p_on_a_board_lists_the_other_boards_not_the_one_on_screen() {
+    let mut app = on_board(&[1]);
+    open_with_switcher(&mut app, "7", 1);
+
+    keys(&mut app, "P");
+
+    assert_eq!(picker_names(&app), ["Website"]);
+}
+
+#[test]
+fn p_enter_from_the_inbox_reopens_the_last_board_where_it_was() {
+    let mut app = loaded(3, 10);
+    open_with_switcher(&mut app, "7", 4);
+    keys(&mut app, "jj");
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "i");
+
+    keys(&mut app, "P");
+    let effects = ignoring_detail(enter(&mut app));
+
+    assert_eq!(app.screen, Screen::Board);
+    assert_eq!(selected_card(&app), Some("c0-2"));
+    assert_eq!(
+        effects,
+        vec![Effect::LoadBoard {
+            project_gid: "7".into()
+        }]
+    );
+}
+
+#[test]
+fn clearing_the_query_shows_the_recent_boards_again_without_a_search() {
+    let mut app = on_board(&[1]);
+    open_with_switcher(&mut app, "7", 1);
+    keys(&mut app, "P");
+    search(&mut app, "x");
+
+    key(&mut app, KeyCode::Backspace, KeyModifiers::NONE);
+    let seq = app.picker.as_ref().unwrap().search_seq;
+    let effects = app.update(Msg::SearchDue { seq });
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(picker_names(&app), ["Website"]);
+}
+
+#[test]
+fn only_the_board_on_screen_is_polled() {
+    let mut app = on_board(&[1]);
+    open_with_switcher(&mut app, "7", 1);
+
+    let effects = app.update(Msg::Tick);
+
+    assert_eq!(
+        effects
+            .iter()
+            .filter(|e| matches!(e, Effect::LoadBoard { .. }))
+            .collect::<Vec<_>>(),
+        [&Effect::LoadBoard {
+            project_gid: "7".into()
+        }]
+    );
+}
+
+#[test]
+fn the_inbox_keeps_polling_while_a_board_is_on_screen() {
+    let mut app = loaded(3, 10);
+    open_with_switcher(&mut app, "7", 1);
+
+    let effects = app.update(Msg::Tick);
+
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::LoadInbox { .. }))
     );
 }

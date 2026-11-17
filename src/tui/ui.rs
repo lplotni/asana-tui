@@ -217,6 +217,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
                 pair(normal(Cmd::FocusLeft), normal(Cmd::FocusRight)),
                 "column",
             ),
+            (normal(Cmd::SwitchProject), "projects"),
             (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
             (normal(Cmd::Refresh), "refresh"),
             (normal(Cmd::Help), "help"),
@@ -448,7 +449,7 @@ fn render_board_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) 
 
 /// The board's columns, or why there are none yet.
 fn render_board(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
-    let message = match app.board.as_ref().map(|b| &b.state) {
+    let message = match app.board().map(|b| &b.state) {
         Some(BoardState::Loaded(view)) => {
             render_columns(frame, area, view, theme, now);
             return;
@@ -560,6 +561,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::Task => " Search tasks ".to_owned(),
         Stage::MoveProject => " Move within which project? ".to_owned(),
         Stage::MoveSection { project, .. } => format!(" Move to a section of {} ", project.name),
+        Stage::Board => " Open a project's board ".to_owned(),
     };
     let mut lines = Vec::new();
     if picker.has_query() {
@@ -886,10 +888,7 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         left.push(Span::raw(format!("  {pending}")));
     }
     let loading = if on_board {
-        matches!(
-            app.board.as_ref().map(|b| &b.state),
-            Some(BoardState::Loading)
-        )
+        matches!(app.board().map(|b| &b.state), Some(BoardState::Loading))
     } else {
         app.loading
     };
@@ -1288,6 +1287,35 @@ mod tests {
     }
 
     #[test]
+    fn the_project_switcher_lists_recent_boards() {
+        let mut app = board_app();
+        // A second board, opened after the first.
+        press(&mut app, "P");
+        for c in "launch".chars() {
+            app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+                ratatui::crossterm::event::KeyCode::Char(c),
+                ratatui::crossterm::event::KeyModifiers::NONE,
+            )));
+        }
+        let seq = app.picker.as_ref().unwrap().search_seq;
+        app.update(Msg::SearchDue { seq });
+        app.update(Msg::ProjectsFound {
+            seq,
+            result: Ok(vec![crate::api::tasks::Named {
+                gid: "7".into(),
+                name: "Launch checklist".into(),
+            }]),
+        });
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+        press(&mut app, "P");
+
+        insta::assert_snapshot!(draw_at(&mut app, 100).backend());
+    }
+
+    #[test]
     fn the_board_hint_line_offers_columns_not_inbox_actions() {
         let app = board_app();
 
@@ -1295,6 +1323,7 @@ mod tests {
 
         assert!(labels.contains(&"column"), "{labels:?}");
         assert!(labels.contains(&"refresh"), "{labels:?}");
+        assert!(labels.contains(&"projects"), "{labels:?}");
         assert!(!labels.contains(&"read"), "{labels:?}");
     }
 

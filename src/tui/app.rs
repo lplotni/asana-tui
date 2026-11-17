@@ -309,7 +309,8 @@ pub enum Screen {
 /// The board of one project, as far as it's loaded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardSlot {
-    pub project_gid: String,
+    /// The project; its name is empty until known (`asn --project`).
+    pub project: Named,
     pub state: BoardState,
     /// A load of this board is running; another one isn't started.
     reloading: bool,
@@ -354,8 +355,9 @@ pub struct Toast {
 #[derive(Debug, Default)]
 pub struct App {
     pub screen: Screen,
-    /// The project board opened this session, if any.
-    pub board: Option<BoardSlot>,
+    /// Boards opened this session, most recently opened first. The first is
+    /// the one the board screen shows.
+    boards: Vec<BoardSlot>,
     /// Everything loaded, newest first.
     pub notifications: Vec<Notification>,
     /// Show only unread notifications. Off by default, matching the web Inbox.
@@ -440,13 +442,10 @@ impl App {
     /// behind it.
     pub fn new_on_board(project_gid: String) -> (App, Vec<Effect>) {
         let (mut app, mut effects) = App::new();
-        app.screen = Screen::Board;
-        app.board = Some(BoardSlot {
-            project_gid: project_gid.clone(),
-            state: BoardState::Loading,
-            reloading: true,
-        });
-        effects.push(Effect::LoadBoard { project_gid });
+        effects.extend(app.open_board(Named {
+            gid: project_gid,
+            name: String::new(),
+        }));
         (app, effects)
     }
 
@@ -688,6 +687,12 @@ impl App {
                 let query = p.query.clone();
                 let effect = match p.stage {
                     picker::Stage::Project => Effect::SearchProjects { query, seq },
+                    // An empty query lists the recent boards instead.
+                    picker::Stage::Board if query.is_empty() && p.has_recents() => {
+                        p.show_recents();
+                        return Vec::new();
+                    }
+                    picker::Stage::Board => Effect::SearchProjects { query, seq },
                     // A blank query finds nothing; don't ask Asana.
                     picker::Stage::Task if query.trim().is_empty() => {
                         p.accept_tasks(seq, Vec::new());
@@ -908,6 +913,7 @@ impl App {
             }
             Cmd::CommandLine => self.command = Some(String::new()),
             Cmd::SearchTasks => self.picker = Some(Picker::tasks()),
+            Cmd::SwitchProject => return self.open_switcher(),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.set_focus(Focus::List);
@@ -978,6 +984,11 @@ impl App {
             Cmd::AddToProject => return self.open_picker(),
             Cmd::MoveToSection => return self.open_move(),
             Cmd::OpenInBrowser => return self.open_in_browser(),
+            Cmd::SwitchProject => return self.open_switcher(),
+            Cmd::GoToInbox => {
+                self.screen = Screen::Inbox;
+                self.set_focus(Focus::List);
+            }
             Cmd::Help => self.help = true,
             Cmd::Refresh => return self.reload_board(),
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
@@ -991,13 +1002,64 @@ impl App {
         if self.screen != Screen::Board {
             return Vec::new();
         }
-        let Some(slot) = self.board.as_mut().filter(|slot| !slot.reloading) else {
+        let Some(slot) = self.boards.first_mut().filter(|slot| !slot.reloading) else {
             return Vec::new();
         };
         slot.reloading = true;
         vec![Effect::LoadBoard {
-            project_gid: slot.project_gid.clone(),
+            project_gid: slot.project.gid.clone(),
         }]
+    }
+
+    /// Shows the board of `project`: from this session's cache at once if
+    /// it was opened before (and reloads it), else loading.
+    fn open_board(&mut self, project: Named) -> Vec<Effect> {
+        let slot = match self
+            .boards
+            .iter()
+            .position(|b| b.project.gid == project.gid)
+        {
+            Some(index) => self.boards.remove(index),
+            None => BoardSlot {
+                project,
+                state: BoardState::Loading,
+                reloading: false,
+            },
+        };
+        self.boards.insert(0, slot);
+        self.screen = Screen::Board;
+        self.set_focus(Focus::List);
+        let sizes = self.sizes;
+        if let Some(view) = self.board_view_mut() {
+            view.resize(sizes.board_width, sizes.board_card_rows);
+        }
+        self.reload_board()
+    }
+
+    /// The project switcher: the other boards opened this session, or a
+    /// project search when there are none.
+    fn open_switcher(&mut self) -> Vec<Effect> {
+        let skip = usize::from(self.screen == Screen::Board);
+        let recents: Vec<Named> = self
+            .boards
+            .iter()
+            .skip(skip)
+            .map(|b| b.project.clone())
+            .collect();
+        let mut picker = Picker::boards(recents);
+        let effects = if picker.has_recents() {
+            Vec::new()
+        } else {
+            let seq = picker.set_query(String::new());
+            vec![Effect::ScheduleSearch { seq }]
+        };
+        self.picker = Some(picker);
+        effects
+    }
+
+    /// The most recently opened board: the one the board screen shows.
+    pub fn board(&self) -> Option<&BoardSlot> {
+        self.boards.first()
     }
 
     /// The selected card of the loaded board, if any.
@@ -1007,14 +1069,14 @@ impl App {
 
     /// The loaded board on screen, if any.
     pub fn board_view(&self) -> Option<&BoardView> {
-        match &self.board.as_ref()?.state {
+        match &self.boards.first()?.state {
             BoardState::Loaded(view) => Some(view),
             _ => None,
         }
     }
 
     fn board_view_mut(&mut self) -> Option<&mut BoardView> {
-        match &mut self.board.as_mut()?.state {
+        match &mut self.boards.first_mut()?.state {
             BoardState::Loaded(view) => Some(view),
             _ => None,
         }
@@ -1025,13 +1087,16 @@ impl App {
     fn board_loaded(&mut self, project_gid: &str, result: Result<Board, String>) {
         let sizes = self.sizes;
         let Some(slot) = self
-            .board
-            .as_mut()
-            .filter(|slot| slot.project_gid == project_gid)
+            .boards
+            .iter_mut()
+            .find(|slot| slot.project.gid == project_gid)
         else {
             return;
         };
         slot.reloading = false;
+        if let Ok(board) = &result {
+            slot.project = board.project.clone();
+        }
         match (&mut slot.state, result) {
             (BoardState::Loaded(view), Ok(board)) => view.replace(board),
             (_, Ok(board)) => {
@@ -1434,6 +1499,10 @@ impl App {
                 }
                 self.details.insert(gid.clone(), Detail::Loading);
                 vec![Effect::LoadDetail { gid }]
+            }
+            picker::Stage::Board => {
+                self.picker = None;
+                self.open_board(item.into_named())
             }
             picker::Stage::Project => {
                 let project = item.into_named();

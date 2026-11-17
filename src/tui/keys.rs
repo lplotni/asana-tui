@@ -54,6 +54,8 @@ pub enum Cmd {
     AddToProject,
     MoveToSection,
     GoToInbox,
+    /// Open a project's board (the project switcher).
+    SwitchProject,
     OpenInBrowser,
     ToggleFilter,
     Refresh,
@@ -220,6 +222,13 @@ pub const BINDINGS: &[Binding] = &[
         Cmd::ToggleFilter,
         Asn,
         "unread only / all",
+    ),
+    bind(
+        Normal,
+        &[Char('P')],
+        Cmd::SwitchProject,
+        Asn,
+        "open a project's board",
     ),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),
