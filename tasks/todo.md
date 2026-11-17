@@ -391,7 +391,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` for each criterion. A picker snapshot. Hints and help.
-- [ ] Manual (with T17): complete, undo and assign on a real board and in the Inbox.
+- [x] Manual (with T17): complete, undo and assign on a real board and in the Inbox (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T16
 
