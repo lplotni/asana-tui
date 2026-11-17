@@ -257,7 +257,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` for each criterion. A status-bar test for the prompt. The key collision test and the help overlay snapshot.
-- [ ] Manual: create a task on a real board.
+- [x] Manual: create a task on a real board (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T11
 
@@ -328,7 +328,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` for each criterion. A snapshot of the picker over the editor.
-- [ ] Manual: mention someone in a real comment and description.
+- [x] Manual: mention someone in a real comment and description (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T13 and Checkpoint M1
 
