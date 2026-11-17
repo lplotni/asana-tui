@@ -59,6 +59,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `c` (or `Tab c`) | Comment on the task in an editor overlay: `Ctrl-s` posts, `Esc` cancels (the text is kept for the next `c`), `Ctrl-o` continues in your `$EDITOR`; posting marks the task's notifications read |
 | `Tab e` | Edit the description as plain text in the same overlay (`Ctrl-s` saves); asks first if it has formatting, which plain text removes |
 | `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
+| `m` | Move the task to another section: pick the project if it's in several, then the section (its current one is marked ✓; `j`/`k` or `Ctrl-n`/`Ctrl-p` move) |
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
@@ -79,6 +80,8 @@ asn search checkout redirect           # find tasks: gid, ✓ if completed, name
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
+asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
+asn project move <task-gid> <section-gid>    # move the task to another section of a project it's in
 asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
 ```
 
@@ -96,6 +99,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | Attachments | `GET /attachments?parent={task}` |
 | Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
+| Move to a section | `GET /projects/{project}/sections`, `POST /sections/{section}/addTask` |
 | Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
 
 The Asana web app runs on its own internal API, so it can show things the public API can't; those gaps are listed below.

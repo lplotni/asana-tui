@@ -1,5 +1,6 @@
 //! The search-as-you-type picker: "add to project" (search projects, then
-//! choose a section) and workspace task search. Pure state; the
+//! choose a section), "move to section" (choose one of the task's projects,
+//! then a section) and workspace task search. Pure state; the
 //! [`App`](super::app::App) turns its decisions into effects.
 
 use crate::api::search::FoundTask;
@@ -13,8 +14,8 @@ pub const SEARCH_DEBOUNCE: std::time::Duration = std::time::Duration::from_milli
 pub struct Item {
     pub gid: Option<String>,
     pub name: String,
-    /// A completed task (drawn with ✓).
-    pub done: bool,
+    /// Drawn with ✓: a completed task, or the section a task is in.
+    pub checked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +26,14 @@ pub enum Stage {
     },
     /// Finding a task in the workspace to show in the task pane.
     Task,
+    /// Choosing which of the task's projects to move it within.
+    MoveProject,
+    /// Choosing the section of `project` to move the task to; `current` is
+    /// the section it's in now.
+    MoveSection {
+        project: Named,
+        current: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +74,32 @@ impl Picker {
         }
     }
 
+    /// Moving `task_gid`: choose among `projects` (the task's own).
+    pub fn move_within(task_gid: String, projects: Vec<Named>) -> Picker {
+        Picker {
+            stage: Stage::MoveProject,
+            loading: false,
+            items: projects
+                .into_iter()
+                .map(|p| Item {
+                    gid: Some(p.gid),
+                    name: p.name,
+                    checked: false,
+                })
+                .collect(),
+            ..Picker::new(task_gid, Vec::new())
+        }
+    }
+
+    /// Moving `task_gid` within `project`, from section `current`; the
+    /// sections are loading.
+    pub fn move_to_section(task_gid: String, project: Named, current: Option<String>) -> Picker {
+        Picker {
+            stage: Stage::MoveSection { project, current },
+            ..Picker::new(task_gid, Vec::new())
+        }
+    }
+
     /// Whether the query is typed (rather than a list chosen from).
     pub fn has_query(&self) -> bool {
         matches!(self.stage, Stage::Project | Stage::Task)
@@ -88,7 +123,7 @@ impl Picker {
             .map(|p| Item {
                 gid: Some(p.gid),
                 name: p.name,
-                done: false,
+                checked: false,
             })
             .collect();
         self.selected = 0;
@@ -106,7 +141,7 @@ impl Picker {
             .map(|t| Item {
                 gid: Some(t.gid),
                 name: t.name,
-                done: t.completed,
+                checked: t.completed,
             })
             .collect();
         self.selected = 0;
@@ -122,21 +157,35 @@ impl Picker {
         self.loading = true;
     }
 
-    /// Takes the sections of `project_gid`, offering "No section" first.
+    /// Takes the sections of `project_gid`. Adding to a project offers
+    /// "No section" first; moving marks the section the task is in.
     pub fn accept_sections(&mut self, project_gid: &str, sections: Vec<Named>) -> bool {
         match &self.stage {
             Stage::Section { project } if project.gid == project_gid => {}
+            Stage::MoveSection { project, current } if project.gid == project_gid => {
+                self.items = sections
+                    .into_iter()
+                    .map(|s| Item {
+                        checked: current.as_ref() == Some(&s.gid),
+                        gid: Some(s.gid),
+                        name: s.name,
+                    })
+                    .collect();
+                self.selected = 0;
+                self.loading = false;
+                return true;
+            }
             _ => return false,
         }
         self.items = std::iter::once(Item {
             gid: None,
             name: "No section".into(),
-            done: false,
+            checked: false,
         })
         .chain(sections.into_iter().map(|s| Item {
             gid: Some(s.gid),
             name: s.name,
-            done: false,
+            checked: false,
         }))
         .collect();
         self.selected = 0;
@@ -367,7 +416,7 @@ mod tests {
             Item {
                 gid: None,
                 name: "No section".into(),
-                done: false,
+                checked: false,
             }
         );
         assert_eq!(items[1].gid.as_deref(), Some("43"));

@@ -201,6 +201,7 @@ fn run_effects(
             Effect::MarkRead { .. }
                 | Effect::PostComment { .. }
                 | Effect::AddToProject { .. }
+                | Effect::MoveToSection { .. }
                 | Effect::SaveNotes { .. }
         );
         let task = async move {
@@ -326,6 +327,23 @@ fn run_effects(
                     Msg::AddedToProject {
                         task_gid,
                         project_gid: project.gid,
+                        result,
+                    }
+                }
+                Effect::MoveToSection {
+                    task_gid,
+                    project_gid,
+                    section,
+                    previous,
+                } => {
+                    let result = core::move_to_section(&client, &task_gid, &section.gid)
+                        .await
+                        .map_err(|e| e.to_string());
+                    Msg::MovedToSection {
+                        task_gid,
+                        project_gid,
+                        section,
+                        previous,
                         result,
                     }
                 }

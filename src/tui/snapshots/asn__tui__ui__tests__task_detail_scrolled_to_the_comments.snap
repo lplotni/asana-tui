@@ -1,5 +1,6 @@
 ---
 source: src/tui/ui.rs
+assertion_line: 986
 expression: "draw(&app, &terminal_theme()).backend()"
 ---
 " asn  Inbox · 5 unread                                                                      [f] all "
@@ -25,4 +26,4 @@ expression: "draw(&app, &terminal_theme()).backend()"
 "│                                           │┃   whiskey echo cedar delta willow romeo kilo golf   ┃"
 "└───────────────────────────────────────────┘┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
 " NORMAL  1/10                                                                                       "
-" j/k scroll   Esc back   c comment   Tab e edit description   p project   ? help                    "
+" j/k scroll   Esc back   c comment   Tab e edit description   p project   m move   ? help           "

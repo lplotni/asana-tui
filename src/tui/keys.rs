@@ -52,6 +52,7 @@ pub enum Cmd {
     Comment,
     EditDescription,
     AddToProject,
+    MoveToSection,
     GoToInbox,
     OpenInBrowser,
     ToggleFilter,
@@ -191,6 +192,13 @@ pub const BINDINGS: &[Binding] = &[
         Cmd::AddToProject,
         Asana,
         "add to project",
+    ),
+    bind(
+        Normal,
+        &[Char('m')],
+        Cmd::MoveToSection,
+        Asn,
+        "move to another section",
     ),
     bind(
         Normal,

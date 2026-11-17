@@ -96,6 +96,13 @@ pub enum Msg {
         project_gid: String,
         result: Result<(), String>,
     },
+    MovedToSection {
+        task_gid: String,
+        project_gid: String,
+        section: Named,
+        previous: Option<Named>,
+        result: Result<(), String>,
+    },
     /// Result of marking `gids` read (or unread): the GIDs Asana couldn't update.
     Marked {
         gids: Vec<String>,
@@ -177,6 +184,13 @@ pub enum Effect {
         task_gid: String,
         project: Named,
         section: Option<Named>,
+    },
+    /// Move the task to `section` of `project_gid` (it was in `previous`).
+    MoveToSection {
+        task_gid: String,
+        project_gid: String,
+        section: Named,
+        previous: Option<Named>,
     },
 }
 
@@ -684,6 +698,27 @@ impl App {
                 }
                 Vec::new()
             }
+            Msg::MovedToSection {
+                task_gid,
+                project_gid,
+                section,
+                previous,
+                result,
+            } => {
+                match result {
+                    Ok(()) => {
+                        self.toast = Some(Toast {
+                            text: format!("Moved to {}", section.name),
+                            is_error: false,
+                        });
+                    }
+                    Err(message) => {
+                        self.set_section(&task_gid, &project_gid, previous);
+                        self.toast = Some(Toast::error(format!("Not moved: {message}")));
+                    }
+                }
+                Vec::new()
+            }
             Msg::Marked { gids, read, result } => {
                 for gid in &gids {
                     self.pending_marks.remove(gid);
@@ -800,6 +835,7 @@ impl App {
             Cmd::Comment => return self.start_comment(),
             Cmd::EditDescription => return self.start_description(),
             Cmd::AddToProject => return self.open_picker(),
+            Cmd::MoveToSection => return self.open_move(),
             Cmd::MarkRead => return self.mark(Some(true)),
             Cmd::MarkUnread => return self.mark(Some(false)),
             Cmd::ToggleRead => return self.mark(None),
@@ -1000,6 +1036,75 @@ impl App {
         }
     }
 
+    /// Starts moving the shown task to another section: straight to the
+    /// sections when it's in one project, else asks which project first.
+    fn open_move(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast {
+                text: "Only tasks can be moved".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let Some(Detail::Loaded(detail)) = self.details.get(&task_gid) else {
+            self.toast = Some(Toast {
+                text: "Wait for the task to load".into(),
+                is_error: false,
+            });
+            return Vec::new();
+        };
+        let memberships = detail.task.memberships.clone();
+        match memberships.as_slice() {
+            [] => {
+                self.toast = Some(Toast {
+                    text: "The task isn't in a project yet; p adds it to one".into(),
+                    is_error: false,
+                });
+                Vec::new()
+            }
+            [only] => {
+                let project_gid = only.project.gid.clone();
+                self.picker = Some(Picker::move_to_section(
+                    task_gid,
+                    only.project.clone(),
+                    only.section.as_ref().map(|s| s.gid.clone()),
+                ));
+                vec![Effect::LoadSections { project_gid }]
+            }
+            several => {
+                let projects = several.iter().map(|m| m.project.clone()).collect();
+                self.picker = Some(Picker::move_within(task_gid, projects));
+                Vec::new()
+            }
+        }
+    }
+
+    /// The section task `task_gid` is in within `project_gid`, if loaded.
+    fn membership_section(&self, task_gid: &str, project_gid: &str) -> Option<Named> {
+        let Some(Detail::Loaded(detail)) = self.details.get(task_gid) else {
+            return None;
+        };
+        detail
+            .task
+            .memberships
+            .iter()
+            .find(|m| m.project.gid == project_gid)
+            .and_then(|m| m.section.clone())
+    }
+
+    /// Shows task `task_gid` in `section` of `project_gid` (if loaded).
+    fn set_section(&mut self, task_gid: &str, project_gid: &str, section: Option<Named>) {
+        if let Some(Detail::Loaded(detail)) = self.details.get_mut(task_gid)
+            && let Some(membership) = detail
+                .task
+                .memberships
+                .iter_mut()
+                .find(|m| m.project.gid == project_gid)
+        {
+            membership.section = section;
+        }
+    }
+
     /// Opens the project picker for the selected task, hiding the projects
     /// it's already in.
     fn open_picker(&mut self) -> Vec<Effect> {
@@ -1040,6 +1145,11 @@ impl App {
                 let query = format!("{}{c}", picker.query);
                 schedule(picker, query)
             }
+            // Lists without a query move with j/k too.
+            Outcome::Insert(c @ ('j' | 'k')) => {
+                picker.move_by(if c == 'j' { 1 } else { -1 });
+                Vec::new()
+            }
             Outcome::Action(Action { cmd, .. }) => match cmd {
                 Cmd::DeleteChar if picker.has_query() => {
                     let mut query = picker.query.clone();
@@ -1073,6 +1183,44 @@ impl App {
             return Vec::new();
         };
         match picker.stage.clone() {
+            picker::Stage::MoveProject => {
+                let task_gid = picker.task_gid.clone();
+                let project_gid = item.gid.unwrap_or_default();
+                let current = self.membership_section(&task_gid, &project_gid);
+                let project = Named {
+                    gid: project_gid.clone(),
+                    name: item.name,
+                };
+                self.picker = Some(Picker::move_to_section(
+                    task_gid,
+                    project,
+                    current.map(|s| s.gid),
+                ));
+                vec![Effect::LoadSections { project_gid }]
+            }
+            picker::Stage::MoveSection { project, .. } => {
+                let task_gid = picker.task_gid.clone();
+                self.picker = None;
+                if item.checked {
+                    self.toast = Some(Toast {
+                        text: format!("Already in {}", item.name),
+                        is_error: false,
+                    });
+                    return Vec::new();
+                }
+                let section = Named {
+                    gid: item.gid.unwrap_or_default(),
+                    name: item.name,
+                };
+                let previous = self.membership_section(&task_gid, &project.gid);
+                self.set_section(&task_gid, &project.gid, Some(section.clone()));
+                vec![Effect::MoveToSection {
+                    task_gid,
+                    project_gid: project.gid,
+                    section,
+                    previous,
+                }]
+            }
             picker::Stage::Task => {
                 self.picker = None;
                 let gid = item.gid.unwrap_or_default();

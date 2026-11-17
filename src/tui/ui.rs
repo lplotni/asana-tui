@@ -198,6 +198,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::Comment), "comment"),
             (normal(Cmd::EditDescription), "edit description"),
             (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::OpenInBrowser), "open in browser"),
             (normal(Cmd::MarkRead), "read"),
             (normal(Cmd::Help), "help"),
@@ -384,6 +385,8 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::Project => " Add to project ".to_owned(),
         Stage::Section { project } => format!(" Section in {} ", project.name),
         Stage::Task => " Search tasks ".to_owned(),
+        Stage::MoveProject => " Move within which project? ".to_owned(),
+        Stage::MoveSection { project, .. } => format!(" Move to a section of {} ", project.name),
     };
     let block = Block::new()
         .borders(Borders::ALL)
@@ -407,12 +410,12 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
     } else if picker.stage == Stage::Task && picker.query.trim().is_empty() {
         lines.push(Line::styled("Type to search tasks", muted));
     } else if picker.items.is_empty() {
-        let what = if picker.stage == Stage::Task {
-            "tasks"
-        } else {
-            "projects"
+        let message = match picker.stage {
+            Stage::Task => "No matching tasks",
+            Stage::MoveSection { .. } => "This project has no sections",
+            _ => "No matching projects",
         };
-        lines.push(Line::styled(format!("No matching {what}"), muted));
+        lines.push(Line::styled(message, muted));
     }
     // Rows left for items inside the borders; scroll to keep the selection in.
     let rows = usize::from(height.saturating_sub(2)).saturating_sub(lines.len());
@@ -424,7 +427,7 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
             theme.style(Role::Text)
         };
         let marker = if index == picker.selected { "▌" } else { " " };
-        let done = if item.done { "✓ " } else { "" };
+        let done = if item.checked { "✓ " } else { "" };
         lines.push(Line::styled(format!("{marker}{done}{}", item.name), style));
     }
     frame.render_widget(Clear, area);
@@ -1528,7 +1531,7 @@ mod tests {
     #[test]
     fn completed_tasks_in_the_results_are_marked() {
         let mut app = app_searching("task", 2);
-        app.picker.as_mut().unwrap().items[1].done = true;
+        app.picker.as_mut().unwrap().items[1].checked = true;
 
         let text = screen_text(&draw(&app, &terminal_theme()));
 
@@ -1678,5 +1681,41 @@ mod tests {
 
         assert_centered(&terminal, " Keys ");
         assert!(screen_text(&terminal).contains("search tasks in the workspace"));
+    }
+
+    #[test]
+    fn the_section_picker_for_a_move_marks_the_current_section() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        let mut picker = Picker::move_to_section(
+            "t".into(),
+            crate::api::tasks::Named {
+                gid: "p".into(),
+                name: "Webshop".into(),
+            },
+            Some("s2".into()),
+        );
+        picker.accept_sections(
+            "p",
+            vec![
+                crate::api::tasks::Named {
+                    gid: "s1".into(),
+                    name: "To do".into(),
+                },
+                crate::api::tasks::Named {
+                    gid: "s2".into(),
+                    name: "Doing".into(),
+                },
+            ],
+        );
+        app.picker = Some(picker);
+
+        let terminal = draw(&app, &terminal_theme());
+        let text = screen_text(&terminal);
+
+        assert!(text.contains("Move to a section of Webshop"), "{text}");
+        assert!(text.contains("✓ Doing"));
+        assert!(!text.contains("✓ To do"));
+        assert!(!text.contains("No section"));
+        assert_centered(&terminal, " Move to a section of Webshop ");
     }
 }

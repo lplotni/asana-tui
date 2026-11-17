@@ -1852,7 +1852,7 @@ fn found_tasks_are_listed_and_completed_ones_marked() {
         .unwrap()
         .items
         .iter()
-        .map(|i| (i.name.as_str(), i.done))
+        .map(|i| (i.name.as_str(), i.checked))
         .collect();
     assert_eq!(items, [("Open one", false), ("Done one", true)]);
 }
@@ -1965,4 +1965,214 @@ fn a_found_task_that_is_still_loading_opens_by_its_gid_in_the_browser() {
             url: "https://app.asana.com/0/0/11".into()
         }]
     );
+}
+
+// --- Moving a task between sections (`m`) -------------------------------------
+
+/// Project "1200000000000043" (section "…044") and "1200000000000045"
+/// (section "…046"), from `task_full.json`.
+const PROJECT: &str = "1200000000000043";
+const SECTION: &str = "1200000000000044";
+
+fn named(gid: &str, name: &str) -> Named {
+    Named {
+        gid: gid.into(),
+        name: name.into(),
+    }
+}
+
+/// The task "t0" loaded, in only its first project when `one_project`.
+fn task_in_projects(one_project: bool) -> App {
+    let mut app = loaded(3, 10);
+    let mut detail = task_detail();
+    if one_project {
+        detail.task.memberships.truncate(1);
+    }
+    load_task(&mut app, "t0", detail);
+    app
+}
+
+fn section_of(app: &App, project: &str) -> Option<String> {
+    match app.selected_detail() {
+        Some(Detail::Loaded(d)) => d
+            .task
+            .memberships
+            .iter()
+            .find(|m| m.project.gid == project)
+            .and_then(|m| m.section.as_ref().map(|s| s.name.clone())),
+        _ => panic!("not loaded"),
+    }
+}
+
+/// Opens `m` on a one-project task and delivers its sections.
+fn choosing_section(app: &mut App) {
+    keys(app, "m");
+    app.update(Msg::SectionsLoaded {
+        project_gid: PROJECT.into(),
+        result: Ok(vec![
+            named("s-todo", "To do"),
+            named(SECTION, "Maple ember"),
+            named("s-done", "Done"),
+        ]),
+    });
+}
+
+#[test]
+fn m_waits_for_the_task_to_load() {
+    let mut app = loaded(3, 10);
+
+    keys(&mut app, "m");
+
+    assert!(app.picker.is_none());
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "Wait for the task to load"
+    );
+}
+
+#[test]
+fn m_on_a_task_in_no_project_points_to_p() {
+    let mut app = loaded(3, 10);
+    let mut detail = task_detail();
+    detail.task.memberships.clear();
+    load_task(&mut app, "t0", detail);
+
+    keys(&mut app, "m");
+
+    assert!(app.picker.is_none());
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "The task isn't in a project yet; p adds it to one"
+    );
+}
+
+#[test]
+fn m_on_a_task_in_one_project_goes_straight_to_its_sections() {
+    let mut app = task_in_projects(true);
+
+    let effects = keys(&mut app, "m");
+
+    assert_eq!(
+        effects,
+        [Effect::LoadSections {
+            project_gid: PROJECT.into()
+        }]
+    );
+    assert!(matches!(
+        &app.picker.as_ref().unwrap().stage,
+        picker::Stage::MoveSection { project, .. } if project.gid == PROJECT
+    ));
+}
+
+#[test]
+fn m_on_a_task_in_several_projects_asks_which_project_first() {
+    let mut app = task_in_projects(false);
+
+    let effects = keys(&mut app, "m");
+
+    assert!(effects.is_empty());
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.stage, picker::Stage::MoveProject);
+    let names: Vec<&str> = picker.items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, ["Stone maple zulu cedar", "Ember zulu"]);
+
+    keys(&mut app, "j");
+    let effects = key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert_eq!(
+        effects,
+        [Effect::LoadSections {
+            project_gid: "1200000000000045".into()
+        }]
+    );
+}
+
+#[test]
+fn the_sections_show_where_the_task_is_now() {
+    let mut app = task_in_projects(true);
+
+    choosing_section(&mut app);
+
+    let items: Vec<(&str, bool)> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .map(|i| (i.name.as_str(), i.checked))
+        .collect();
+    assert_eq!(
+        items,
+        [("To do", false), ("Maple ember", true), ("Done", false)]
+    );
+}
+
+#[test]
+fn choosing_a_section_moves_the_task_right_away() {
+    let mut app = task_in_projects(true);
+    choosing_section(&mut app);
+
+    keys(&mut app, "jj");
+    let effects = key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert_eq!(
+        effects,
+        [Effect::MoveToSection {
+            task_gid: "t0".into(),
+            project_gid: PROJECT.into(),
+            section: named("s-done", "Done"),
+            previous: Some(named(SECTION, "Maple ember")),
+        }]
+    );
+    assert!(app.picker.is_none());
+    assert_eq!(section_of(&app, PROJECT).as_deref(), Some("Done"));
+}
+
+#[test]
+fn choosing_the_current_section_changes_nothing() {
+    let mut app = task_in_projects(true);
+    choosing_section(&mut app);
+
+    keys(&mut app, "j");
+    let effects = key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    assert!(effects.is_empty());
+    assert!(app.picker.is_none());
+    assert_eq!(app.toast.as_ref().unwrap().text, "Already in Maple ember");
+}
+
+#[test]
+fn a_confirmed_move_says_where_the_task_went() {
+    let mut app = task_in_projects(true);
+
+    app.update(Msg::MovedToSection {
+        task_gid: "t0".into(),
+        project_gid: PROJECT.into(),
+        section: named("s-done", "Done"),
+        previous: Some(named(SECTION, "Maple ember")),
+        result: Ok(()),
+    });
+
+    assert_eq!(app.toast.as_ref().unwrap().text, "Moved to Done");
+    assert!(!app.toast.as_ref().unwrap().is_error);
+}
+
+#[test]
+fn a_refused_move_puts_the_task_back() {
+    let mut app = task_in_projects(true);
+    choosing_section(&mut app);
+    keys(&mut app, "jj");
+    key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+
+    app.update(Msg::MovedToSection {
+        task_gid: "t0".into(),
+        project_gid: PROJECT.into(),
+        section: named("s-done", "Done"),
+        previous: Some(named(SECTION, "Maple ember")),
+        result: Err("forbidden".into()),
+    });
+
+    assert_eq!(section_of(&app, PROJECT).as_deref(), Some("Maple ember"));
+    assert_eq!(app.toast.as_ref().unwrap().text, "Not moved: forbidden");
+    assert!(app.toast.as_ref().unwrap().is_error);
 }
