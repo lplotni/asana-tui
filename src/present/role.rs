@@ -43,4 +43,8 @@ roles! {
     ToastSuccess => "toast_success",
     ToastError => "toast_error",
     PickerMatch => "picker_match",
+    Celebrate1 => "celebrate_1",
+    Celebrate2 => "celebrate_2",
+    Celebrate3 => "celebrate_3",
+    Celebrate4 => "celebrate_4",
 }

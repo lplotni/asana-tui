@@ -65,3 +65,17 @@ modifiers = ["bold"]
 [picker_match]
 fg = "yellow"
 modifiers = ["bold"]
+
+# The colours a completed board card cycles through as it's struck out.
+
+[celebrate_1]
+fg = "magenta"
+
+[celebrate_2]
+fg = "yellow"
+
+[celebrate_3]
+fg = "green"
+
+[celebrate_4]
+fg = "cyan"

@@ -68,3 +68,17 @@ modifiers = ["bold"]
 [picker_match]
 fg = "#fabd2f"
 modifiers = ["bold"]
+
+# The colours a completed board card cycles through as it's struck out.
+
+[celebrate_1]
+fg = "#d3869b"
+
+[celebrate_2]
+fg = "#fabd2f"
+
+[celebrate_3]
+fg = "#b8bb26"
+
+[celebrate_4]
+fg = "#8ec07c"

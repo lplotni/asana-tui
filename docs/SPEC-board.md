@@ -184,7 +184,7 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
 ### F23. Completion animation
 
 - When `d` completes a task on a board, its card plays a short animation before it leaves its column, instead of disappearing at once (F16):
-  1. **Strike (about 240 ms):** a strike-through sweeps across the name from left to right, and the second line reads `✓ done` (role `toast_success`).
+  1. **Strike (about 240 ms):** a strike-through sweeps across the name from left to right in a band of colours that moves with it (roles `celebrate_1`–`celebrate_4`, one per letter, cycling), and the second line reads `✓ done`, cycling through the same colours.
   2. **Collapse (about 160 ms):** the card shrinks to its name line, then is gone, and the cards below move up.
 - Frames come every 40 ms. Other keys keep working during the animation. The cursor stays on the card until it leaves, then behaves as in F16.
 - **Undo:** `d` during the animation (the next key, as in F16) reopens the task: the animation stops and the card stays as it was.
@@ -192,7 +192,7 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
 - **Failure:** if Asana refuses the completion, the card is restored (as in F16), whether or not the animation has finished.
 - **Off switch:** `animations = false` in the config file or `ASN_ANIMATIONS=off` gives F16's instant behaviour.
 - The Inbox and search task pane are unchanged: they show `✓ Completed` at once, and nothing disappears there.
-- Styles come from existing roles (`text_muted` with a crossed-out modifier, `toast_success`). No new theme roles.
+- Styles come from theme roles: four new ones, `celebrate_1`–`celebrate_4` (magenta, yellow, green and cyan in `terminal`; the matching gruvbox colours in `dark` and `light`; no colours under `NO_COLOR`), and `text_muted` with a crossed-out modifier during the collapse. Added at the user's request (2026-11-17).
 
 **Tests (F22–F23):**
 - `config.rs`: precedence (env over file over default) for every key; `token` rejected; unknown key and wrong type rejected with the key named; `XDG_CONFIG_HOME` and `HOME` path resolution; a missing file is the old env-only behaviour.

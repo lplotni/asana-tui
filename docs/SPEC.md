@@ -203,6 +203,7 @@ asn project add <task-gid> <project-gid> [--section GID]
   - `actor`, `timestamp`, `task_meta` (assignee, due date, projects), `comment_author`
   - `statusbar`, `statusbar_mode`, `keyhint`
   - `toast_success`, `toast_error`, `picker_match`
+  - `celebrate_1`–`celebrate_4` (the completion animation, F23 in SPEC-board.md)
 
   Rendering code asks for a role, never for a color.
 - **Built-in themes:**

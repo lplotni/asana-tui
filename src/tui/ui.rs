@@ -625,21 +625,41 @@ fn completing_card_item<'a>(
         .char_indices()
         .nth(struck)
         .map_or(name.len(), |(i, _)| i);
-    let name_line = Line::from(vec![
-        Span::styled(
+    let crossed = |role| theme.style(role).add_modifier(Modifier::CROSSED_OUT);
+    let mut spans: Vec<Span> = if frame < STRIKE_FRAMES {
+        // A band of colours that moves along with the strike.
+        name[..split]
+            .chars()
+            .enumerate()
+            .map(|(i, c)| Span::styled(c.to_string(), crossed(celebrate(i + usize::from(frame)))))
+            .collect()
+    } else {
+        vec![Span::styled(
             name[..split].to_owned(),
-            theme
-                .style(Role::TextMuted)
-                .add_modifier(Modifier::CROSSED_OUT),
-        ),
-        Span::styled(name[split..].to_owned(), theme.style(Role::Text)),
-    ]);
+            crossed(Role::TextMuted),
+        )]
+    };
+    spans.push(Span::styled(
+        name[split..].to_owned(),
+        theme.style(Role::Text),
+    ));
+    let name_line = Line::from(spans);
     if frame < STRIKE_FRAMES {
-        let done = Line::styled("✓ done", theme.style(Role::ToastSuccess));
+        let done = Line::styled("✓ done", theme.style(celebrate(usize::from(frame))));
         ListItem::new(vec![name_line, done])
     } else {
         ListItem::new(vec![name_line])
     }
+}
+
+/// The `n`th colour of the completion animation, cycling.
+fn celebrate(n: usize) -> Role {
+    [
+        Role::Celebrate1,
+        Role::Celebrate2,
+        Role::Celebrate3,
+        Role::Celebrate4,
+    ][n % 4]
 }
 
 /// The comment or description editor, centered.
@@ -1253,12 +1273,18 @@ mod tests {
         let terminal = completing_board(2);
 
         let buffer = terminal.backend().buffer();
-        let struck = buffer
+        let struck: Vec<_> = buffer
             .content()
             .iter()
             .filter(|c| c.modifier.contains(Modifier::CROSSED_OUT))
-            .count();
-        assert!(struck > 0, "nothing is struck through");
+            .collect();
+        assert!(!struck.is_empty(), "nothing is struck through");
+        let colours: std::collections::HashSet<_> = struck.iter().map(|c| c.fg).collect();
+        assert_eq!(
+            colours.len(),
+            4,
+            "the strike cycles four colours: {colours:?}"
+        );
         insta::assert_snapshot!(terminal.backend());
     }
 
