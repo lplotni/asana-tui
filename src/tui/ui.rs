@@ -13,7 +13,7 @@ use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
 use crate::api::notifications::Notification;
-use crate::present::format::{describe, relative_time};
+use crate::present::format::{describe, is_bidi_control, relative_time};
 use crate::present::{card, detail};
 
 /// Lines per Inbox item.
@@ -409,11 +409,11 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
 /// zero-width graphemes); they would reorder what the terminal shows.
 fn strip_bidi_controls(buffer: &mut ratatui::buffer::Buffer) {
     for cell in &mut buffer.content {
-        if cell.symbol().contains(crate::cli::is_bidi_control) {
+        if cell.symbol().contains(is_bidi_control) {
             let kept: String = cell
                 .symbol()
                 .chars()
-                .filter(|&c| !crate::cli::is_bidi_control(c))
+                .filter(|&c| !is_bidi_control(c))
                 .collect();
             cell.set_symbol(if kept.is_empty() { " " } else { &kept });
         }
@@ -1169,6 +1169,7 @@ mod tests {
 
         let screen = screen_text(&terminal);
         assert!(!screen.contains(BIDI), "a bidi control was drawn");
+        assert!(screen.contains("Invoice"), "the visible text stays");
     }
 
     #[test]

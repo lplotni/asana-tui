@@ -43,7 +43,7 @@ cargo run --example screenshot -- board > docs/board.svg
   - Hint labels are short (`edit`, `browser`, `done`).
 - **Help overlay is full.** At 100×24 it uses all 24 rows. `the_help_overlay_shows_every_binding_on_a_100_by_24_terminal` fails if a key's description gets cut off. Keep descriptions short, and change the help layout before adding keys.
 - **Snapshots:** `cargo-insta` isn't installed. Review each `src/tui/snapshots/*.snap.new` (`diff` it against the `.snap`), then accept it by removing the `assertion_line:` line and renaming it to `.snap`.
-- **Text from Asana is untrusted.** The CLI passes it through `cli::terminal_safe` / `tsv_line`, which removes control characters and bidi overrides. In the TUI, ratatui drops control characters, and `ui::render` strips bidi overrides from every drawn cell at the end (`strip_bidi_controls`), whatever widget drew it. Both use `cli::is_bidi_control`. Keep new drawing inside `ui::render`, so it passes that pass.
+- **Text from Asana is untrusted.** The CLI passes it through `cli::terminal_safe` / `tsv_line`, which removes control characters and bidi overrides. In the TUI, ratatui drops control characters, and `ui::render` strips bidi overrides from every drawn cell at the end (`strip_bidi_controls`), whatever widget drew it. Both use `present::format::is_bidi_control`. Keep new drawing inside `ui::render`, so it passes that pass.
 - **Tests and fixtures use invented GIDs and names only** (`12000000000000xx`, "Ada Lovelace"). Never put a real workspace or project GID, a real name, or a user's pasted data in the repo, commits or docs. The repo is public.
 
 ## How we work

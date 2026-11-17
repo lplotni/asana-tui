@@ -5,6 +5,8 @@ pub mod inbox;
 pub mod search;
 pub mod task;
 
+use crate::present::format::is_bidi_control;
+
 /// `text` made safe to print to a terminal. Asana text (names, comments,
 /// descriptions) is written by other people: control characters (escape
 /// sequences, tabs, newlines) become spaces and bidi overrides are dropped,
@@ -15,12 +17,6 @@ pub fn terminal_safe(text: &str) -> String {
         .filter(|&c| !is_bidi_control(c))
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect()
-}
-
-/// A bidi override or isolate (U+202A–202E, U+2066–2069): it would reorder
-/// what the terminal shows after it. The TUI strips these too.
-pub fn is_bidi_control(c: char) -> bool {
-    matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 
 /// One tab-separated line per item: `gid  name` (sections, people).

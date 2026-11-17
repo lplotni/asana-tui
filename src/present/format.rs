@@ -1,4 +1,12 @@
-//! Display helpers: relative times and readable notification actions.
+//! Display helpers: relative times, readable notification actions, and
+//! which characters are unsafe to show.
+
+/// A bidi override or isolate (U+202A–202E, U+2066–2069): it would reorder
+/// what the terminal shows after it. The CLI's `terminal_safe` and the TUI's
+/// render pass both drop these.
+pub fn is_bidi_control(c: char) -> bool {
+    matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
 
 /// Seconds since the Unix epoch for Asana's `2026-11-16T12:43:23.527Z`
 /// timestamps (always UTC). `None` for anything else.
