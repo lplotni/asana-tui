@@ -208,6 +208,7 @@ fn run_effects(
             effect,
             Effect::MarkRead { .. }
                 | Effect::CreateTask { .. }
+                | Effect::SetCompleted { .. }
                 | Effect::PostComment { .. }
                 | Effect::AddToProject { .. }
                 | Effect::MoveToSection { .. }
@@ -334,6 +335,21 @@ fn run_effects(
                 Effect::ScheduleSearch { seq } => {
                     tokio::time::sleep(picker::SEARCH_DEBOUNCE).await;
                     Msg::SearchDue { seq }
+                }
+                Effect::SetCompleted {
+                    task_gid,
+                    name,
+                    completed,
+                } => {
+                    let result = core::set_completed(&client, &task_gid, completed)
+                        .await
+                        .map_err(|e| e.to_string());
+                    Msg::CompletedSet {
+                        task_gid,
+                        name,
+                        completed,
+                        result,
+                    }
                 }
                 Effect::SearchMentions { query, seq } => Msg::MentionsFound {
                     seq,

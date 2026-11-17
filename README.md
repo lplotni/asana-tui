@@ -56,6 +56,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move (with counts: `5j`, `12G`) |
 | `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
 | `o` | Open the task in the browser |
+| `d` | Mark the task complete (or incomplete again); `d` as the very next key undoes it |
 | `c` (or `Tab c`) | Comment on the task in an editor overlay: `Ctrl-s` posts, `Esc` cancels (the text is kept for the next `c`), `Ctrl-o` continues in your `$EDITOR`; posting marks the task's notifications read. Typing `@` mentions someone: type part of a name, `Enter` inserts it (people, projects and tasks; `Esc` types a plain `@`) |
 | `Tab e` | Edit the description as plain text in the same overlay (`Ctrl-s` saves), with `@` mentions as in comments; mentions already in it show as names and are kept. Asks first if it has other formatting (links, lists, bold), which plain text removes |
 | `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
@@ -84,6 +85,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `h` / `l` | Previous / next column |
 | `Enter` | Open the card's task full-width (`h`/`Esc`/`q` back) |
 | `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
+| `d` | Complete the card: it leaves the column at once; `d` as the very next key reopens it |
 | `Tab q` | New task in this column: type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
 | `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
 | `P` | Open another board; with nothing typed, `Enter` goes back to the last one |

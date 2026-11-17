@@ -3452,3 +3452,144 @@ fn a_description_with_mentions_is_edited_with_names_and_saved_with_them() {
         "{effects:?}"
     );
 }
+
+// --- d: complete, with undo (F16) ------------------------------------------
+
+fn completed_set(gid: &str, name: &str, completed: bool, result: Result<(), String>) -> Msg {
+    Msg::CompletedSet {
+        task_gid: gid.into(),
+        name: name.into(),
+        completed,
+        result,
+    }
+}
+
+#[test]
+fn d_on_a_card_takes_it_off_the_board_and_completes_it() {
+    let mut app = on_board(&[2]);
+
+    let effects = keys(&mut app, "d");
+
+    assert_eq!(
+        effects,
+        vec![Effect::SetCompleted {
+            task_gid: "c0-0".into(),
+            name: "Card 0-0".into(),
+            completed: true,
+        }]
+    );
+    assert_eq!(selected_card(&app), Some("c0-1"));
+}
+
+#[test]
+fn a_completed_card_reloads_the_board_and_offers_undo() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "d");
+
+    let effects = app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+
+    assert_eq!(board_loads(&effects), 1);
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("Card 0-0") && t.text.contains("d to undo")),
+        "{:?}",
+        app.toast
+    );
+}
+
+#[test]
+fn d_right_after_completing_reopens_the_task_and_selects_its_card() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    });
+
+    let effects = keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", false, Ok(())));
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    });
+
+    assert_eq!(
+        effects,
+        vec![Effect::SetCompleted {
+            task_gid: "c0-0".into(),
+            name: "Card 0-0".into(),
+            completed: false,
+        }]
+    );
+    assert_eq!(selected_card(&app), Some("c0-0"));
+}
+
+#[test]
+fn any_other_key_ends_the_undo() {
+    let mut app = on_board(&[3]);
+    keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+
+    keys(&mut app, "j");
+    let effects = keys(&mut app, "d");
+
+    assert!(
+        matches!(
+            &effects[..],
+            [Effect::SetCompleted {
+                completed: true,
+                ..
+            }]
+        ),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn d_in_the_inbox_toggles_the_loaded_task() {
+    let mut app = loaded(3, 10);
+    load_task(&mut app, "t0", task_detail());
+
+    let effects = keys(&mut app, "d");
+
+    assert!(
+        matches!(&effects[..], [Effect::SetCompleted { task_gid, completed: true, .. }] if task_gid == "t0"),
+        "{effects:?}"
+    );
+    assert!(matches!(
+        app.details.get("t0"),
+        Some(Detail::Loaded(d)) if d.task.completed
+    ));
+}
+
+#[test]
+fn d_in_the_inbox_waits_for_the_task_to_load() {
+    let mut app = loaded(3, 10);
+
+    let effects = keys(&mut app, "d");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(app.toast.is_some());
+}
+
+#[test]
+fn a_failed_completion_puts_the_card_back_and_says_so() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "d");
+
+    let effects = app.update(completed_set(
+        "c0-0",
+        "Card 0-0",
+        true,
+        Err("Forbidden".into()),
+    ));
+
+    assert_eq!(board_loads(&effects), 1);
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.is_error && t.text.contains("Forbidden"))
+    );
+}

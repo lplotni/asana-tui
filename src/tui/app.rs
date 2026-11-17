@@ -41,6 +41,13 @@ pub enum Msg {
     Key(KeyEvent),
     /// How much fits on screen (sent on start and resize).
     Resize(Sizes),
+    /// A task was marked complete (or incomplete again), or why not.
+    CompletedSet {
+        task_gid: String,
+        name: String,
+        completed: bool,
+        result: Result<(), String>,
+    },
     /// People, projects and tasks found for mention search `seq`.
     MentionsFound {
         seq: u64,
@@ -197,6 +204,13 @@ pub enum Effect {
     SearchProjects {
         query: String,
         seq: u64,
+    },
+    /// Mark the task complete (or incomplete again), then send
+    /// [`Msg::CompletedSet`].
+    SetCompleted {
+        task_gid: String,
+        name: String,
+        completed: bool,
     },
     /// Find people, projects and tasks to mention, then send
     /// [`Msg::MentionsFound`].
@@ -461,6 +475,8 @@ pub struct App {
     drafts: HashMap<String, (String, Vec<Mention>)>,
     /// The editor's mentions while its text is in `$EDITOR`.
     external_mentions: Vec<Mention>,
+    /// The task just completed (GID, name): `d` as the next key reopens it.
+    undo_complete: Option<(String, String)>,
     /// Numbers comments shown before Asana confirms them.
     next_local_id: u64,
     /// Text of comments being posted, by local GID (kept as a draft if the
@@ -559,6 +575,8 @@ impl App {
             }
             Msg::Key(event) => {
                 self.toast = None;
+                // Undo lasts one key: `d` uses it, anything else drops it.
+                let undo = self.undo_complete.take();
                 if self.picker.is_some() {
                     let outcome = self.keys.feed(Context::Input, event);
                     return self.picker_key(outcome);
@@ -584,6 +602,10 @@ impl App {
                     return self.load_more_if_needed();
                 }
                 match self.keys.feed(Context::Normal, event) {
+                    Outcome::Action(Action {
+                        cmd: Cmd::ToggleComplete,
+                        ..
+                    }) if let Some((task_gid, name)) = undo => self.reopen(task_gid, name),
                     Outcome::Action(action) if self.screen == Screen::Board => {
                         self.run_board(action)
                     }
@@ -709,6 +731,12 @@ impl App {
                 self.external_mentions.clear();
                 Vec::new()
             }
+            Msg::CompletedSet {
+                task_gid,
+                name,
+                completed,
+                result,
+            } => self.completed_set(task_gid, name, completed, result),
             Msg::MentionsFound { seq, result } => {
                 match result {
                     Ok(targets) => {
@@ -1020,6 +1048,7 @@ impl App {
             Cmd::SearchTasks => self.picker = Some(Picker::tasks()),
             Cmd::SwitchProject => return self.open_switcher(),
             Cmd::OpenTaskBoard => return self.open_task_board(),
+            Cmd::ToggleComplete => return self.toggle_complete(),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.set_focus(Focus::List);
@@ -1104,6 +1133,7 @@ impl App {
             Cmd::AddToProject => return self.open_picker(),
             Cmd::MoveToSection => return self.open_move(),
             Cmd::OpenInBrowser => return self.open_in_browser(),
+            Cmd::ToggleComplete => return self.toggle_complete(),
             Cmd::SwitchProject => return self.open_switcher(),
             Cmd::GoToInbox => {
                 self.screen = Screen::Inbox;
@@ -1332,6 +1362,87 @@ impl App {
         vec![Effect::LoadBoard {
             project_gid: project_gid.to_owned(),
         }]
+    }
+
+    /// `d`: completes the shown task, or reopens it if it's complete. A board
+    /// card is open by definition; elsewhere its details must be loaded.
+    fn toggle_complete(&mut self) -> Vec<Effect> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast::info("Only tasks can be completed"));
+            return Vec::new();
+        };
+        let name = self.shown_task_name().unwrap_or("task").to_owned();
+        let completed = match self.details.get(&task_gid) {
+            Some(Detail::Loaded(detail)) => !detail.task.completed,
+            _ if self.screen == Screen::Board => true,
+            _ => {
+                self.toast = Some(Toast::info("Wait for the task to load"));
+                return Vec::new();
+            }
+        };
+        self.show_completed(&task_gid, completed);
+        vec![Effect::SetCompleted {
+            task_gid,
+            name,
+            completed,
+        }]
+    }
+
+    /// `d` right after completing: reopens that task.
+    fn reopen(&mut self, task_gid: String, name: String) -> Vec<Effect> {
+        self.show_completed(&task_gid, false);
+        vec![Effect::SetCompleted {
+            task_gid,
+            name,
+            completed: false,
+        }]
+    }
+
+    /// Shows task `gid` as complete or not before Asana confirms: in its
+    /// details, and (completed) off the board, which shows open tasks.
+    fn show_completed(&mut self, gid: &str, completed: bool) {
+        if let Some(Detail::Loaded(detail)) = self.details.get_mut(gid) {
+            detail.task.completed = completed;
+        }
+        if completed
+            && self.screen == Screen::Board
+            && self.board_view_mut().is_some_and(|view| view.remove(gid))
+        {
+            self.set_focus(Focus::List);
+        }
+    }
+
+    /// Asana confirmed (or refused) a completion: says so, offers undo, and
+    /// reloads the board, where a reopened card comes back selected.
+    fn completed_set(
+        &mut self,
+        task_gid: String,
+        name: String,
+        completed: bool,
+        result: Result<(), String>,
+    ) -> Vec<Effect> {
+        match result {
+            Ok(()) if completed => {
+                self.toast = Some(Toast::info(format!("Completed \"{name}\" · d to undo")));
+                self.undo_complete = Some((task_gid, name));
+            }
+            Ok(()) => {
+                self.toast = Some(Toast::info(format!("Reopened \"{name}\"")));
+                if self.screen == Screen::Board
+                    && let Some(slot) = self.boards.first_mut()
+                {
+                    slot.select_task = Some(task_gid);
+                }
+            }
+            Err(message) => {
+                if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
+                    detail.task.completed = !completed;
+                }
+                let what = if completed { "completed" } else { "reopened" };
+                self.toast = Some(Toast::error(format!("Not {what}: {message}")));
+            }
+        }
+        self.reload_board()
     }
 
     /// `Tab q`: opens the name prompt for a task in the selected column.

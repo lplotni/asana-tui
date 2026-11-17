@@ -60,6 +60,8 @@ pub enum Cmd {
     OpenTaskBoard,
     /// Name a new task in the selected board column.
     NewTask,
+    /// Complete the task, or reopen a completed one.
+    ToggleComplete,
     OpenInBrowser,
     ToggleFilter,
     Refresh,
@@ -247,6 +249,13 @@ pub const BINDINGS: &[Binding] = &[
         Cmd::NewTask,
         Asana,
         "new task on the board",
+    ),
+    bind(
+        Normal,
+        &[Char('d')],
+        Cmd::ToggleComplete,
+        Asn,
+        "complete / reopen",
     ),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),

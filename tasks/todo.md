@@ -361,17 +361,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T17: `d` completes, with undo
+### - [x] T17: `d` completes, with undo
 
 **Description:** `d` toggles completion of the shown task or card. On a board the card leaves its column at once (`BoardView::remove`), and the board reloads. The success toast offers undo, and `d` as the very next key reopens the task (on a board, the card comes back selected). A failure restores the card or state and shows an error.
 
 **Acceptance criteria:**
-- [ ] `d` on a card removes it, sends the completion, and reloads the board. `d` again right after reopens it.
-- [ ] `d` in the Inbox toggles the loaded task's state, and asks to wait when it isn't loaded.
-- [ ] Another key ends the undo. A failure restores and says so.
+- [x] `d` on a card removes it, sends the completion, and reloads the board. `d` again right after reopens it.
+- [x] `d` in the Inbox toggles the loaded task's state, and asks to wait when it isn't loaded.
+- [x] Another key ends the undo. A failure restores and says so.
 
 **Verification:**
-- [ ] Tests: `tui/board.rs` (remove) and `app_tests.rs` for each criterion. Key collision and help overlay tests.
+- [x] Tests: `tui/board.rs` (remove) and `app_tests.rs` for each criterion. Key collision and help overlay tests.
 
 **Dependencies:** T16
 

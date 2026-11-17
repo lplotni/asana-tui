@@ -220,6 +220,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::Comment), "comment"),
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Help), "help"),
@@ -243,6 +244,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::Comment), "comment"),
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
+            (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::NewTask), "new task"),
@@ -269,6 +271,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::Back), "back"),
             (normal(Cmd::Comment), "comment"),
             (normal(Cmd::MarkRead), "read"),
+            (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::OpenTaskBoard), "board"),
             (normal(Cmd::MoveToSection), "move"),
             (normal(Cmd::AddToProject), "project"),
@@ -290,6 +293,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         (normal(Cmd::MarkRead), "read"),
         (normal(Cmd::MarkUnread), "unread"),
         (normal(Cmd::Comment), "comment"),
+        (normal(Cmd::ToggleComplete), "done"),
         (normal(Cmd::OpenTaskBoard), "board"),
         (normal(Cmd::SwitchProject), "projects"),
         (normal(Cmd::MoveToSection), "move"),
@@ -2028,6 +2032,7 @@ mod tests {
         let mut inbox = app_with(fixture("notifications_page.json"));
         let wanted = [
             "read", "unread", "comment", "board", "projects", "project", "move", "edit", "browser",
+            "done",
         ];
         assert_eq!(
             missing(&labels(&inbox), &wanted),
@@ -2037,7 +2042,7 @@ mod tests {
 
         press(&mut inbox, "l");
         let wanted = [
-            "back", "comment", "edit", "project", "move", "board", "browser",
+            "back", "comment", "edit", "project", "move", "board", "browser", "done",
         ];
         assert_eq!(
             missing(&labels(&inbox), &wanted),
@@ -2048,12 +2053,14 @@ mod tests {
         let mut board = board_app();
         let wanted = [
             "open", "column", "comment", "move", "project", "edit", "browser", "new task", "find",
-            "projects", "refresh",
+            "projects", "refresh", "done",
         ];
         assert_eq!(missing(&labels(&board), &wanted), [] as [&str; 0], "board");
 
         board.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
-        let wanted = ["back", "comment", "edit", "project", "move", "browser"];
+        let wanted = [
+            "back", "comment", "edit", "project", "move", "browser", "done",
+        ];
         assert_eq!(
             missing(&labels(&board), &wanted),
             [] as [&str; 0],

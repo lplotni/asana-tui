@@ -172,6 +172,19 @@ impl BoardView {
         true
     }
 
+    /// Takes card `gid` off the board (e.g. once completed). The selection
+    /// keeps its row, clamped. Returns whether the card was there.
+    pub fn remove(&mut self, gid: &str) -> bool {
+        let mut removed = false;
+        for column in &mut self.columns {
+            let before = column.tasks.len();
+            column.tasks.retain(|t| t.gid != gid);
+            removed |= column.tasks.len() != before;
+        }
+        self.set_row(self.row);
+        removed
+    }
+
     /// Shows a reloaded board. The selection stays on the same task wherever
     /// it is now; if it's gone, on the same position of the same section
     /// (or column), clamped.
@@ -430,6 +443,35 @@ mod tests {
         assert_eq!(v.scroll(1), 3);
         v.top();
         assert_eq!(v.scroll(1), 0);
+    }
+
+    #[test]
+    fn removing_the_selected_card_selects_the_one_that_moves_up() {
+        let mut v = view(&[3]);
+        v.down(1);
+
+        assert!(v.remove("c0-1"));
+
+        assert_eq!(selected(&v), Some("c0-2"));
+    }
+
+    #[test]
+    fn removing_the_last_card_of_a_column_selects_the_one_above() {
+        let mut v = view(&[2]);
+        v.bottom();
+
+        assert!(v.remove("c0-1"));
+
+        assert_eq!(selected(&v), Some("c0-0"));
+    }
+
+    #[test]
+    fn removing_a_card_that_is_not_on_the_board_changes_nothing() {
+        let mut v = view(&[2]);
+
+        assert!(!v.remove("elsewhere"));
+
+        assert_eq!(v.columns()[0].tasks.len(), 2);
     }
 
     #[test]
