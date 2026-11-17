@@ -71,23 +71,22 @@ pub async fn run(config: Config, client: Client) -> Result<(), Box<dyn std::erro
         };
         app.now = now();
         let effects = app.update(msg);
-        let (edits, effects): (Vec<_>, Vec<_>) = effects.into_iter().partition(|e| {
-            matches!(
-                e,
-                Effect::EditComment { .. } | Effect::EditDescription { .. }
-            )
-        });
+        let (edits, effects): (Vec<_>, Vec<_>) = effects
+            .into_iter()
+            .partition(|e| matches!(e, Effect::EditExternal { .. }));
         for edit in edits {
-            match edit {
-                Effect::EditComment { task_gid, initial } => {
-                    let text = edit_in_terminal(&mut terminal, &input, &editor, initial).await;
-                    let _ = tx.send(Msg::CommentWritten { task_gid, text });
-                }
-                Effect::EditDescription { task_gid, initial } => {
-                    let text = edit_in_terminal(&mut terminal, &input, &editor, initial).await;
-                    let _ = tx.send(Msg::DescriptionWritten { task_gid, text });
-                }
-                _ => {}
+            if let Effect::EditExternal {
+                kind,
+                task_gid,
+                initial,
+            } = edit
+            {
+                let text = edit_in_terminal(&mut terminal, &input, &editor, initial).await;
+                let _ = tx.send(Msg::Written {
+                    kind,
+                    task_gid,
+                    text,
+                });
             }
         }
         run_effects(effects, &client, &workspace, search, &tx, &mut writes);
@@ -268,7 +267,7 @@ fn run_effects(
                     }
                 }
                 // Needs the terminal; handled by the event loop.
-                Effect::EditComment { .. } | Effect::EditDescription { .. } => return,
+                Effect::EditExternal { .. } => return,
                 Effect::SaveNotes {
                     task_gid,
                     text,

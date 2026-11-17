@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, CONNECT_TIMEOUT, Client, Page};
+use super::{ApiError, CONNECT_TIMEOUT, Client, Page, http_client, network};
 
 /// How long a whole file download may take.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
@@ -63,12 +63,10 @@ impl Client {
 /// not Asana, so the request carries no token. Fails when the file is bigger
 /// than `max_bytes`, without reading the rest.
 pub async fn download(url: &str, max_bytes: usize) -> Result<Vec<u8>, ApiError> {
-    let network = |e: reqwest::Error| ApiError::Network(e.to_string());
-    let http = reqwest::Client::builder()
-        .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(DOWNLOAD_TIMEOUT)
-        .build()
-        .expect("static client configuration is valid");
+    // One client for every download, so connections to the file host are reused.
+    static HTTP: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let http = HTTP.get_or_init(|| http_client(CONNECT_TIMEOUT, DOWNLOAD_TIMEOUT));
+    // `network` drops reqwest's message, which would include the signed URL.
     let mut response = http.get(url).send().await.map_err(network)?;
     let status = response.status();
     if !status.is_success() {

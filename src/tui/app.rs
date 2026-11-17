@@ -56,8 +56,9 @@ pub enum Msg {
         attachment_gid: String,
         result: Result<Arc<image::DynamicImage>, String>,
     },
-    /// The editor closed: the comment text, or `None` if cancelled.
-    CommentWritten {
+    /// `$EDITOR` closed: the text, or `None` if cancelled.
+    Written {
+        kind: EditorKind,
         task_gid: String,
         text: Option<String>,
     },
@@ -65,11 +66,6 @@ pub enum Msg {
         task_gid: String,
         local_gid: String,
         result: Result<Box<TaskStory>, String>,
-    },
-    /// The editor closed: the new description, or `None` if cancelled.
-    DescriptionWritten {
-        task_gid: String,
-        text: Option<String>,
     },
     NotesSaved {
         task_gid: String,
@@ -142,8 +138,9 @@ pub enum Effect {
         url: String,
     },
     /// Hand the terminal to `$EDITOR`, starting with `initial`, then send
-    /// [`Msg::CommentWritten`].
-    EditComment {
+    /// [`Msg::Written`].
+    EditExternal {
+        kind: EditorKind,
         task_gid: String,
         initial: String,
     },
@@ -151,12 +148,6 @@ pub enum Effect {
         task_gid: String,
         local_gid: String,
         text: String,
-    },
-    /// Hand the terminal to `$EDITOR` with the description, then send
-    /// [`Msg::DescriptionWritten`].
-    EditDescription {
-        task_gid: String,
-        initial: String,
     },
     /// Save the description unless the task changed since `expected_modified_at`.
     SaveNotes {
@@ -217,6 +208,31 @@ pub enum Detail {
 pub enum EditorKind {
     Comment,
     Description,
+}
+
+impl EditorKind {
+    /// What `Ctrl-s` does: "post" or "save".
+    pub fn verb(self) -> &'static str {
+        match self {
+            EditorKind::Comment => "post",
+            EditorKind::Description => "save",
+        }
+    }
+
+    /// The editor's title for the task named `task`.
+    pub fn title(self, task: &str) -> String {
+        match self {
+            EditorKind::Comment => format!(" Comment on {task} "),
+            EditorKind::Description => format!(" Description of {task} "),
+        }
+    }
+}
+
+/// How a key closes the editor.
+enum EditorExit {
+    Save,
+    External,
+    Cancel,
 }
 
 /// The text editor overlay for a comment or a task description.
@@ -414,10 +430,7 @@ impl App {
                     ));
                     Vec::new()
                 } else {
-                    self.toast = Some(Toast {
-                        text: "Description not edited".into(),
-                        is_error: false,
-                    });
+                    self.toast = Some(Toast::info("Description not edited"));
                     Vec::new()
                 }
             }
@@ -530,11 +543,12 @@ impl App {
                     target: self.notifications.len().max(INITIAL_LOAD),
                 }]
             }
-            Msg::CommentWritten {
+            Msg::Written {
+                kind,
                 task_gid,
                 text: Some(text),
-            } => self.show_and_post_comment(task_gid, text),
-            Msg::CommentWritten { text: None, .. } => Vec::new(),
+            } => self.finish_editing(kind, task_gid, text),
+            Msg::Written { text: None, .. } => Vec::new(),
             Msg::CommentPosted {
                 task_gid,
                 local_gid,
@@ -552,10 +566,7 @@ impl App {
                         {
                             *local = *story;
                         }
-                        self.toast = Some(Toast {
-                            text: "Comment posted".into(),
-                            is_error: false,
-                        });
+                        self.toast = Some(Toast::info("Comment posted"));
                         // Commenting means the task was dealt with.
                         return self.mark_task_read(&task_gid);
                     }
@@ -571,20 +582,12 @@ impl App {
                 }
                 Vec::new()
             }
-            Msg::DescriptionWritten {
-                task_gid,
-                text: Some(text),
-            } => self.show_and_save_description(task_gid, text),
-            Msg::DescriptionWritten { text: None, .. } => Vec::new(),
             Msg::NotesSaved {
                 task_gid,
                 result: Ok(()),
             } => {
                 self.previous_notes.remove(&task_gid);
-                self.toast = Some(Toast {
-                    text: "Description saved".into(),
-                    is_error: false,
-                });
+                self.toast = Some(Toast::info("Description saved"));
                 // Reload for Asana's html_notes and modified_at.
                 vec![Effect::LoadDetail { gid: task_gid }]
             }
@@ -606,51 +609,43 @@ impl App {
                 )));
                 Vec::new()
             }
-            Msg::SearchDue { seq } => match &mut self.picker {
-                Some(p) if p.stage == picker::Stage::Project && p.search_seq == seq => {
-                    p.loading = true;
-                    vec![Effect::SearchProjects {
-                        query: p.query.clone(),
-                        seq,
-                    }]
-                }
-                Some(p) if p.stage == picker::Stage::Task && p.search_seq == seq => {
-                    if p.query.trim().is_empty() {
+            Msg::SearchDue { seq } => {
+                let Some(p) = self.picker.as_mut().filter(|p| p.search_seq == seq) else {
+                    return Vec::new();
+                };
+                let query = p.query.clone();
+                let effect = match p.stage {
+                    picker::Stage::Project => Effect::SearchProjects { query, seq },
+                    // A blank query finds nothing; don't ask Asana.
+                    picker::Stage::Task if query.trim().is_empty() => {
                         p.accept_tasks(seq, Vec::new());
                         return Vec::new();
                     }
-                    p.loading = true;
-                    vec![Effect::SearchTasks {
-                        query: p.query.clone(),
-                        seq,
-                    }]
-                }
-                _ => Vec::new(),
-            },
+                    picker::Stage::Task => Effect::SearchTasks { query, seq },
+                    _ => return Vec::new(),
+                };
+                p.loading = true;
+                vec![effect]
+            }
             Msg::TasksFound { seq, result } => {
-                match (&mut self.picker, result) {
-                    (Some(p), Ok(tasks)) => {
-                        p.accept_tasks(seq, tasks);
+                match result {
+                    Ok(tasks) => {
+                        if let Some(p) = &mut self.picker {
+                            p.accept_tasks(seq, tasks);
+                        }
                     }
-                    (Some(p), Err(message)) if p.search_seq == seq => {
-                        p.loading = false;
-                        self.toast = Some(Toast::error(format!("Task search failed: {message}")));
-                    }
-                    _ => {}
+                    Err(message) => self.search_failed(seq, "Task", &message),
                 }
                 Vec::new()
             }
             Msg::ProjectsFound { seq, result } => {
-                match (&mut self.picker, result) {
-                    (Some(p), Ok(projects)) => {
-                        p.accept_projects(seq, projects);
+                match result {
+                    Ok(projects) => {
+                        if let Some(p) = &mut self.picker {
+                            p.accept_projects(seq, projects);
+                        }
                     }
-                    (Some(p), Err(message)) if p.search_seq == seq => {
-                        p.loading = false;
-                        self.toast =
-                            Some(Toast::error(format!("Project search failed: {message}")));
-                    }
-                    _ => {}
+                    Err(message) => self.search_failed(seq, "Project", &message),
                 }
                 Vec::new()
             }
@@ -684,10 +679,7 @@ impl App {
                 };
                 match result {
                     Ok(()) => {
-                        self.toast = Some(Toast {
-                            text: "Added to project".into(),
-                            is_error: false,
-                        });
+                        self.toast = Some(Toast::info("Added to project"));
                     }
                     Err(message) => {
                         if let Some(memberships) = memberships {
@@ -707,10 +699,7 @@ impl App {
             } => {
                 match result {
                     Ok(()) => {
-                        self.toast = Some(Toast {
-                            text: format!("Moved to {}", section.name),
-                            is_error: false,
-                        });
+                        self.toast = Some(Toast::info(format!("Moved to {}", section.name)));
                     }
                     Err(message) => {
                         self.set_section(&task_gid, &project_gid, previous);
@@ -764,6 +753,20 @@ impl App {
         (object.resource_type == "task").then_some(object.gid.as_str())
     }
 
+    /// Moves focus; leaving the task pane closes a task opened from search,
+    /// so the pane shows the selected notification's task again.
+    fn set_focus(&mut self, focus: Focus) {
+        self.focus = focus;
+        if focus == Focus::List {
+            self.opened = None;
+        }
+    }
+
+    /// Whether an overlay (help, picker, editor) covers the screen.
+    pub fn overlay_open(&self) -> bool {
+        self.help || self.picker.is_some() || self.editor.is_some()
+    }
+
     /// The name of what the task pane shows, known before its details load.
     pub fn shown_task_name(&self) -> Option<&str> {
         if let Some(opened) = &self.opened {
@@ -809,7 +812,7 @@ impl App {
                 self.replace_keeping_selection(|app| app.search = None);
             }
             Cmd::Search => {
-                self.focus = Focus::List;
+                self.set_focus(Focus::List);
                 self.search = Some(Search {
                     query: String::new(),
                     editing: true,
@@ -826,11 +829,13 @@ impl App {
             Cmd::SearchTasks => self.picker = Some(Picker::tasks()),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
-                self.focus = Focus::List;
+                self.set_focus(Focus::List);
                 self.move_to(0);
             }
-            Cmd::Back | Cmd::FocusLeft => self.focus = Focus::List,
-            Cmd::FocusRight | Cmd::Open if self.selected().is_some() => self.focus = Focus::Detail,
+            Cmd::Back | Cmd::FocusLeft => self.set_focus(Focus::List),
+            Cmd::FocusRight | Cmd::Open if self.selected().is_some() => {
+                self.set_focus(Focus::Detail)
+            }
             Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::Comment => return self.start_comment(),
             Cmd::EditDescription => return self.start_description(),
@@ -845,12 +850,9 @@ impl App {
             }
             Cmd::Refresh => return self.refresh(),
             Cmd::Quit if self.visual_anchor.is_some() => self.visual_anchor = None,
-            Cmd::Quit if self.focus == Focus::Detail => self.focus = Focus::List,
+            Cmd::Quit if self.focus == Focus::Detail => self.set_focus(Focus::List),
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
             _ => {}
-        }
-        if self.focus == Focus::List {
-            self.opened = None;
         }
         self.load_more_if_needed()
     }
@@ -1023,10 +1025,10 @@ impl App {
                 for gid in &gids {
                     self.pending_marks.insert(gid.clone(), true);
                 }
-                self.toast = Some(Toast {
-                    text: format!("Marking {} notification(s) read", gids.len()),
-                    is_error: false,
-                });
+                self.toast = Some(Toast::info(format!(
+                    "Marking {} notification(s) read",
+                    gids.len()
+                )));
                 vec![Effect::MarkRead { gids, read: true }]
             }
             other => {
@@ -1036,46 +1038,68 @@ impl App {
         }
     }
 
+    /// Search `seq` of the picker failed: stop its spinner and say why,
+    /// unless a newer search replaced it.
+    fn search_failed(&mut self, seq: u64, what: &str, message: &str) {
+        if let Some(p) = self.picker.as_mut().filter(|p| p.search_seq == seq) {
+            p.loading = false;
+            self.toast = Some(Toast::error(format!("{what} search failed: {message}")));
+        }
+    }
+
     /// Starts moving the shown task to another section: straight to the
     /// sections when it's in one project, else asks which project first.
     fn open_move(&mut self) -> Vec<Effect> {
-        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
-            self.toast = Some(Toast {
-                text: "Only tasks can be moved".into(),
-                is_error: false,
-            });
+        let Some((task_gid, detail)) = self.loaded_shown_task("Only tasks can be moved") else {
             return Vec::new();
         };
-        let Some(Detail::Loaded(detail)) = self.details.get(&task_gid) else {
-            self.toast = Some(Toast {
-                text: "Wait for the task to load".into(),
-                is_error: false,
-            });
-            return Vec::new();
-        };
-        let memberships = detail.task.memberships.clone();
-        match memberships.as_slice() {
-            [] => {
-                self.toast = Some(Toast {
-                    text: "The task isn't in a project yet; p adds it to one".into(),
-                    is_error: false,
-                });
+        let mut projects: Vec<Named> = detail
+            .task
+            .memberships
+            .iter()
+            .map(|m| m.project.clone())
+            .collect();
+        match projects.len() {
+            0 => {
+                self.toast = Some(Toast::info(
+                    "The task isn't in a project yet; p adds it to one",
+                ));
                 Vec::new()
             }
-            [only] => {
-                let project_gid = only.project.gid.clone();
-                self.picker = Some(Picker::move_to_section(
-                    task_gid,
-                    only.project.clone(),
-                    only.section.as_ref().map(|s| s.gid.clone()),
-                ));
-                vec![Effect::LoadSections { project_gid }]
-            }
-            several => {
-                let projects = several.iter().map(|m| m.project.clone()).collect();
+            1 => self.open_sections(task_gid, projects.remove(0)),
+            _ => {
                 self.picker = Some(Picker::move_within(task_gid, projects));
                 Vec::new()
             }
+        }
+    }
+
+    /// Lists the sections of `project` to move task `task_gid` to.
+    fn open_sections(&mut self, task_gid: String, project: Named) -> Vec<Effect> {
+        let current = self.membership_section(&task_gid, &project.gid);
+        let project_gid = project.gid.clone();
+        self.picker = Some(Picker::move_to_section(
+            task_gid,
+            project,
+            current.map(|s| s.gid),
+        ));
+        vec![Effect::LoadSections { project_gid }]
+    }
+
+    /// The shown task's GID and details, once loaded. Otherwise explains why
+    /// not (`not_a_task` when the selection isn't a task) and returns `None`.
+    fn loaded_shown_task(&mut self, not_a_task: &str) -> Option<(String, &TaskDetail)> {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast::info(not_a_task));
+            return None;
+        };
+        if !matches!(self.details.get(&task_gid), Some(Detail::Loaded(_))) {
+            self.toast = Some(Toast::info("Wait for the task to load"));
+            return None;
+        }
+        match self.details.get(&task_gid) {
+            Some(Detail::Loaded(detail)) => Some((task_gid, detail)),
+            _ => None,
         }
     }
 
@@ -1109,10 +1133,7 @@ impl App {
     /// it's already in.
     fn open_picker(&mut self) -> Vec<Effect> {
         let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
-            self.toast = Some(Toast {
-                text: "Only tasks can be added to projects".into(),
-                is_error: false,
-            });
+            self.toast = Some(Toast::info("Only tasks can be added to projects"));
             return Vec::new();
         };
         let exclude = match self.selected_detail() {
@@ -1185,33 +1206,16 @@ impl App {
         match picker.stage.clone() {
             picker::Stage::MoveProject => {
                 let task_gid = picker.task_gid.clone();
-                let project_gid = item.gid.unwrap_or_default();
-                let current = self.membership_section(&task_gid, &project_gid);
-                let project = Named {
-                    gid: project_gid.clone(),
-                    name: item.name,
-                };
-                self.picker = Some(Picker::move_to_section(
-                    task_gid,
-                    project,
-                    current.map(|s| s.gid),
-                ));
-                vec![Effect::LoadSections { project_gid }]
+                self.open_sections(task_gid, item.into_named())
             }
             picker::Stage::MoveSection { project, .. } => {
                 let task_gid = picker.task_gid.clone();
                 self.picker = None;
                 if item.checked {
-                    self.toast = Some(Toast {
-                        text: format!("Already in {}", item.name),
-                        is_error: false,
-                    });
+                    self.toast = Some(Toast::info(format!("Already in {}", item.name)));
                     return Vec::new();
                 }
-                let section = Named {
-                    gid: item.gid.unwrap_or_default(),
-                    name: item.name,
-                };
+                let section = item.into_named();
                 let previous = self.membership_section(&task_gid, &project.gid);
                 self.set_section(&task_gid, &project.gid, Some(section.clone()));
                 vec![Effect::MoveToSection {
@@ -1223,12 +1227,10 @@ impl App {
             }
             picker::Stage::Task => {
                 self.picker = None;
-                let gid = item.gid.unwrap_or_default();
-                self.opened = Some(Named {
-                    gid: gid.clone(),
-                    name: item.name,
-                });
-                self.focus = Focus::Detail;
+                let task = item.into_named();
+                let gid = task.gid.clone();
+                self.opened = Some(task);
+                self.set_focus(Focus::Detail);
                 if self.details.contains_key(&gid) {
                     return Vec::new();
                 }
@@ -1236,10 +1238,7 @@ impl App {
                 vec![Effect::LoadDetail { gid }]
             }
             picker::Stage::Project => {
-                let project = Named {
-                    gid: item.gid.unwrap_or_default(),
-                    name: item.name,
-                };
+                let project = item.into_named();
                 let project_gid = project.gid.clone();
                 picker.choose_project(project);
                 vec![Effect::LoadSections { project_gid }]
@@ -1269,18 +1268,8 @@ impl App {
     /// Opens the editor with the selected task's description. A description
     /// with formatting asks first, since saving plain text removes it.
     fn start_description(&mut self) -> Vec<Effect> {
-        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
-            self.toast = Some(Toast {
-                text: "Only tasks have descriptions".into(),
-                is_error: false,
-            });
-            return Vec::new();
-        };
-        let Some(Detail::Loaded(detail)) = self.details.get(&task_gid) else {
-            self.toast = Some(Toast {
-                text: "Wait for the task to load".into(),
-                is_error: false,
-            });
+        let Some((task_gid, detail)) = self.loaded_shown_task("Only tasks have descriptions")
+        else {
             return Vec::new();
         };
         let initial = detail.task.notes.clone();
@@ -1308,10 +1297,7 @@ impl App {
             return Vec::new();
         };
         if text.trim_end() == detail.task.notes.trim_end() {
-            self.toast = Some(Toast {
-                text: "No changes".into(),
-                is_error: false,
-            });
+            self.toast = Some(Toast::info("No changes"));
             return Vec::new();
         }
         let old = std::mem::replace(&mut detail.task.notes, text.clone());
@@ -1346,10 +1332,7 @@ impl App {
     /// left by a failed post.
     fn start_comment(&mut self) -> Vec<Effect> {
         let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
-            self.toast = Some(Toast {
-                text: "Comments work on tasks only".into(),
-                is_error: false,
-            });
+            self.toast = Some(Toast::info("Comments work on tasks only"));
             return Vec::new();
         };
         let initial = self.drafts.remove(&task_gid).unwrap_or_default();
@@ -1368,44 +1351,47 @@ impl App {
         let ctrl = |c: char| {
             event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char(c)
         };
-        let (save, external) = (ctrl('s'), ctrl('o'));
-        let cancel = ctrl('c') || event.code == KeyCode::Esc;
-        if !(save || external || cancel) {
+        let exit = if ctrl('s') {
+            EditorExit::Save
+        } else if ctrl('o') {
+            EditorExit::External
+        } else if ctrl('c') || event.code == KeyCode::Esc {
+            EditorExit::Cancel
+        } else {
             if let Some(editor) = &mut self.editor {
                 editor.textarea.input(event);
             }
             return Vec::new();
-        }
+        };
         let Some(editor) = self.editor.take() else {
             return Vec::new();
         };
-        let text = editor.text();
-        let task_gid = editor.task_gid;
-        match (editor.kind, save, external) {
-            (EditorKind::Comment, true, _) if text.trim().is_empty() => {
-                self.toast = Some(Toast {
-                    text: "Empty comment; nothing posted".into(),
-                    is_error: false,
-                });
-                Vec::new()
-            }
-            (EditorKind::Comment, true, _) => self.show_and_post_comment(task_gid, text),
-            (EditorKind::Description, true, _) => self.show_and_save_description(task_gid, text),
-            (EditorKind::Comment, _, true) => vec![Effect::EditComment {
+        let (kind, task_gid, text) = (editor.kind, editor.task_gid.clone(), editor.text());
+        match exit {
+            EditorExit::Save => self.finish_editing(kind, task_gid, text),
+            EditorExit::External => vec![Effect::EditExternal {
+                kind,
                 task_gid,
                 initial: text,
             }],
-            (EditorKind::Description, _, true) => vec![Effect::EditDescription {
-                task_gid,
-                initial: text,
-            }],
-            (EditorKind::Comment, _, _) => {
-                if !text.trim().is_empty() {
+            EditorExit::Cancel => {
+                if kind == EditorKind::Comment && !text.trim().is_empty() {
                     self.drafts.insert(task_gid, text);
                 }
                 Vec::new()
             }
-            (EditorKind::Description, _, _) => Vec::new(),
+        }
+    }
+
+    /// Posts the comment or saves the description written in either editor.
+    fn finish_editing(&mut self, kind: EditorKind, task_gid: String, text: String) -> Vec<Effect> {
+        match kind {
+            EditorKind::Comment if text.trim().is_empty() => {
+                self.toast = Some(Toast::info("Empty comment; nothing posted"));
+                Vec::new()
+            }
+            EditorKind::Comment => self.show_and_post_comment(task_gid, text),
+            EditorKind::Description => self.show_and_save_description(task_gid, text),
         }
     }
 
@@ -1444,22 +1430,20 @@ impl App {
                 url: detail.task.permalink_url.clone(),
             }];
         }
-        if let Some(opened) = &self.opened {
+        if let Some(gid) = self.selected_task_gid() {
             return vec![Effect::OpenUrl {
-                url: format!("https://app.asana.com/0/0/{}", opened.gid),
+                url: format!("https://app.asana.com/0/0/{gid}"),
             }];
         }
         let Some(object) = self.selected().and_then(|n| n.work_objects.first()) else {
             return Vec::new();
         };
         let url = match object.resource_type.as_str() {
-            "task" => format!("https://app.asana.com/0/0/{}", object.gid),
             "project" => format!("https://app.asana.com/0/{}", object.gid),
             other => {
-                self.toast = Some(Toast {
-                    text: format!("asn can't open {other}s yet; open it from the web Inbox"),
-                    is_error: false,
-                });
+                self.toast = Some(Toast::info(format!(
+                    "asn can't open {other}s yet; open it from the web Inbox"
+                )));
                 return Vec::new();
             }
         };
@@ -1622,6 +1606,13 @@ fn matches_search(n: &Notification, query: &str) -> bool {
 }
 
 impl Toast {
+    fn info(text: impl Into<String>) -> Toast {
+        Toast {
+            text: text.into(),
+            is_error: false,
+        }
+    }
+
     fn error(text: String) -> Toast {
         Toast {
             text,

@@ -7,7 +7,7 @@ use ratatui::widgets::{
     Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
-use super::app::{App, Detail, Editor, EditorKind, Focus, IMAGE_ROWS, ImageState, Sizes};
+use super::app::{App, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Sizes};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -60,6 +60,31 @@ pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
     lines
 }
 
+/// Clears `area` and draws an overlay's frame (thick border, `title`, an
+/// optional `footer`); returns the area inside it.
+fn draw_overlay(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    footer: Option<&str>,
+    theme: &Theme,
+) -> Rect {
+    let mut block = Block::new()
+        .borders(Borders::ALL)
+        .border_type(ratatui::widgets::BorderType::Thick)
+        .border_style(theme.style(Role::BorderFocused))
+        .title(Span::styled(title.to_owned(), theme.style(Role::Title)))
+        .padding(Padding::horizontal(1))
+        .style(theme.style(Role::Text));
+    if let Some(footer) = footer {
+        block = block.title_bottom(Span::styled(footer.to_owned(), theme.style(Role::Keyhint)));
+    }
+    let inner = block.inner(area);
+    frame.render_widget(Clear, area);
+    frame.render_widget(block, area);
+    inner
+}
+
 /// A `width` × `height` rectangle in the middle of `area`, shrunk to fit.
 pub fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let (width, height) = (width.min(area.width), height.min(area.height));
@@ -83,16 +108,7 @@ fn render_help(frame: &mut Frame, over: Rect, theme: &Theme) {
         (line_width + 4, lines.len() as u16 + 2)
     };
     let area = centered(over, width, height);
-    let block = Block::new()
-        .borders(Borders::ALL)
-        .border_type(ratatui::widgets::BorderType::Thick)
-        .border_style(theme.style(Role::BorderFocused))
-        .title(Span::styled(" Keys ", theme.style(Role::Title)))
-        .title_bottom(Span::styled(" any key closes ", theme.style(Role::Keyhint)))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(area);
-    frame.render_widget(Clear, area);
-    frame.render_widget(block.style(theme.style(Role::Text)), area);
+    let inner = draw_overlay(frame, area, " Keys ", Some(" any key closes "), theme);
 
     if two_columns {
         let [left, _, right] = Layout::horizontal([
@@ -142,12 +158,8 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         return vec![(lit("any key"), "close")];
     }
     if let Some(editor) = &app.editor {
-        let save = match editor.kind {
-            EditorKind::Comment => "post",
-            EditorKind::Description => "save",
-        };
         return vec![
-            (lit("Ctrl-s"), save),
+            (lit("Ctrl-s"), editor.kind.verb()),
             (lit("Esc"), "cancel"),
             (lit("Ctrl-o"), "open in $EDITOR"),
         ];
@@ -335,13 +347,12 @@ pub fn render(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<Show
     if let Some(editor) = &app.editor {
         render_editor(frame, screen, editor, app, theme);
     }
-    if app.help || app.picker.is_some() || app.editor.is_some() {
+    if app.overlay_open() {
         images.clear();
     }
     images
 }
 
-/// The project/section picker, drawn over the task pane.
 /// The comment or description editor, centered.
 fn render_editor(frame: &mut Frame, over: Rect, editor: &Editor, app: &App, theme: &Theme) {
     let area = centered(
@@ -349,28 +360,12 @@ fn render_editor(frame: &mut Frame, over: Rect, editor: &Editor, app: &App, them
         over.width.saturating_sub(4).min(80),
         over.height.saturating_sub(2).min(18),
     );
-    let name = app.shown_task_name().unwrap_or("task");
-    let title = match editor.kind {
-        EditorKind::Comment => format!(" Comment on {name} "),
-        EditorKind::Description => format!(" Description of {name} "),
-    };
-    let save = match editor.kind {
-        EditorKind::Comment => "post",
-        EditorKind::Description => "save",
-    };
-    let block = Block::new()
-        .borders(Borders::ALL)
-        .border_type(ratatui::widgets::BorderType::Thick)
-        .border_style(theme.style(Role::BorderFocused))
-        .title(Span::styled(title, theme.style(Role::Title)))
-        .title_bottom(Span::styled(
-            format!(" Ctrl-s {save} · Esc cancel · Ctrl-o $EDITOR "),
-            theme.style(Role::Keyhint),
-        ))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(area);
-    frame.render_widget(Clear, area);
-    frame.render_widget(block.style(theme.style(Role::Text)), area);
+    let title = editor.kind.title(app.shown_task_name().unwrap_or("task"));
+    let footer = format!(
+        " Ctrl-s {} · Esc cancel · Ctrl-o $EDITOR ",
+        editor.kind.verb()
+    );
+    let inner = draw_overlay(frame, area, &title, Some(&footer), theme);
     frame.render_widget(&editor.textarea, inner);
 }
 
@@ -388,13 +383,6 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::MoveProject => " Move within which project? ".to_owned(),
         Stage::MoveSection { project, .. } => format!(" Move to a section of {} ", project.name),
     };
-    let block = Block::new()
-        .borders(Borders::ALL)
-        .border_type(ratatui::widgets::BorderType::Thick)
-        .border_style(theme.style(Role::BorderFocused))
-        .title(Span::styled(title, theme.style(Role::Title)))
-        .padding(Padding::horizontal(1));
-
     let mut lines = Vec::new();
     if picker.has_query() {
         lines.push(Line::from(vec![
@@ -430,13 +418,8 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         let done = if item.checked { "✓ " } else { "" };
         lines.push(Line::styled(format!("{marker}{done}{}", item.name), style));
     }
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(block)
-            .style(theme.style(Role::Text)),
-        area,
-    );
+    let inner = draw_overlay(frame, area, &title, None, theme);
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 fn render_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -771,7 +754,11 @@ mod tests {
     }
 
     fn draw(app: &App, theme: &Theme) -> Terminal<TestBackend> {
-        let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
+        draw_sized(app, theme, 100, 24)
+    }
+
+    fn draw_sized(app: &App, theme: &Theme, width: u16, height: u16) -> Terminal<TestBackend> {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
             .draw(|f| {
                 render(f, app, theme, NOW);
@@ -1560,10 +1547,7 @@ mod tests {
     #[test]
     fn a_found_task_shows_its_name_while_loading() {
         let mut app = app_searching("task", 1);
-        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
-            ratatui::crossterm::event::KeyCode::Enter,
-            ratatui::crossterm::event::KeyModifiers::NONE,
-        )));
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Enter));
 
         let text = screen_text(&draw(&app, &terminal_theme()));
 
@@ -1618,28 +1602,9 @@ mod tests {
         );
     }
 
-    fn draw_sized(app: &App, width: u16, height: u16) -> Terminal<TestBackend> {
-        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal
-            .draw(|f| {
-                render(f, app, &terminal_theme(), NOW);
-            })
-            .unwrap();
-        terminal
-    }
-
     fn app_editing_a_comment(text: &str) -> App {
         let mut app = app_with(fixture("notifications_page.json"));
-        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
-            ratatui::crossterm::event::KeyCode::Char('c'),
-            ratatui::crossterm::event::KeyModifiers::NONE,
-        )));
-        for c in text.chars() {
-            app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
-                ratatui::crossterm::event::KeyCode::Char(c),
-                ratatui::crossterm::event::KeyModifiers::NONE,
-            )));
-        }
+        press(&mut app, &format!("c{text}"));
         app
     }
 
@@ -1677,7 +1642,7 @@ mod tests {
         let mut app = app_with(fixture("notifications_page.json"));
         app.help = true;
 
-        let terminal = draw_sized(&app, 160, 40);
+        let terminal = draw_sized(&app, &terminal_theme(), 160, 40);
 
         assert_centered(&terminal, " Keys ");
         assert!(screen_text(&terminal).contains("search tasks in the workspace"));

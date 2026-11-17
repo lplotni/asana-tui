@@ -90,16 +90,33 @@ impl Client {
         connect: Duration,
         request: Duration,
     ) -> Self {
-        let http = reqwest::Client::builder()
-            .connect_timeout(connect)
-            .timeout(request)
-            .build()
-            .expect("static client configuration is valid");
         Self {
-            http,
+            http: http_client(connect, request),
             base_url: base_url.into(),
             token: token.expose().to_owned(),
         }
+    }
+
+    /// `GET /workspaces/{ws}/typeahead`: up to `count` objects of
+    /// `resource_type` matching `query`, with `fields`.
+    pub(crate) async fn typeahead<T: DeserializeOwned>(
+        &self,
+        workspace: &str,
+        resource_type: &str,
+        query: &str,
+        count: u32,
+        fields: &str,
+    ) -> Result<Vec<T>, ApiError> {
+        let query = [
+            ("resource_type", resource_type.to_owned()),
+            ("query", query.to_owned()),
+            ("count", count.to_string()),
+            ("opt_fields", fields.to_owned()),
+        ];
+        let page: Page<T> = self
+            .get(&format!("/workspaces/{workspace}/typeahead"), &query)
+            .await?;
+        Ok(page.data)
     }
 
     /// GET `path` and decode the JSON body.
@@ -184,6 +201,15 @@ fn retry_after(response: &reqwest::Response) -> Duration {
         .and_then(|v| v.trim().parse().ok())
         .map(Duration::from_secs)
         .unwrap_or(DEFAULT_RETRY_AFTER)
+}
+
+/// An HTTP client whose requests give up after the given times.
+fn http_client(connect: Duration, request: Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(connect)
+        .timeout(request)
+        .build()
+        .expect("static client configuration is valid")
 }
 
 /// Keeps only the error's description: reqwest errors include the request URL,

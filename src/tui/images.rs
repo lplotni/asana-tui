@@ -16,7 +16,7 @@ use super::ui::ShownImage;
 pub const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 /// Decoded images are shrunk to fit this many pixels on each side, which is
 /// more than a terminal pane shows and keeps memory bounded.
-pub const MAX_SIDE: u32 = 1600;
+pub const MAX_SIDE: u32 = 1024;
 
 /// Decodes PNG, JPEG, GIF (first frame) or WebP bytes, shrunk to [`MAX_SIDE`].
 pub fn decode(bytes: &[u8]) -> Result<DynamicImage, String> {

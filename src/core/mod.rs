@@ -128,16 +128,11 @@ pub async fn search_tasks(
 
 /// Task search needs a paid plan; Asana answers 402 otherwise.
 fn search_plan_hint(err: ApiError) -> ApiError {
-    match err {
-        ApiError::Status {
-            status: 402,
-            message,
-        } => ApiError::Status {
-            status: 402,
-            message: format!("{message} — set ASN_SEARCH=typeahead to search task names instead"),
-        },
-        other => other,
-    }
+    with_hint(
+        err,
+        &[402],
+        "set ASN_SEARCH=typeahead to search task names instead",
+    )
 }
 
 /// The sections of a project, in board order.
@@ -227,13 +222,15 @@ where
 /// The Inbox call is workspace-scoped, so 403/404 almost always mean a wrong
 /// `ASANA_WORKSPACE`.
 fn workspace_hint(err: ApiError) -> ApiError {
+    with_hint(err, &[403, 404], "check ASANA_WORKSPACE")
+}
+
+/// Appends `hint` to Asana's message when the status is one of `statuses`.
+fn with_hint(err: ApiError, statuses: &[u16], hint: &str) -> ApiError {
     match err {
-        ApiError::Status {
-            status: status @ (403 | 404),
-            message,
-        } => ApiError::Status {
+        ApiError::Status { status, message } if statuses.contains(&status) => ApiError::Status {
             status,
-            message: format!("{message} — check ASANA_WORKSPACE"),
+            message: format!("{message} — {hint}"),
         },
         other => other,
     }

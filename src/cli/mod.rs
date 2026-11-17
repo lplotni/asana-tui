@@ -17,6 +17,13 @@ pub fn terminal_safe(text: &str) -> String {
         .collect()
 }
 
+/// One line of tab-separated output, every field made [`terminal_safe`]
+/// (so a field can't contain a tab or newline that breaks the columns).
+pub fn tsv_line(fields: &[&str]) -> String {
+    let safe: Vec<String> = fields.iter().map(|f| terminal_safe(f)).collect();
+    safe.join("\t") + "\n"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

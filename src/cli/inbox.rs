@@ -1,6 +1,6 @@
 //! `asn inbox` output.
 
-use super::terminal_safe;
+use super::tsv_line;
 use crate::api::notifications::Notification;
 
 /// One tab-separated line per notification:
@@ -12,16 +12,14 @@ pub fn render_text(notifications: &[Notification]) -> String {
             let marker = if n.is_read { " " } else { "●" };
             let actor = n.created_by.as_ref().map_or("Asana", |a| a.name.as_str());
             let object = n.work_objects.first().map_or("-", |o| o.name.as_str());
-            let fields = [
-                n.gid.as_str(),
+            tsv_line(&[
+                &n.gid,
                 marker,
-                n.created_at.as_str(),
+                &n.created_at,
                 actor,
-                n.story_resource_subtype.as_str(),
+                &n.story_resource_subtype,
                 object,
-            ];
-            let safe: Vec<String> = fields.iter().map(|f| terminal_safe(f)).collect();
-            safe.join("\t") + "\n"
+            ])
         })
         .collect()
 }

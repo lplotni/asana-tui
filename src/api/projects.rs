@@ -1,18 +1,11 @@
 //! Project search, sections, adding a task to a project and moving it
 //! between sections.
 
-use serde::Deserialize;
-
 use super::tasks::Named;
-use super::{ApiError, Client};
+use super::{ApiError, Client, Page};
 
 /// How many projects the typeahead returns.
 const TYPEAHEAD_COUNT: u32 = 20;
-
-#[derive(Deserialize)]
-struct List {
-    data: Vec<Named>,
-}
 
 impl Client {
     pub async fn typeahead_projects(
@@ -20,16 +13,8 @@ impl Client {
         workspace: &str,
         query: &str,
     ) -> Result<Vec<Named>, ApiError> {
-        let query = [
-            ("resource_type", "project".to_owned()),
-            ("query", query.to_owned()),
-            ("count", TYPEAHEAD_COUNT.to_string()),
-            ("opt_fields", "name".to_owned()),
-        ];
-        let list: List = self
-            .get(&format!("/workspaces/{workspace}/typeahead"), &query)
-            .await?;
-        Ok(list.data)
+        self.typeahead(workspace, "project", query, TYPEAHEAD_COUNT, "name")
+            .await
     }
 
     pub async fn sections(&self, project_gid: &str) -> Result<Vec<Named>, ApiError> {
@@ -37,10 +22,10 @@ impl Client {
             ("opt_fields", "name".to_owned()),
             ("limit", "100".to_owned()),
         ];
-        let list: List = self
+        let page: Page<Named> = self
             .get(&format!("/projects/{project_gid}/sections"), &query)
             .await?;
-        Ok(list.data)
+        Ok(page.data)
     }
 
     pub async fn add_project(

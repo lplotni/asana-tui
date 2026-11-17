@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{ApiError, Client};
+use super::{ApiError, Client, Page};
 
 /// Fields of each task found.
 pub const SEARCH_FIELDS: &str = "name,completed";
@@ -16,11 +16,6 @@ pub struct FoundTask {
     pub name: String,
     #[serde(default)]
     pub completed: bool,
-}
-
-#[derive(Deserialize)]
-struct List {
-    data: Vec<FoundTask>,
 }
 
 impl Client {
@@ -37,28 +32,20 @@ impl Client {
             ("limit", SEARCH_LIMIT.to_string()),
             ("opt_fields", SEARCH_FIELDS.to_owned()),
         ];
-        let list: List = self
+        let page: Page<FoundTask> = self
             .get(&format!("/workspaces/{workspace}/tasks/search"), &query)
             .await?;
-        Ok(list.data)
+        Ok(page.data)
     }
 
-    /// `GET /workspaces/{ws}/typeahead` for tasks: names, ranked like the web
-    /// search box. Works on every plan.
+    /// Typeahead for tasks: names, ranked like the web search box. Works on
+    /// every plan.
     pub async fn typeahead_tasks(
         &self,
         workspace: &str,
         text: &str,
     ) -> Result<Vec<FoundTask>, ApiError> {
-        let query = [
-            ("resource_type", "task".to_owned()),
-            ("query", text.to_owned()),
-            ("count", SEARCH_LIMIT.to_string()),
-            ("opt_fields", SEARCH_FIELDS.to_owned()),
-        ];
-        let list: List = self
-            .get(&format!("/workspaces/{workspace}/typeahead"), &query)
-            .await?;
-        Ok(list.data)
+        self.typeahead(workspace, "task", text, SEARCH_LIMIT, SEARCH_FIELDS)
+            .await
     }
 }

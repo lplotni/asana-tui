@@ -1,6 +1,6 @@
 //! `asn search` output.
 
-use super::terminal_safe;
+use super::tsv_line;
 use crate::api::search::FoundTask;
 
 /// One tab-separated line per task: `gid  completed-mark  name`.
@@ -9,11 +9,7 @@ pub fn render_text(tasks: &[FoundTask]) -> String {
         .iter()
         .map(|t| {
             let mark = if t.completed { "✓" } else { " " };
-            format!(
-                "{}\t{mark}\t{}\n",
-                terminal_safe(&t.gid),
-                terminal_safe(&t.name)
-            )
+            tsv_line(&[&t.gid, mark, &t.name])
         })
         .collect()
 }

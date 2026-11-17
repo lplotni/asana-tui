@@ -594,11 +594,7 @@ fn schedules(effects: &[Effect]) -> Vec<&str> {
 }
 
 fn loaded_detail(app: &mut App, gid: &str) {
-    app.update(Msg::DetailDue { gid: gid.into() });
-    app.update(Msg::DetailLoaded {
-        gid: gid.into(),
-        result: Ok(Box::new(task_detail())),
-    });
+    load_task(app, gid, task_detail());
 }
 
 #[test]
@@ -1032,7 +1028,8 @@ fn ctrl_o_hands_the_comment_to_the_external_editor() {
 
     assert_eq!(
         effects,
-        [Effect::EditComment {
+        [Effect::EditExternal {
+            kind: EditorKind::Comment,
             task_gid: "t0".into(),
             initial: "Hi".into()
         }]
@@ -1055,7 +1052,8 @@ fn c_on_a_non_task_explains_why_nothing_happens() {
 fn a_cancelled_editor_posts_nothing() {
     let mut app = loaded(3, 10);
 
-    let effects = app.update(Msg::CommentWritten {
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: None,
     });
@@ -1069,7 +1067,8 @@ fn a_written_comment_appears_at_once_and_is_posted() {
     loaded_detail(&mut app, "t0");
     let before = comments_of(&app, "t0").len();
 
-    let effects = app.update(Msg::CommentWritten {
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Ship it\n".into()),
     });
@@ -1094,7 +1093,8 @@ fn a_written_comment_appears_at_once_and_is_posted() {
 fn the_posted_comment_replaces_the_local_one() {
     let mut app = loaded(3, 10);
     loaded_detail(&mut app, "t0");
-    app.update(Msg::CommentWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Ship it\n".into()),
     });
@@ -1119,7 +1119,8 @@ fn a_failed_post_removes_the_comment_and_keeps_the_text_as_a_draft() {
     let mut app = loaded(3, 10);
     loaded_detail(&mut app, "t0");
     let before = comments_of(&app, "t0").len();
-    app.update(Msg::CommentWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Ship it\n".into()),
     });
@@ -1143,7 +1144,8 @@ fn a_failed_post_removes_the_comment_and_keeps_the_text_as_a_draft() {
 fn commenting_works_before_the_details_have_loaded() {
     let mut app = loaded(3, 10);
 
-    let effects = app.update(Msg::CommentWritten {
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Hi".into()),
     });
@@ -1424,7 +1426,8 @@ fn ctrl_o_hands_the_description_to_the_external_editor() {
 
     assert_eq!(
         effects,
-        [Effect::EditDescription {
+        [Effect::EditExternal {
+            kind: EditorKind::Description,
             task_gid: "t0".into(),
             initial: "Old text".into()
         }]
@@ -1467,7 +1470,8 @@ fn an_unchanged_description_is_not_saved() {
     let mut app = loaded(3, 10);
     with_notes(&mut app, "Old text", "<body>Old text</body>");
 
-    let effects = app.update(Msg::DescriptionWritten {
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Description,
         task_gid: "t0".into(),
         text: Some("Old text\n".into()),
     });
@@ -1481,7 +1485,8 @@ fn a_changed_description_shows_at_once_and_is_saved_with_a_conflict_check() {
     let mut app = loaded(3, 10);
     with_notes(&mut app, "Old text", "<body>Old text</body>");
 
-    let effects = app.update(Msg::DescriptionWritten {
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Description,
         task_gid: "t0".into(),
         text: Some("New text\n".into()),
     });
@@ -1501,7 +1506,8 @@ fn a_changed_description_shows_at_once_and_is_saved_with_a_conflict_check() {
 fn a_saved_description_reloads_the_task() {
     let mut app = loaded(3, 10);
     with_notes(&mut app, "Old text", "<body>Old text</body>");
-    app.update(Msg::DescriptionWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Description,
         task_gid: "t0".into(),
         text: Some("New text\n".into()),
     });
@@ -1519,7 +1525,8 @@ fn a_saved_description_reloads_the_task() {
 fn a_failed_save_restores_the_old_text_and_says_where_the_new_one_is() {
     let mut app = loaded(3, 10);
     with_notes(&mut app, "Old text", "<body>Old text</body>");
-    app.update(Msg::DescriptionWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Description,
         task_gid: "t0".into(),
         text: Some("New text\n".into()),
     });
@@ -1551,7 +1558,8 @@ fn a_posted_comment_marks_the_tasks_unread_notifications_read() {
     notifications[2].work_objects[0].gid = "t0".into();
     let mut app = loaded_with(notifications, None, 10);
     loaded_detail(&mut app, "t0");
-    app.update(Msg::CommentWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Done".into()),
     });
@@ -1578,7 +1586,8 @@ fn a_posted_comment_marks_the_tasks_unread_notifications_read() {
 #[test]
 fn a_failed_comment_leaves_the_notifications_unread() {
     let mut app = loaded(3, 10);
-    app.update(Msg::CommentWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Done".into()),
     });
@@ -1596,7 +1605,8 @@ fn a_failed_comment_leaves_the_notifications_unread() {
 #[test]
 fn commenting_on_an_already_read_task_sends_no_mark() {
     let mut app = loaded_with(inbox(2, |_| true), None, 10);
-    app.update(Msg::CommentWritten {
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
         task_gid: "t0".into(),
         text: Some("Done".into()),
     });
@@ -2175,4 +2185,21 @@ fn a_refused_move_puts_the_task_back() {
     assert_eq!(section_of(&app, PROJECT).as_deref(), Some("Maple ember"));
     assert_eq!(app.toast.as_ref().unwrap().text, "Not moved: forbidden");
     assert!(app.toast.as_ref().unwrap().is_error);
+}
+
+#[test]
+fn a_blank_comment_from_the_external_editor_is_not_posted() {
+    let mut app = loaded(3, 10);
+
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Comment,
+        task_gid: "t0".into(),
+        text: Some("  \n".into()),
+    });
+
+    assert!(effects.is_empty());
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "Empty comment; nothing posted"
+    );
 }

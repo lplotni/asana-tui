@@ -371,3 +371,14 @@ async fn a_task_whose_stories_asana_refuses_still_loads_without_comments() {
     let error = detail.comments_error.unwrap();
     assert!(error.contains("unsupported parent"), "{error}");
 }
+
+#[tokio::test]
+async fn a_failed_download_never_shows_the_signed_link() {
+    let url = "http://127.0.0.1:1/assets/shot.png?X-Amz-Signature=secret";
+
+    let err = asn::api::attachments::download(url, 1000)
+        .await
+        .unwrap_err();
+
+    assert!(!err.to_string().contains("X-Amz-Signature"), "{err}");
+}

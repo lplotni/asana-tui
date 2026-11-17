@@ -18,6 +18,27 @@ pub struct Item {
     pub checked: bool,
 }
 
+impl From<Named> for Item {
+    fn from(named: Named) -> Item {
+        Item {
+            gid: Some(named.gid),
+            name: named.name,
+            checked: false,
+        }
+    }
+}
+
+impl Item {
+    /// The project, section or task this row stands for. Only "No section"
+    /// has no gid, and it's never chosen as one of those.
+    pub fn into_named(self) -> Named {
+        Named {
+            gid: self.gid.unwrap_or_default(),
+            name: self.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stage {
     Project,
@@ -79,14 +100,7 @@ impl Picker {
         Picker {
             stage: Stage::MoveProject,
             loading: false,
-            items: projects
-                .into_iter()
-                .map(|p| Item {
-                    gid: Some(p.gid),
-                    name: p.name,
-                    checked: false,
-                })
-                .collect(),
+            items: projects.into_iter().map(Item::from).collect(),
             ..Picker::new(task_gid, Vec::new())
         }
     }
@@ -120,11 +134,7 @@ impl Picker {
         self.items = projects
             .into_iter()
             .filter(|p| !self.exclude.contains(&p.gid))
-            .map(|p| Item {
-                gid: Some(p.gid),
-                name: p.name,
-                checked: false,
-            })
+            .map(Item::from)
             .collect();
         self.selected = 0;
         self.loading = false;
@@ -182,11 +192,7 @@ impl Picker {
             name: "No section".into(),
             checked: false,
         })
-        .chain(sections.into_iter().map(|s| Item {
-            gid: Some(s.gid),
-            name: s.name,
-            checked: false,
-        }))
+        .chain(sections.into_iter().map(Item::from))
         .collect();
         self.selected = 0;
         self.loading = false;

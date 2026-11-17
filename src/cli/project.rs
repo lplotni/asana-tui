@@ -1,13 +1,13 @@
 //! `asn project` output.
 
-use super::terminal_safe;
+use super::tsv_line;
 use crate::api::tasks::Named;
 
 /// One tab-separated line per section: `gid  name`.
 pub fn render_sections(sections: &[Named]) -> String {
     sections
         .iter()
-        .map(|s| format!("{}\t{}\n", terminal_safe(&s.gid), terminal_safe(&s.name)))
+        .map(|s| tsv_line(&[&s.gid, &s.name]))
         .collect()
 }
 
