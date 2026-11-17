@@ -193,7 +193,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 
 ## Key Assumptions to Validate
 
-- [ ] **A1: `GET /projects/{gid}/tasks` returns tasks in board order within each section.** Test: compare `asn board --json` with the web board on 2–3 projects before building the TUI. If it fails, load each section with `GET /sections/{gid}/tasks` (one request per section, which still fits the budget).
+- [x] **A1: `GET /projects/{gid}/tasks` returns tasks in board order within each section.** Confirmed by the user on real projects (2026-11-17); a large project also loads well under 2 s. Test: compare `asn board --json` with the web board on 2–3 projects before building the TUI. If it fails, load each section with `GET /sections/{gid}/tasks` (one request per section, which still fits the budget).
 - [ ] **A2: 28-cell cards with name + initials + due are enough to glance at.** Test: dogfood on the widest and narrowest terminals in use. If not, first try 3-line cards, before considering a stacked layout.
 - [ ] **A3: Initials are unambiguous enough in a project's assignee set.** Test: dogfood. If two people share initials, fall back to the first name.
 - [ ] **A4: Hiding completed tasks matches how the board is read.** Test: dogfood. The web board collapses them by default.

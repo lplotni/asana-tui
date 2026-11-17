@@ -29,7 +29,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 **Verification:**
 - [x] Tests: `wiremock` test in `tests/api_project.rs` following `next_page` and asserting the query parameters. `core::board` grouping tests (two-project task, unknown section, empty section). CLI rendering tests for text and JSON. Run with `cargo test board`.
 - [x] New fixtures (`project_tasks_page*.json`) are anonymized. Grep them for real names and GIDs.
-- [ ] Manual (Checkpoint A): compare `asn board <gid> --json` with the web board on 2–3 real projects, and time a ~300-task project.
+- [x] Manual (Checkpoint A): compare `asn board <gid> --json` with the web board on 2–3 real projects, and time a ~300-task project.
 
 **Dependencies:** None
 
@@ -66,9 +66,9 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 ---
 
 ### Checkpoint A: data is right
-- [ ] A1: card order and the open-task set match the web board on 2–3 real projects. If they don't, change `core::board` to `GET /sections/{gid}/tasks` per section before continuing, and update the spec.
-- [ ] A ~300-task project loads in < 2 s.
-- [ ] fmt, clippy and tests are clean.
+- [x] A1: card order and the open-task set match the web board on 2–3 real projects. If they don't, change `core::board` to `GET /sections/{gid}/tasks` per section before continuing, and update the spec.
+- [x] A ~300-task project loads in < 2 s.
+- [x] fmt, clippy and tests are clean.
 
 ---
 

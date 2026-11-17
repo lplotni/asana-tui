@@ -42,9 +42,9 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T2: Pure board state in `tui/board.rs` (F9 navigation, paging, cursor)
 
 ### Checkpoint A: data is right
-- [ ] A1 checked: `asn board --json` matches the web board on 2–3 real projects (or switch to per-section loading)
-- [ ] A 300-task project loads in < 2 s
-- [ ] fmt, clippy and tests are clean
+- [x] A1 checked: `asn board --json` matches the web board on 2–3 real projects (or switch to per-section loading)
+- [x] A 300-task project loads in < 2 s
+- [x] fmt, clippy and tests are clean
 
 ### Phase 2: A board you can look at
 - [ ] T3: Board screen opened with `asn --project` (F9 render, F11 startup)
