@@ -8,7 +8,7 @@ use super::board::BoardView;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
 use crate::present::{detail, format};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
 use crate::api::notifications::Notification;
@@ -78,6 +78,8 @@ pub enum Msg {
     },
     /// The 60-second refresh timer.
     Tick,
+    /// The next frame of an animation, every 40 ms while [`App::animating`].
+    Frame,
     /// The Inbox from the first page (start or refresh).
     InboxLoaded(Loaded),
     /// More notifications after the current ones.
@@ -498,6 +500,13 @@ pub struct App {
     external_mentions: Vec<Mention>,
     /// The task just completed (GID, name): `d` as the next key reopens it.
     undo_complete: Option<(String, String)>,
+    /// Completed board cards animate before they leave (spec F23).
+    pub animations: bool,
+    /// Completions sent to Asana and not confirmed yet, by task GID.
+    completions_in_flight: HashSet<String>,
+    /// Tasks to reopen once Asana confirms their completion: `d` came
+    /// during the animation, and reopening at once could reach Asana first.
+    reopen_when_confirmed: HashSet<String>,
     /// Numbers comments shown before Asana confirms them.
     next_local_id: u64,
     /// Text of comments being posted, by local GID (kept as a draft if the
@@ -642,6 +651,14 @@ impl App {
                 self.sizes = sizes;
                 self.move_to(self.cursor);
                 self.load_more_if_needed()
+            }
+            Msg::Frame => {
+                for slot in &mut self.boards {
+                    if let BoardState::Loaded(view) = &mut slot.state {
+                        view.advance();
+                    }
+                }
+                Vec::new()
             }
             Msg::Tick => {
                 let mut effects = self.refresh();
@@ -1390,7 +1407,10 @@ impl App {
         // A queued reload means this result may predate what's waiting to be
         // selected; select it from the next one.
         let queued = std::mem::take(&mut slot.reload_queued);
-        let select = (result.is_ok() && !queued)
+        // A card animating its completion holds this result back until it
+        // ends (F23), so the card to select waits for the next load.
+        let held = matches!(&slot.state, BoardState::Loaded(view) if view.completing().is_some());
+        let select = (result.is_ok() && !queued && !held)
             .then(|| slot.select_task.take())
             .flatten();
         match (&mut slot.state, result) {
@@ -1437,6 +1457,13 @@ impl App {
             return Vec::new();
         };
         let name = self.shown_task_name().unwrap_or("task").to_owned();
+        if self
+            .board_view()
+            .and_then(BoardView::completing)
+            .is_some_and(|(gid, _)| gid == task_gid)
+        {
+            return self.reopen_completing(task_gid, name);
+        }
         let completed = match self.details.get(&task_gid) {
             Some(Detail::Loaded(detail)) => !detail.task.completed,
             _ if self.screen == Screen::Board => true,
@@ -1446,11 +1473,32 @@ impl App {
             }
         };
         self.show_completed(&task_gid, completed);
+        if completed {
+            self.completions_in_flight.insert(task_gid.clone());
+        }
         vec![Effect::SetCompleted {
             task_gid,
             name,
             completed,
         }]
+    }
+
+    /// `d` on a card that's animating its completion: it stays. The task is
+    /// reopened now, or once Asana confirms the completion still in flight.
+    fn reopen_completing(&mut self, task_gid: String, name: String) -> Vec<Effect> {
+        if self.completions_in_flight.contains(&task_gid) {
+            self.show_completed(&task_gid, false);
+            self.reopen_when_confirmed.insert(task_gid);
+            return Vec::new();
+        }
+        self.reopen(task_gid, name)
+    }
+
+    /// Whether an animation is playing, so the event loop sends frames.
+    pub fn animating(&self) -> bool {
+        self.boards.iter().any(
+            |slot| matches!(&slot.state, BoardState::Loaded(view) if view.completing().is_some()),
+        )
     }
 
     /// `d` right after completing: reopens that task.
@@ -1469,11 +1517,30 @@ impl App {
         if let Some(Detail::Loaded(detail)) = self.details.get_mut(gid) {
             detail.task.completed = completed;
         }
-        if completed
-            && self.screen == Screen::Board
-            && self.board_view_mut().is_some_and(|view| view.remove(gid))
+        if !completed {
+            self.stop_completing(gid);
+            return;
+        }
+        let animations = self.animations;
+        if self.screen == Screen::Board
+            && self.board_view_mut().is_some_and(|view| {
+                if animations {
+                    view.start_completing(gid)
+                } else {
+                    view.remove(gid)
+                }
+            })
         {
             self.set_focus(Focus::List);
+        }
+    }
+
+    /// Stops card `gid`'s completion animation on every board; it stays.
+    fn stop_completing(&mut self, gid: &str) {
+        for slot in &mut self.boards {
+            if let BoardState::Loaded(view) = &mut slot.state {
+                view.cancel_completing(gid);
+            }
         }
     }
 
@@ -1486,6 +1553,12 @@ impl App {
         completed: bool,
         result: Result<(), String>,
     ) -> Vec<Effect> {
+        if completed {
+            self.completions_in_flight.remove(&task_gid);
+            if self.reopen_when_confirmed.remove(&task_gid) && result.is_ok() {
+                return self.reopen(task_gid, name);
+            }
+        }
         match result {
             Ok(()) if completed => {
                 self.toast = Some(Toast::info(format!("Completed \"{name}\" · d to undo")));
@@ -1502,6 +1575,9 @@ impl App {
             Err(message) => {
                 if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
                     detail.task.completed = !completed;
+                }
+                if completed {
+                    self.stop_completing(&task_gid);
                 }
                 let what = if completed { "completed" } else { "reopened" };
                 self.toast = Some(Toast::error(format!("Not {what}: {message}")));

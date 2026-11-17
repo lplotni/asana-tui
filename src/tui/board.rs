@@ -9,6 +9,12 @@ use crate::core::{Board, Column};
 /// The narrowest a column is drawn, in cells.
 pub const MIN_COLUMN_WIDTH: usize = 28;
 
+/// A completed card's animation (spec F23), in frames of 40 ms: the name is
+/// struck through during the first [`STRIKE_FRAMES`], then the card shows
+/// only its name line, and it leaves after [`COMPLETE_FRAMES`].
+pub const STRIKE_FRAMES: u8 = 6;
+pub const COMPLETE_FRAMES: u8 = 10;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardView {
     project: Named,
@@ -25,6 +31,10 @@ pub struct BoardView {
     width: usize,
     /// Cards that fit in a column.
     card_rows: usize,
+    /// A completed card playing its animation: its GID and frame.
+    completing: Option<(String, u8)>,
+    /// A reload that arrived during the animation, shown when it ends.
+    held: Option<Box<Board>>,
 }
 
 impl BoardView {
@@ -38,6 +48,63 @@ impl BoardView {
             first: 0,
             width: 0,
             card_rows: 1,
+            completing: None,
+            held: None,
+        }
+    }
+
+    /// The card playing its completion animation, and its frame.
+    pub fn completing(&self) -> Option<(&str, u8)> {
+        self.completing
+            .as_ref()
+            .map(|(gid, frame)| (gid.as_str(), *frame))
+    }
+
+    /// Starts card `gid`'s completion animation. `false` if it isn't here.
+    pub fn start_completing(&mut self, gid: &str) -> bool {
+        let here = self
+            .columns
+            .iter()
+            .any(|c| c.tasks.iter().any(|t| t.gid == gid));
+        if here {
+            self.finish_completing();
+            self.completing = Some((gid.to_owned(), 0));
+        }
+        here
+    }
+
+    /// The next frame. After the last one the card leaves, and a reload held
+    /// back meanwhile is shown. Returns whether the animation goes on.
+    pub fn advance(&mut self) -> bool {
+        let Some((_, frame)) = &mut self.completing else {
+            return false;
+        };
+        *frame += 1;
+        if *frame < COMPLETE_FRAMES {
+            return true;
+        }
+        self.finish_completing();
+        false
+    }
+
+    /// Stops card `gid`'s animation and keeps the card (its task was
+    /// reopened, or completing it failed).
+    pub fn cancel_completing(&mut self, gid: &str) {
+        if self.completing().is_some_and(|(g, _)| g == gid) {
+            self.completing = None;
+            if let Some(board) = self.held.take() {
+                self.replace(*board);
+            }
+        }
+    }
+
+    /// Ends a running animation at once: the card leaves.
+    fn finish_completing(&mut self) {
+        if let Some((gid, _)) = self.completing.take() {
+            self.remove(&gid);
+            if let Some(board) = self.held.take() {
+                self.replace(*board);
+            }
         }
     }
 
@@ -189,6 +256,10 @@ impl BoardView {
     /// it is now; if it's gone, on the same position of the same section
     /// (or column), clamped.
     pub fn replace(&mut self, board: Board) {
+        if self.completing.is_some() {
+            self.held = Some(Box::new(board));
+            return;
+        }
         let task = self.selected_task().map(|t| t.gid.clone());
         let section = self
             .columns
@@ -586,5 +657,76 @@ mod tests {
         v.replace(board(&[1]));
 
         assert_eq!(selected(&v), Some("c0-0"));
+    }
+
+    // --- Completion animation (F23) ------------------------------------------
+
+    #[test]
+    fn a_completing_card_stays_until_its_last_frame() {
+        let mut v = view(&[3]);
+        assert!(v.start_completing("c0-0"));
+
+        for _ in 1..COMPLETE_FRAMES {
+            assert!(v.advance());
+            assert_eq!(selected(&v), Some("c0-0"));
+        }
+        assert!(!v.advance(), "the last frame ends it");
+
+        assert_eq!(v.completing(), None);
+        assert_eq!(selected(&v), Some("c0-1"));
+        assert!(!v.advance());
+    }
+
+    #[test]
+    fn a_card_that_isnt_on_the_board_doesnt_animate() {
+        let mut v = view(&[2]);
+
+        assert!(!v.start_completing("elsewhere"));
+        assert_eq!(v.completing(), None);
+    }
+
+    #[test]
+    fn a_reload_during_the_animation_is_shown_when_it_ends() {
+        let mut v = view(&[3]);
+        v.start_completing("c0-0");
+        let mut reloaded = board(&[3]);
+        reloaded.columns[0].tasks.remove(0);
+        reloaded.columns[0].tasks.push(card("new"));
+
+        v.replace(reloaded);
+        assert_eq!(v.columns()[0].tasks.len(), 3, "held back");
+        while v.advance() {}
+
+        let gids: Vec<&str> = v.columns()[0]
+            .tasks
+            .iter()
+            .map(|t| t.gid.as_str())
+            .collect();
+        assert_eq!(gids, ["c0-1", "c0-2", "new"]);
+    }
+
+    #[test]
+    fn cancelling_keeps_the_card_and_shows_a_held_reload() {
+        let mut v = view(&[2]);
+        v.start_completing("c0-0");
+        v.advance();
+        v.replace(board(&[2]));
+
+        v.cancel_completing("c0-0");
+
+        assert_eq!(v.completing(), None);
+        assert_eq!(selected(&v), Some("c0-0"));
+        assert!(!v.advance());
+    }
+
+    #[test]
+    fn completing_another_card_finishes_the_first_at_once() {
+        let mut v = view(&[3]);
+        v.start_completing("c0-0");
+
+        v.start_completing("c0-1");
+
+        assert_eq!(v.completing(), Some(("c0-1", 0)));
+        assert!(v.columns()[0].tasks.iter().all(|t| t.gid != "c0-0"));
     }
 }

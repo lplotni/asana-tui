@@ -17,6 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ratatui::crossterm::event::{self, Event};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 use tokio::task::JoinSet;
+use tokio::time::Instant;
 
 use crate::api::Client;
 use crate::config::{Config, SearchMode};
@@ -27,6 +28,9 @@ use theme::Theme;
 
 /// How long quitting waits for unfinished writes.
 const WRITE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How often an animation draws its next frame (spec F23).
+const FRAME: std::time::Duration = std::time::Duration::from_millis(40);
 
 /// How often the Inbox is polled (the API has no push).
 const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
@@ -69,7 +73,9 @@ pub async fn run(
         Some(project_gid) => App::new_on_board(project_gid),
         None => App::new(),
     };
+    app.animations = config.animations;
     app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
+    let mut next_frame: Option<Instant> = None;
     run_effects(effects, &client, &workspace, search, &tx, &mut writes);
 
     let result = loop {
@@ -80,7 +86,22 @@ pub async fn run(
         if let Err(err) = drawn {
             break Err(err.into());
         }
-        let Some(msg) = rx.recv().await else {
+        // While an animation plays, a frame is due every FRAME, however
+        // many other messages arrive in between.
+        let msg = if app.animating() {
+            let due = *next_frame.get_or_insert_with(|| Instant::now() + FRAME);
+            match tokio::time::timeout_at(due, rx.recv()).await {
+                Ok(msg) => msg,
+                Err(_) => {
+                    next_frame = Some(due + FRAME);
+                    Some(Msg::Frame)
+                }
+            }
+        } else {
+            next_frame = None;
+            rx.recv().await
+        };
+        let Some(msg) = msg else {
             break Ok(());
         };
         app.now = now();

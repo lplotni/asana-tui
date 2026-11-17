@@ -3594,6 +3594,112 @@ fn a_failed_completion_puts_the_card_back_and_says_so() {
     );
 }
 
+// --- Completion animation (F23) ---------------------------------------------
+
+fn animated_board(sizes: &[usize]) -> App {
+    let mut app = on_board(sizes);
+    app.animations = true;
+    app
+}
+
+fn frames(app: &mut App, count: u8) {
+    for _ in 0..count {
+        app.update(Msg::Frame);
+    }
+}
+
+fn reopens(effects: &[Effect]) -> bool {
+    matches!(effects, [Effect::SetCompleted { task_gid, completed: false, .. }] if task_gid == "c0-0")
+}
+
+#[test]
+fn an_animated_card_stays_until_its_last_frame() {
+    let mut app = animated_board(&[2]);
+
+    let effects = keys(&mut app, "d");
+
+    assert!(
+        matches!(
+            &effects[..],
+            [Effect::SetCompleted {
+                completed: true,
+                ..
+            }]
+        ),
+        "{effects:?}"
+    );
+    assert!(app.animating());
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    frames(&mut app, crate::tui::board::COMPLETE_FRAMES);
+    assert!(!app.animating());
+    assert_eq!(selected_card(&app), Some("c0-1"));
+}
+
+#[test]
+fn d_during_the_animation_reopens_once_asana_confirms_the_completion() {
+    let mut app = animated_board(&[2]);
+    keys(&mut app, "d");
+    frames(&mut app, 2);
+
+    // Still in flight: reopening now could reach Asana first.
+    let effects = keys(&mut app, "d");
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(!app.animating());
+    assert_eq!(selected_card(&app), Some("c0-0"));
+
+    let effects = app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    assert!(reopens(&effects), "{effects:?}");
+}
+
+#[test]
+fn d_during_the_animation_after_asana_confirmed_reopens_at_once() {
+    let mut app = animated_board(&[3]);
+    keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    // Undo ends with another key, but the card is still animating.
+    keys(&mut app, "jk");
+
+    let effects = keys(&mut app, "d");
+
+    assert!(reopens(&effects), "{effects:?}");
+    assert!(!app.animating());
+    assert_eq!(selected_card(&app), Some("c0-0"));
+}
+
+#[test]
+fn a_reload_during_the_animation_waits_for_it() {
+    let mut app = animated_board(&[2]);
+    keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    let mut reloaded = project_board(&[2]);
+    reloaded.columns[0].tasks.remove(0);
+
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(reloaded),
+    });
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    frames(&mut app, crate::tui::board::COMPLETE_FRAMES);
+    assert_eq!(selected_card(&app), Some("c0-1"));
+}
+
+#[test]
+fn a_failed_completion_stops_the_animation_and_keeps_the_card() {
+    let mut app = animated_board(&[2]);
+    keys(&mut app, "d");
+
+    app.update(completed_set(
+        "c0-0",
+        "Card 0-0",
+        true,
+        Err("Forbidden".into()),
+    ));
+
+    assert!(!app.animating());
+    assert_eq!(selected_card(&app), Some("c0-0"));
+}
+
 // --- Tab a: assign (F17) -----------------------------------------------------
 
 fn tab_a(app: &mut App) -> Vec<Effect> {

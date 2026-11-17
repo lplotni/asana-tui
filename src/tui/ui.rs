@@ -2,13 +2,14 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, Borders, Clear, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
 };
 
 use super::app::{App, BoardState, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Screen, Sizes};
-use super::board::BoardView;
+use super::board::{BoardView, STRIKE_FRAMES};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -558,10 +559,16 @@ fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme
         }
         // Inside the borders, after the one-cell selection marker.
         let text_width = usize::from(column_area.width.saturating_sub(3));
+        let completing = view.completing();
         let items: Vec<ListItem> = column
             .tasks
             .iter()
-            .map(|task| card_item(task, text_width, theme, now))
+            .map(|task| match completing {
+                Some((gid, frame)) if gid == task.gid => {
+                    completing_card_item(task, text_width, theme, frame)
+                }
+                _ => card_item(task, text_width, theme, now),
+            })
             .collect();
         let list = List::new(items)
             .block(block)
@@ -597,6 +604,42 @@ fn card_item<'a>(
         }
     }
     ListItem::new(vec![name, Line::from(meta)])
+}
+
+/// A completed card's animation frame (F23): the name struck through from
+/// the left with `✓ done` below it, then the name line alone.
+fn completing_card_item<'a>(
+    task: &crate::api::projects::BoardTask,
+    width: usize,
+    theme: &Theme,
+    frame: u8,
+) -> ListItem<'a> {
+    let name = card::truncate(&task.name, width);
+    let total = name.chars().count();
+    let struck = if frame < STRIKE_FRAMES {
+        (total * usize::from(frame + 1)).div_ceil(usize::from(STRIKE_FRAMES))
+    } else {
+        total
+    };
+    let split = name
+        .char_indices()
+        .nth(struck)
+        .map_or(name.len(), |(i, _)| i);
+    let name_line = Line::from(vec![
+        Span::styled(
+            name[..split].to_owned(),
+            theme
+                .style(Role::TextMuted)
+                .add_modifier(Modifier::CROSSED_OUT),
+        ),
+        Span::styled(name[split..].to_owned(), theme.style(Role::Text)),
+    ]);
+    if frame < STRIKE_FRAMES {
+        let done = Line::styled("✓ done", theme.style(Role::ToastSuccess));
+        ListItem::new(vec![name_line, done])
+    } else {
+        ListItem::new(vec![name_line])
+    }
 }
 
 /// The comment or description editor, centered.
@@ -1188,6 +1231,40 @@ mod tests {
         let screen = screen_text(&terminal);
         assert!(!screen.contains(BIDI), "a bidi control was drawn");
         assert!(screen.contains("Invoice"), "the visible text stays");
+    }
+
+    /// A board whose first card was just completed with animations on.
+    fn completing_board(frames: u8) -> Terminal<TestBackend> {
+        let (mut app, _) = App::new_on_board("42".into());
+        app.animations = true;
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(sample_board()),
+        });
+        app.update(key_event(ratatui::crossterm::event::KeyCode::Char('d')));
+        for _ in 0..frames {
+            app.update(Msg::Frame);
+        }
+        draw_at(&mut app, 120)
+    }
+
+    #[test]
+    fn a_completed_card_is_struck_through_from_the_left() {
+        let terminal = completing_board(2);
+
+        let buffer = terminal.backend().buffer();
+        let struck = buffer
+            .content()
+            .iter()
+            .filter(|c| c.modifier.contains(Modifier::CROSSED_OUT))
+            .count();
+        assert!(struck > 0, "nothing is struck through");
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn a_completed_card_collapses_to_its_name_before_it_leaves() {
+        insta::assert_snapshot!(completing_board(STRIKE_FRAMES).backend());
     }
 
     #[test]

@@ -1,0 +1,28 @@
+---
+source: src/tui/ui.rs
+expression: completing_board(STRIKE_FRAMES).backend()
+---
+" asn  Website relaunch · 6 open                                                                                     1 › "
+"┏ Backlog (2) ━━━━━━━━━━━━━━━┓┌ In progress (2) ───────────┐┌ Review (0) ────────────────┐┌ Done this week (1) ────────┐"
+"┃▌Pick a font pairing for he…┃│ Rewrite the pricing page c…││ no tasks                   ││ Favicon                    │"
+"┃ Audit image sizes          ┃│ AL · Thu 12 Nov!           ││                            ││ GH                         │"
+"┃ GH · Fri 27 Nov            ┃│ Cookie banner              ││                            ││                            │"
+"┃                            ┃│ AT · Fri 20 Nov            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┃                            ┃│                            ││                            ││                            │"
+"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└────────────────────────────┘└────────────────────────────┘└────────────────────────────┘"
+" NORMAL  1/2                                                                                                            "
+" j/k move  Enter open  h/l column  c comment  m move  p project  d done  Tab q new task  Tab a assign  ? help           "

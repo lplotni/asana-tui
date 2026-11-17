@@ -507,18 +507,18 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T22: Completion animation on board cards
+### - [x] T22: Completion animation on board cards
 
 **Description:** F23: `d` on a board card plays the strike and collapse before the card leaves. The event loop sends `Msg::Frame` every 40 ms only while an animation runs. Reloads during it are held. `animations = false` keeps F16's instant removal.
 
 **Acceptance criteria:**
-- [ ] A completed card strikes through, collapses and leaves after the last frame.
-- [ ] `d` during the animation reopens the task, and the card stays.
-- [ ] A reload during the animation is applied when it ends; a failure restores the card.
-- [ ] With animations off, the card leaves at once (today's tests still pass).
+- [x] A completed card strikes through, collapses and leaves after the last frame.
+- [x] `d` during the animation reopens the task, and the card stays.
+- [x] A reload during the animation is applied when it ends; a failure restores the card.
+- [x] With animations off, the card leaves at once (today's tests still pass).
 
 **Verification:**
-- [ ] App tests and two snapshots (mid-strike, mid-collapse).
+- [x] App tests and two snapshots (mid-strike, mid-collapse).
 - [ ] Manual: complete a card on a real board.
 
 **Dependencies:** T20
