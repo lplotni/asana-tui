@@ -39,7 +39,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T2: Pure board state in `tui/board.rs`
+### - [x] T2: Pure board state in `tui/board.rs`
 
 **Description:** A `Board` state struct built from `core::Board`, with no I/O and no rendering, in the style of `tui/picker.rs`. It handles:
 - columns and the cursor (column + row)
@@ -50,12 +50,12 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - `replace(core::Board)`: keeps the cursor on the same task GID, or clamps to the same position in the same column when the task is gone
 
 **Acceptance criteria:**
-- [ ] Moving across uneven columns, including empty ones, never panics and keeps the row clamped. `h`/`l` move through empty columns.
-- [ ] The column window keeps the selected column visible and reports correct `‹ n` / `n ›` counts at 80, 120 and 200 cells. A width narrower than two columns shows one.
-- [ ] `replace` keeps the cursor by GID, and clamps when the task has gone.
+- [x] Moving across uneven columns, including empty ones, never panics and keeps the row clamped. `h`/`l` move through empty columns.
+- [x] The column window keeps the selected column visible and reports correct `‹ n` / `n ›` counts at 80, 120 and 200 cells. A width narrower than two columns shows one.
+- [x] `replace` keeps the cursor by GID, and clamps when the task has gone.
 
 **Verification:**
-- [ ] Tests: unit tests in `tui/board.rs` for every bullet above. Run with `cargo test tui::board`.
+- [x] Tests: unit tests in `tui/board.rs` for every bullet above. Run with `cargo test tui::board`.
 
 **Dependencies:** The `core::Board` type from T1 (define the type first if both run in parallel)
 

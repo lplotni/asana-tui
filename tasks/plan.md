@@ -39,7 +39,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 ### Phase 1: Data and de-risk
 - [x] T1: `asn board <gid> [--json]` (F13, API surface)
-- [ ] T2: Pure board state in `tui/board.rs` (F9 navigation, paging, cursor)
+- [x] T2: Pure board state in `tui/board.rs` (F9 navigation, paging, cursor)
 
 ### Checkpoint A: data is right
 - [ ] A1 checked: `asn board --json` matches the web board on 2–3 real projects (or switch to per-section loading)
