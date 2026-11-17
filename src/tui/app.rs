@@ -261,6 +261,9 @@ impl Editor {
     fn new(kind: EditorKind, task_gid: String, text: &str) -> Editor {
         let mut textarea = TextArea::new(text.split('\n').map(str::to_owned).collect());
         textarea.set_cursor_line_style(ratatui::style::Style::default());
+        // Wrap long lines (descriptions are often one line per paragraph)
+        // instead of scrolling sideways.
+        textarea.set_wrap_mode(ratatui_textarea::WrapMode::WordOrGlyph);
         if kind == EditorKind::Comment {
             textarea.move_cursor(CursorMove::Bottom);
             textarea.move_cursor(CursorMove::End);

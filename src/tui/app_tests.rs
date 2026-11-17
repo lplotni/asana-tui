@@ -3056,3 +3056,15 @@ fn esc_after_a_board_search_ends_it() {
     assert!(app.board_search.is_none());
     assert_eq!(selected_card(&app), Some("c1-0"));
 }
+
+#[test]
+fn the_editor_wraps_long_lines_instead_of_scrolling_sideways() {
+    let mut app = loaded(3, 10);
+
+    keys(&mut app, "c");
+
+    assert_eq!(
+        app.editor.as_ref().map(|e| e.textarea.wrap_mode()),
+        Some(ratatui_textarea::WrapMode::WordOrGlyph)
+    );
+}

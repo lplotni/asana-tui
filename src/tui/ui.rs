@@ -549,12 +549,29 @@ fn card_item<'a>(
 }
 
 /// The comment or description editor, centered.
+/// The editor overlay: most of the screen, about 80% of its width but at
+/// least 80 cells (when they fit) and at most 120, so lines stay readable.
+fn editor_area(over: Rect) -> Rect {
+    let width = (over.width * 4 / 5)
+        .clamp(80, 120)
+        .min(over.width.saturating_sub(4));
+    centered(over, width, over.height.saturating_sub(4))
+}
+
+/// A picker overlay: about 60% of the screen each way, at least 56×14 cells
+/// (when they fit) and at most 100×30.
+fn picker_area(over: Rect) -> Rect {
+    let width = (over.width * 3 / 5)
+        .clamp(56, 100)
+        .min(over.width.saturating_sub(4));
+    let height = (over.height * 3 / 5)
+        .clamp(14, 30)
+        .min(over.height.saturating_sub(2));
+    centered(over, width, height)
+}
+
 fn render_editor(frame: &mut Frame, over: Rect, editor: &Editor, app: &App, theme: &Theme) {
-    let area = centered(
-        over,
-        over.width.saturating_sub(4).min(80),
-        over.height.saturating_sub(2).min(18),
-    );
+    let area = editor_area(over);
     let title = editor.kind.title(app.shown_task_name().unwrap_or("task"));
     let footer = format!(
         " Ctrl-s {} · Esc cancel · Ctrl-o $EDITOR ",
@@ -565,11 +582,7 @@ fn render_editor(frame: &mut Frame, over: Rect, editor: &Editor, app: &App, them
 }
 
 fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) {
-    let area = centered(
-        over,
-        over.width.saturating_sub(4).min(56),
-        over.height.saturating_sub(2).min(14),
-    );
+    let area = picker_area(over);
     let height = area.height;
     let title = match &picker.stage {
         Stage::Project => " Add to project ".to_owned(),
@@ -981,6 +994,57 @@ mod tests {
 
     fn terminal_theme() -> Theme {
         Theme::builtin("terminal").unwrap()
+    }
+
+    #[test]
+    fn the_editor_wraps_a_long_paragraph() {
+        let mut app = app_with(fixture("notifications_page.json"));
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 30))));
+        press(
+            &mut app,
+            "cRewrite the pricing page so every plan fits on one screen at 1280 pixels, \
+             keep the comparison table, drop the FAQ accordion, and link the annual \
+             discount from the hero instead of the footer.",
+        );
+
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal
+            .draw(|f| {
+                render(f, &app, &terminal_theme(), NOW);
+            })
+            .unwrap();
+
+        insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn the_editor_keeps_its_size_on_a_small_terminal() {
+        let area = editor_area(Rect::new(0, 0, 80, 24));
+
+        assert_eq!((area.width, area.height), (76, 20));
+    }
+
+    #[test]
+    fn the_editor_grows_with_the_terminal_up_to_a_readable_width() {
+        let medium = editor_area(Rect::new(0, 0, 120, 40));
+        let wide = editor_area(Rect::new(0, 0, 250, 60));
+
+        assert_eq!((medium.width, medium.height), (96, 36));
+        assert_eq!((wide.width, wide.height), (120, 56));
+    }
+
+    #[test]
+    fn pickers_keep_their_size_on_a_small_terminal() {
+        let area = picker_area(Rect::new(0, 0, 80, 24));
+
+        assert_eq!((area.width, area.height), (56, 14));
+    }
+
+    #[test]
+    fn pickers_grow_with_the_terminal() {
+        let wide = picker_area(Rect::new(0, 0, 200, 60));
+
+        assert_eq!((wide.width, wide.height), (100, 30));
     }
 
     #[test]
