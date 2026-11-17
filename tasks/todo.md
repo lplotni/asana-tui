@@ -96,7 +96,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `present/` unit tests for card text. `app_tests.rs` covering key dispatch on the board and Inbox-only keys ignored. `TestBackend` snapshots: board that fits, board paged with markers, one-column narrow, empty section, overdue card, loading, error, `NO_COLOR` board. CLI arg validation test.
-- [ ] Manual: run against a real project at 80, 120 and 200 columns.
+- [x] Manual: run against a real project at 80, 120 and 200 columns.
 
 **Dependencies:** T1, T2
 
@@ -117,7 +117,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` for each bullet. Run with `cargo test`.
-- [ ] Manual: move a task on the web, and it moves in `asn` within 60 s or on `R`.
+- [x] Manual: move a task on the web, and it moves in `asn` within 60 s or on `R`.
 
 **Dependencies:** T3
 
@@ -128,8 +128,8 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 ---
 
 ### Checkpoint B: glance works
-- [ ] The user dogfoods `asn --project` on real projects for a few days at 80, 120 and 200 columns. Record the results for A2 (are 28-cell cards enough?) and A3 (are initials unambiguous?) in the spec.
-- [ ] **Human review before Phase 3.**
+- [x] The user dogfoods `asn --project` on real projects for a few days at 80, 120 and 200 columns. Record the results for A2 (are 28-cell cards enough?) and A3 (are initials unambiguous?) in the spec.
+- [x] **Human review before Phase 3.**
 
 ---
 

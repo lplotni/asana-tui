@@ -51,8 +51,8 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T4: Polling and `R` (F9 refresh; the session cache moved to T6)
 
 ### Checkpoint B: glance works
-- [ ] The user dogfoods `asn --project` at 80, 120 and 200 columns (success criterion 6, A2, A3)
-- [ ] Human review before Phase 3
+- [x] The user dogfoods `asn --project` at 80, 120 and 200 columns (success criterion 6, A2, A3)
+- [x] Human review before Phase 3
 
 ### Phase 3: Act and navigate
 - [ ] T5: `Enter` → full-width detail, and actions on cards (F10)
