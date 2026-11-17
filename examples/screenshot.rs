@@ -1,10 +1,12 @@
-//! Renders the README screenshot: the real TUI with made-up data, as SVG.
+//! Renders the README screenshots: the real TUI with made-up data, as SVG.
 //!
 //!     cargo run --example screenshot > docs/screenshot.svg
+//!     cargo run --example screenshot -- board > docs/board.svg
 
 use asn::api::notifications::{Actor, Notification, Story, WorkObject};
+use asn::api::projects::BoardTask;
 use asn::api::tasks::{CustomField, Membership, Named, Task, TaskStory};
-use asn::core::TaskDetail;
+use asn::core::{Board, Column, TaskDetail};
 use asn::present::format;
 use asn::tui::app::{App, Msg};
 use asn::tui::theme::{Role, Theme};
@@ -28,6 +30,22 @@ fn main() {
     let theme = Theme::builtin("dark").expect("built-in theme");
     let now = format::parse_timestamp(NOW).expect("valid timestamp");
 
+    let app = match std::env::args().nth(1).as_deref() {
+        Some("board") => board_app(),
+        _ => inbox_app(),
+    };
+
+    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("test backend");
+    terminal
+        .draw(|frame| {
+            ui::render(frame, &app, &theme, now);
+        })
+        .expect("draw");
+    print!("{}", svg(terminal.backend().buffer(), &theme));
+}
+
+/// The Inbox with the first task's details.
+fn inbox_app() -> App {
     let (mut app, _) = App::new();
     app.update(Msg::Resize(ui::sizes(Rect::new(0, 0, WIDTH, HEIGHT))));
     app.update(Msg::InboxLoaded(Ok((demo_inbox(), None))));
@@ -37,14 +55,91 @@ fn main() {
         gid,
         result: Ok(Box::new(demo_task())),
     });
+    app
+}
 
-    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("test backend");
-    terminal
-        .draw(|frame| {
-            ui::render(frame, &app, &theme, now);
-        })
-        .expect("draw");
-    print!("{}", svg(terminal.backend().buffer(), &theme));
+/// A project board, as opened with `asn --project`.
+fn board_app() -> App {
+    let (mut app, _) = App::new_on_board("5000000000000000".into());
+    app.update(Msg::Resize(ui::sizes(Rect::new(0, 0, WIDTH, HEIGHT))));
+    app.update(Msg::BoardLoaded {
+        project_gid: "5000000000000000".into(),
+        result: Ok(demo_board()),
+    });
+    app
+}
+
+/// A fictional project: four sections, so one is paged off to the right.
+fn demo_board() -> Board {
+    let named = |gid: &str, name: &str| Named {
+        gid: gid.into(),
+        name: name.into(),
+    };
+    let card = |gid: &str, name: &str, assignee: Option<&str>, due: Option<&str>| BoardTask {
+        gid: gid.into(),
+        name: name.into(),
+        assignee: assignee.map(|a| named("2", a)),
+        due_on: due.map(Into::into),
+        due_at: None,
+        memberships: Vec::new(),
+    };
+    let column = |gid: &str, name: &str, tasks: Vec<BoardTask>| Column {
+        section: Some(named(gid, name)),
+        tasks,
+    };
+    Board {
+        project: named("5000000000000000", "Website relaunch"),
+        columns: vec![
+            column(
+                "5000000000000001",
+                "Backlog",
+                vec![
+                    card("51", "Pick a font pairing for headings", None, None),
+                    card(
+                        "52",
+                        "Audit image sizes",
+                        Some("Grace Hopper"),
+                        Some("2026-11-27"),
+                    ),
+                    card("53", "Dark mode", None, None),
+                    card("54", "Localize the footer", Some("Alan Turing"), None),
+                ],
+            ),
+            column(
+                "5000000000000002",
+                "In progress",
+                vec![
+                    card(
+                        "55",
+                        "Rewrite the pricing page copy",
+                        Some("Ada Lovelace"),
+                        Some("2026-11-12"),
+                    ),
+                    card(
+                        "56",
+                        "Cookie banner",
+                        Some("Alan Turing"),
+                        Some("2026-11-20"),
+                    ),
+                ],
+            ),
+            column(
+                "5000000000000003",
+                "Review",
+                vec![card(
+                    "57",
+                    "New hero illustration",
+                    Some("Grace Hopper"),
+                    Some("2026-11-18"),
+                )],
+            ),
+            column(
+                "5000000000000004",
+                "Done this week",
+                vec![card("58", "Favicon", Some("Ada Lovelace"), None)],
+            ),
+        ],
+    }
 }
 
 /// The selected task: fictional, like everything else here.

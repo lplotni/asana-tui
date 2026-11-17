@@ -198,7 +198,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **A2: 28-cell cards with name + initials + due are enough to glance at.** Confirmed by the user at Checkpoint B (2026-11-17), cards unchanged. Test: dogfood on the widest and narrowest terminals in use. If not, first try 3-line cards, before considering a stacked layout.
 - [x] **A3: Initials are unambiguous enough in a project's assignee set.** No problem found at Checkpoint B. Test: dogfood. If two people share initials, fall back to the first name.
 - [ ] **A4: Hiding completed tasks matches how the board is read.** Test: dogfood. The web board collapses them by default.
-- [ ] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
+- [x] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Confirmed in planning: `selected_task_gid()` was already that seam (search used it); T5 made it return the selected card. Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
 
 ## Not Doing (and Why)
 
@@ -209,6 +209,11 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** 60 s polling and session recents cover the job, and nothing is written to disk.
 - **Showing completed tasks:** they are hidden, to keep columns about current work.
 - **Multiple boards side by side, portfolios, My Tasks board:** one project at a time. "My Tasks" as a startup view stays a separate idea.
+
+## Findings from Use
+
+- Checkpoints A–C (2026-11-17): board order, load time, card readability and every success criterion confirmed by the user on real projects.
+- The editor and pickers were too small on large terminals; they now grow with the terminal, and the editor soft-wraps long lines (a change outside this spec, made at the user's request during Checkpoint C).
 
 ## Open Questions
 

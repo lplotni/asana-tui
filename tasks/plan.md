@@ -61,11 +61,11 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T8: `/`, `n`, `N` jump on the board (F12)
 
 ### Checkpoint C: feature complete
-- [ ] Success criteria 1–8 of SPEC-board.md hold
-- [ ] Human review
+- [x] Success criteria 1–8 of SPEC-board.md hold
+- [x] Human review
 
 ### Phase 4: Ship
-- [ ] T9: Help, README and spec updates
+- [x] T9: Help, README and spec updates
 - [ ] T10: Release v0.2.0 (ask first)
 
 ## Risks and Mitigations

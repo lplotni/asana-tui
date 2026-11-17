@@ -219,15 +219,15 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 ---
 
 ### Checkpoint C: feature complete
-- [ ] SPEC-board.md success criteria 1–8 are checked by hand on real projects.
-- [ ] fmt, clippy and tests are clean.
-- [ ] **Human review.**
+- [x] SPEC-board.md success criteria 1–8 are checked by hand on real projects.
+- [x] fmt, clippy and tests are clean.
+- [x] **Human review.**
 
 ---
 
 ## Phase 4: Ship
 
-### - [ ] T9: Help, README and spec updates
+### - [x] T9: Help, README and spec updates
 
 **Description:** Make the docs match what shipped:
 - README: the "Why asn?" board line, a board key table, `asn board` / `asn --project`, the API table rows, and the version note
@@ -235,11 +235,11 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - `docs/screenshot.svg`: a board screenshot, if the README shows one, with anonymized data
 
 **Acceptance criteria:**
-- [ ] Every key in F12 is in the README and the help overlay, with matching descriptions.
-- [ ] Every API call the board makes is in the README's API table.
+- [x] Every key in F12 is in the README and the help overlay, with matching descriptions.
+- [x] Every API call the board makes is in the README's API table.
 
 **Verification:**
-- [ ] Manual: read the README top to bottom against `asn --help`, `asn board --help` and the `?` overlay.
+- [x] Manual: read the README top to bottom against `asn --help`, `asn board --help` and the `?` overlay.
 
 **Dependencies:** Checkpoint C
 

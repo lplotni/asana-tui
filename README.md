@@ -1,6 +1,6 @@
 # asn
 
-Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
+Your Asana Inbox and project boards in the terminal, with vim keys and a scriptable CLI.
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
@@ -9,11 +9,11 @@ Your Asana Inbox in the terminal, with vim keys and a scriptable CLI.
 I built `asn` to get a simple terminal UI for the way I work with Asana:
 
 - **The Inbox:** go through notifications, read the task, comment, and mark them read.
-- **Specific projects in board view:** planned for the next version.
+- **Projects as boards:** see where every task of a project stands, section by section, and act on any card.
 
-The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
+The CLI is deliberately small as well. It covers the same use cases (`inbox`, `read`, `task`, `comment`, `desc`, `project add`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
 
-> v0.1: the Inbox, read state, task details, comments, description editing and adding to projects work ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
+> v0.2 adds project boards ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
 
 ## Install
 
@@ -65,10 +65,29 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `f` | Unread only / all |
 | `R` | Refresh (also every 60 s) |
 | `/` then `n` / `N` | Filter the loaded Inbox by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
+| `P` | Open a project's board: type to search projects (boards opened this session are listed first) |
+| `b` | Open the board of the task's project, on that task (asks which project if it's in several) |
 | `S` | Search tasks across the workspace (see `ASN_SEARCH`): type, `Ctrl-n`/`Ctrl-p` to move, `Enter` shows the task in the task pane, where `c`, `Tab e`, `p` and `o` work on it; `h`/`Esc` returns to the Inbox |
 | `:` | Commands: `:q`, `:refresh`, `:unread`, `:read-all` (marks everything loaded read) |
 | `?` | All keys (generated from the keymap) |
 | `q` / `Ctrl-c` | Back (from the task pane or visual mode), else quit / quit from anywhere |
+
+### Boards
+
+`P` (or `asn --project <project-gid>`) opens a project as a board: one column per section, one card per open task with its assignee's initials and due date (`!` when overdue). When not every column fits, `h`/`l` page across them and the top line counts the hidden ones (`‹ 2  1 ›`). The board refreshes every 60 s.
+
+![asn showing a project board with four sections, one of them paged off to the right](docs/board.svg)
+
+| Keys | |
+|---|---|
+| `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move within the column (with counts) |
+| `h` / `l` | Previous / next column |
+| `Enter` | Open the card's task full-width (`h`/`Esc`/`q` back) |
+| `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
+| `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
+| `P` | Open another board; with nothing typed, `Enter` goes back to the last one |
+| `Tab i` | Back to the Inbox, where you left it (boards keep their place too) |
+| `R` | Refresh the board |
 
 Every action is also a command for scripts:
 
@@ -82,6 +101,8 @@ asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open 
 asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
 asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
 asn project move <task-gid> <section-gid>    # move the task to another section of a project it's in
+asn board <project-gid>                 # open tasks by section: section lines, then indented gid, name, assignee, due (--json too)
+asn --project <project-gid>             # open the TUI on that project's board
 asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
 ```
 
@@ -100,6 +121,7 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
 | Move to a section | `GET /projects/{project}/sections`, `POST /sections/{section}/addTask` |
+| Boards (`P`, `b`, `asn board`) | `GET /projects/{project}`, `GET /projects/{project}/sections`, `GET /projects/{project}/tasks?completed_since=now`; projects are found with `GET /workspaces/{workspace}/typeahead` |
 | Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
 
 The Asana web app runs on its own internal API, so it can show things the public API can't; those gaps are listed below.
@@ -115,13 +137,15 @@ These come from Asana's public API (most from the [Notifications API](https://fo
 - **Mentions look like comments.** The API doesn't mark @mentions separately.
 - **Some tasks' comments can't be loaded.** For some tasks (likely those with replies to comments), Asana refuses the comment list with "unsupported parent in the public API: CommentStory". `asn` still shows the rest of the task and says why the comments are missing; read them on the web.
 - **Task search needs a paid plan.** On other plans Asana answers 402; set `ASN_SEARCH=typeahead` to search task names instead. Results are the 50 most relevant, and new or renamed tasks can take up to a minute to become searchable.
+- **Boards show open, top-level tasks only.** Completed tasks and subtasks aren't on the board, and cards can't be reordered within a column; `m` moves them between sections.
 - **Image links expire.** An attachment's `download_url` works for a short time only; if an image fails after the task was open a while, refresh (`R`).
 
 ## Develop
 
 ```sh
 cargo test
-cargo run --example screenshot > docs/screenshot.svg   # regenerate the screenshot (made-up data)
+cargo run --example screenshot > docs/screenshot.svg            # regenerate the screenshots (made-up data)
+cargo run --example screenshot -- board > docs/board.svg
 ```
 
 Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.

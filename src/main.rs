@@ -6,7 +6,8 @@ use asn::config::Config;
 use asn::core;
 use clap::{Parser, Subcommand};
 
-/// Asana Inbox in your terminal. Runs the TUI when no subcommand is given.
+/// Asana Inbox and project boards in your terminal. Runs the TUI when no
+/// subcommand is given.
 #[derive(Parser)]
 #[command(name = "asn", version, args_conflicts_with_subcommands = true)]
 struct Cli {
