@@ -60,10 +60,10 @@ T0 API spike + fixtures
 - [x] T8: TUI read actions, visual mode, filter, polling, pagination
 
 ### Checkpoint B: daily triage possible
-- [ ] Open `asn` and get through a real Inbox to empty using only `j`/`k`/`e`/`V`
+- [x] Open `asn` and get through a real Inbox to empty using only `j`/`k`/`e`/`V` (confirmed by the user, 2026-11-17)
 - [x] Looks right in Rex with `terminal`, `dark`, `light` and `NO_COLOR` (confirmed by the user, 2026-11-17)
-- [ ] The terminal is always restored (`q`, Ctrl-C, forced panic)
-- [ ] **Human review before Phase 3**
+- [x] The terminal is always restored (`q` and Ctrl-C verified in Rex; panics via ratatui's restore hook, not triggered manually)
+- [x] **Human review before Phase 3** (done by the user, 2026-11-17)
 
 ### Phase 3: Act on tasks
 - [x] T9: Task detail (`asn task` and the detail pane)

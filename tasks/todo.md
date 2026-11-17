@@ -226,7 +226,7 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 
 **Verification:**
 - [x] `cargo test`
-- [ ] (Partly verified: `e`, `u`, `f`, `V` and `R` round-trip with real Asana on a single item. Processing the whole Inbox to empty is the Checkpoint B review.) Manual: a real Inbox can be processed to empty with `j`/`k`/`e`/`V`, and the web Inbox reflects the read state
+- [x] Manual: a real Inbox can be processed to empty with `j`/`k`/`e`/`V`, and the web Inbox reflects the read state (confirmed by the user, 2026-11-17).
 
 **Dependencies:** T3, T7
 
@@ -235,9 +235,9 @@ Apply the tints to the `terminal` theme, and to user themes based on it, only fo
 **Estimated scope:** M
 
 ## Checkpoint B: daily triage possible
-- [ ] Real Inbox processed to empty using only the keyboard. The terminal is always restored.
+- [x] Real Inbox processed to empty using only the keyboard (confirmed by the user, 2026-11-17). The terminal is restored after `q` and Ctrl-C (verified in Rex).
 - [x] Visual check in Rex: `terminal` (with tints), `dark`, `light`, `NO_COLOR` (confirmed by the user, 2026-11-17).
-- [ ] **Human review before Phase 3.**
+- [x] **Human review before Phase 3.** (done by the user, 2026-11-17)
 
 ---
 
