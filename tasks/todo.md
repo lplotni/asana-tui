@@ -548,17 +548,17 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done above applies, with `docs/SPEC-skill.md` as the spec to update. Order and rationale: [`plan.md`](plan.md#phase-6-asn-in-claude-code).
 
-### - [ ] T24: `asn task <gid> --brief` read receipt
+### - [x] T24: `asn task <gid> --brief` read receipt
 
 **Description:** F18. The receipt lines are built in `present/` from a `TaskDetail` (name, gid and permalink, one `where` line per membership, assignee/due/status, and counts for description lines, comments and attachments). `cli/task.rs` renders them plain through `terminal_safe`. `asn task` gets `--brief`, which conflicts with `--json`.
 
 **Acceptance criteria:**
-- [ ] `asn task <gid> --brief` prints the five-line receipt from F18; a task in two projects gets two `where` lines; a missing assignee reads `unassigned`, and a missing due date is left out.
-- [ ] Description and comment text never appear in the receipt; control characters and bidi overrides in the name are neutralised; the name fits 80 cells.
-- [ ] `--brief --json` is a usage error; `asn task <gid>` and `--json` output are unchanged.
+- [x] `asn task <gid> --brief` prints the five-line receipt from F18; a task in two projects gets two `where` lines; a missing assignee reads `unassigned`, and a missing due date is left out.
+- [x] Description and comment text never appear in the receipt; control characters and bidi overrides in the name are neutralised; the name fits 80 cells.
+- [x] `--brief --json` is a usage error; `asn task <gid>` and `--json` output are unchanged.
 
 **Verification:**
-- [ ] Rendering tests in `cli/task.rs` (memberships, unassigned, no due date, completed, a hostile name and description); `tests/cli.rs` for the flag conflict; `cargo test`, clippy, fmt.
+- [x] Rendering tests in `cli/task.rs` (memberships, unassigned, no due date, completed, a hostile name and description); `tests/cli.rs` for the flag conflict; `cargo test`, clippy, fmt.
 - [ ] Manual: `asn task <real gid> --brief` matches the web app.
 
 **Dependencies:** None

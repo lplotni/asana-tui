@@ -5,6 +5,7 @@
 pub mod card;
 pub mod detail;
 pub mod format;
+pub mod receipt;
 mod role;
 
 pub use role::Role;

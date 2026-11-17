@@ -151,12 +151,25 @@ fn task_help_lists_assign_and_done() {
 }
 
 #[test]
+fn task_brief_and_json_cannot_be_combined() {
+    let output = asn(&["task", "1200000000000031", "--brief", "--json"], &[]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("cannot be used with"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
 fn asn_task_with_a_gid_still_shows_a_task() {
     // Parsed as before: it gets as far as needing a token (exit 2), not a
     // usage error (exit 1).
     for args in [
         &["task", "1200000000000031"][..],
         &["task", "1200000000000031", "--json"],
+        &["task", "1200000000000031", "--brief"],
     ] {
         let output = asn(args, &[("ASANA_WORKSPACE", "1234567890123456")]);
 

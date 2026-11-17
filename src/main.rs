@@ -60,6 +60,9 @@ enum Command {
         /// Print JSON
         #[arg(long)]
         json: bool,
+        /// Print only a short summary: where it is, who has it, and counts
+        #[arg(long, conflicts_with = "json")]
+        brief: bool,
         #[command(subcommand)]
         command: Option<TaskCommand>,
     },
@@ -306,10 +309,15 @@ async fn main() -> ExitCode {
         Some(Command::Task {
             gid: Some(gid),
             json,
+            brief,
             command: None,
         }) => match core::task_detail(&client, &gid).await {
             Ok(detail) if json => {
                 println!("{}", asn::cli::task::render_json(&detail));
+                ExitCode::SUCCESS
+            }
+            Ok(detail) if brief => {
+                print!("{}", asn::cli::task::render_brief(&detail, unix_now()));
                 ExitCode::SUCCESS
             }
             Ok(detail) => {

@@ -7,6 +7,7 @@ use unicode_width::UnicodeWidthStr;
 use super::Role;
 use super::format::{file_size, is_before_today, relative_time, short_date};
 use crate::api::attachments::Attachment;
+use crate::api::tasks::Task;
 use crate::core::{TaskDetail, mention};
 
 /// A run of text with one role.
@@ -200,6 +201,17 @@ fn attachment_line(attachment: &Attachment) -> String {
 
 /// "☐ Incomplete · Ada · Due Wed 4 Nov (overdue)", breaking between the
 /// `·`-separated parts when it doesn't fit in `width`.
+/// The task's due date in the short format ("Wed 4 Nov"), with the time
+/// when it has one (`due_at`, a UTC timestamp). `None` when it has no due date.
+pub fn due_text(task: &Task, now: i64) -> Option<String> {
+    let due = task.due_at.as_deref().or(task.due_on.as_deref())?;
+    let date = short_date(due, now);
+    Some(match due.get(11..16) {
+        Some(time) if due.len() > 10 => format!("{date} {time} UTC"),
+        _ => date,
+    })
+}
+
 fn status_lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
     let task = &detail.task;
     let mut parts: Vec<Vec<Segment>> = vec![vec![if task.completed {
@@ -214,14 +226,7 @@ fn status_lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
     parts.push(vec![Segment::new(assignee.to_owned(), Role::TaskMeta)]);
 
     let due = task.due_at.as_deref().or(task.due_on.as_deref());
-    let due_text = due.map(|d| {
-        let date = short_date(d, now);
-        // due_at is a UTC timestamp; show its time too.
-        match d.get(11..16) {
-            Some(time) if d.len() > 10 => format!("{date} {time} UTC"),
-            _ => date,
-        }
-    });
+    let due_text = due_text(task, now);
     let dates = match (task.start_on.as_deref(), due_text) {
         (Some(start), Some(due)) => Some(format!("{} – {due}", short_date(start, now))),
         (None, Some(due)) => Some(format!("Due {due}")),

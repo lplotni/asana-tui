@@ -93,7 +93,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 ### Phase 6: asn in Claude Code (F18–F21, see below)
 
 #### 6a: Receipt and a first skill (de-risk the model, C1/C4)
-- [ ] T24: `asn task <gid> --brief` read receipt (F18)
+- [x] T24: `asn task <gid> --brief` read receipt (F18)
 - [ ] T25: The `asn` skill, v1 over GIDs and the existing lookup commands (F20)
 
 #### Checkpoint S1: does the habit stick?
