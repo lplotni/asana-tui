@@ -119,6 +119,15 @@ pub fn lines_with_images(
     }
 
     out.push(Vec::new());
+    if let Some(error) = &detail.comments_error {
+        push("Comments", Role::Title, &mut out);
+        push(
+            &format!("Couldn't load the comments: {error}"),
+            Role::ToastError,
+            &mut out,
+        );
+        return (out, slots);
+    }
     let mut header = vec![Segment::new(
         format!("Comments ({})", detail.comments.len()),
         Role::Title,
@@ -325,6 +334,7 @@ mod tests {
             comments,
             activity_count: activity.len(),
             attachments: Vec::new(),
+            comments_error: None,
         }
     }
 
@@ -563,6 +573,22 @@ mod tests {
         d.attachments = attachments();
 
         assert_eq!(lines(&d, 60, now()), lines_with_images(&d, 60, now(), 0).0);
+    }
+
+    #[test]
+    fn comments_that_could_not_be_loaded_say_so() {
+        let mut d = detail("task_full.json");
+        d.comments.clear();
+        d.activity_count = 0;
+        d.comments_error = Some("Asana API error 400: unsupported parent".into());
+
+        let lines = text(&d, 80);
+
+        let header = lines.iter().position(|l| l == "Comments").unwrap();
+        assert_eq!(
+            lines[header + 1],
+            "Couldn't load the comments: Asana API error 400: unsupported parent"
+        );
     }
 
     #[test]

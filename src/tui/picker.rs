@@ -157,6 +157,7 @@ mod tests {
                 comments: vec![],
                 activity_count: 0,
                 attachments: Vec::new(),
+                comments_error: None,
             })),
         });
         app

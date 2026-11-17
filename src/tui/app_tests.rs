@@ -579,6 +579,7 @@ fn task_detail() -> TaskDetail {
         comments,
         activity_count: activity.len(),
         attachments: Vec::new(),
+        comments_error: None,
     }
 }
 

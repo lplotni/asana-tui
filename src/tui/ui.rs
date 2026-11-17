@@ -879,6 +879,7 @@ mod tests {
             comments,
             activity_count: activity.len(),
             attachments: Vec::new(),
+            comments_error: None,
         };
         app.update(Msg::DetailDue { gid: gid.clone() });
         app.update(Msg::DetailLoaded {
@@ -1314,6 +1315,7 @@ mod tests {
             comments: Vec::new(),
             activity_count: 0,
             attachments: serde_json::from_value(value["data"].clone()).unwrap(),
+            comments_error: None,
         };
         app.update(Msg::DetailDue { gid: gid.clone() });
         app.update(Msg::DetailLoaded {

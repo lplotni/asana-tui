@@ -58,6 +58,11 @@ pub struct TaskDetail {
     /// System stories (activity) not shown as comments.
     pub activity_count: usize,
     pub attachments: Vec<Attachment>,
+    /// Why the comments couldn't be loaded. Asana refuses the stories of
+    /// some tasks (e.g. with replies the public API can't represent); the
+    /// rest of the task is still shown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comments_error: Option<String>,
 }
 
 /// Fetches the task, every page of its stories and every page of its
@@ -68,13 +73,19 @@ pub async fn task_detail(client: &Client, gid: &str) -> Result<TaskDetail, ApiEr
         all_pages(|offset| async move { client.stories_page(gid, offset.as_deref()).await }),
         all_pages(|offset| async move { client.attachments_page(gid, offset.as_deref()).await }),
     );
+    let task = task?;
+    let (stories, comments_error) = match stories {
+        Ok(stories) => (stories, None),
+        Err(err) => (Vec::new(), Some(err.to_string())),
+    };
     let (comments, activity): (Vec<TaskStory>, Vec<TaskStory>) =
-        stories?.into_iter().partition(TaskStory::is_comment);
+        stories.into_iter().partition(TaskStory::is_comment);
     Ok(TaskDetail {
-        task: task?,
+        task,
         comments,
         activity_count: activity.len(),
         attachments: attachments?,
+        comments_error,
     })
 }
 

@@ -351,3 +351,23 @@ async fn download_reports_an_expired_link() {
 
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn a_task_whose_stories_asana_refuses_still_loads_without_comments() {
+    let server = MockServer::start().await;
+    serve_task(&server, fixture("task_full.json")).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}/stories")))
+        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
+            "errors": [{ "message": "The requested stories has the following unsupported parent in the public API: CommentStory" }]
+        })))
+        .mount(&server)
+        .await;
+
+    let detail = core::task_detail(&client(&server), TASK).await.unwrap();
+
+    assert_eq!(detail.task.name, fixture("task_full.json")["data"]["name"]);
+    assert!(detail.comments.is_empty());
+    let error = detail.comments_error.unwrap();
+    assert!(error.contains("unsupported parent"), "{error}");
+}
