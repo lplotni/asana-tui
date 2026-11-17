@@ -121,7 +121,50 @@ impl BoardView {
             let row = column.tasks.iter().position(|t| t.gid == gid)?;
             Some((c, row))
         });
-        let Some((column, row)) = found else {
+        self.select_position(found)
+    }
+
+    /// Selects the first card in board order (column by column, top to
+    /// bottom) whose name contains `query`, ignoring case. Returns whether
+    /// one did; if not, the selection stays.
+    pub fn first_match(&mut self, query: &str) -> bool {
+        let first = self.matches(query).into_iter().next();
+        self.select_position(first)
+    }
+
+    /// Selects the next (or, not `forward`, previous) matching card after
+    /// the selected one, wrapping around the board.
+    pub fn next_match(&mut self, query: &str, forward: bool) -> bool {
+        let matches = self.matches(query);
+        let here = (self.column, self.row);
+        let next = if forward {
+            matches.iter().find(|&&m| m > here).or(matches.first())
+        } else {
+            matches.iter().rev().find(|&&m| m < here).or(matches.last())
+        };
+        self.select_position(next.copied())
+    }
+
+    /// (column, row) of every card whose name contains `query`, in board
+    /// order.
+    fn matches(&self, query: &str) -> Vec<(usize, usize)> {
+        let query = query.to_lowercase();
+        self.columns
+            .iter()
+            .enumerate()
+            .flat_map(|(c, column)| {
+                column
+                    .tasks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, task)| task.name.to_lowercase().contains(&query))
+                    .map(move |(row, _)| (c, row))
+            })
+            .collect()
+    }
+
+    fn select_position(&mut self, position: Option<(usize, usize)>) -> bool {
+        let Some((column, row)) = position else {
             return false;
         };
         self.column = column;
@@ -407,6 +450,61 @@ mod tests {
         v.right(1);
 
         assert!(!v.select("elsewhere"));
+
+        assert_eq!(selected(&v), Some("c1-0"));
+    }
+
+    /// Columns of cards named by `names`, so searches have something to find.
+    fn named_view(columns: &[&[&str]]) -> BoardView {
+        let mut board = board(&columns.iter().map(|c| c.len()).collect::<Vec<_>>());
+        for (column, names) in board.columns.iter_mut().zip(columns) {
+            for (task, name) in column.tasks.iter_mut().zip(names.iter()) {
+                task.name = (*name).to_owned();
+            }
+        }
+        BoardView::new(board)
+    }
+
+    #[test]
+    fn the_first_match_is_found_in_board_order_ignoring_case() {
+        let mut v = named_view(&[&["Logo", "Fonts"], &["Font sizes", "Cookie banner"]]);
+        v.right(1);
+
+        assert!(v.first_match("FONT"));
+
+        assert_eq!(selected(&v), Some("c0-1"));
+    }
+
+    #[test]
+    fn the_next_match_goes_column_by_column_and_wraps() {
+        let mut v = named_view(&[&["Logo", "Fonts"], &["Font sizes"], &["Webfont"]]);
+        v.first_match("font");
+
+        assert!(v.next_match("font", true));
+        assert_eq!(selected(&v), Some("c1-0"));
+        assert!(v.next_match("font", true));
+        assert_eq!(selected(&v), Some("c2-0"));
+        assert!(v.next_match("font", true));
+        assert_eq!(selected(&v), Some("c0-1"));
+    }
+
+    #[test]
+    fn the_previous_match_goes_backwards_and_wraps() {
+        let mut v = named_view(&[&["Fonts"], &["Logo"], &["Webfont"]]);
+        v.first_match("font");
+
+        assert!(v.next_match("font", false));
+
+        assert_eq!(selected(&v), Some("c2-0"));
+    }
+
+    #[test]
+    fn no_match_leaves_the_selection_where_it_is() {
+        let mut v = named_view(&[&["Logo"], &["Fonts"]]);
+        v.right(1);
+
+        assert!(!v.first_match("banner"));
+        assert!(!v.next_match("banner", true));
 
         assert_eq!(selected(&v), Some("c1-0"));
     }

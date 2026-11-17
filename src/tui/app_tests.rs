@@ -2978,3 +2978,81 @@ fn b_on_a_task_missing_from_its_board_says_so_and_starts_at_the_top() {
             .is_some_and(|t| t.text.contains("isn't on this board"))
     );
 }
+
+// --- / n N on the board ----------------------------------------------------
+
+#[test]
+fn slash_on_the_board_jumps_to_the_first_matching_card() {
+    let mut app = on_board(&[2, 2, 2]);
+
+    keys(&mut app, "/card 1-");
+    assert_eq!(
+        selected_card(&app),
+        Some("c0-0"),
+        "nothing moves while typing"
+    );
+    enter(&mut app);
+
+    assert_eq!(selected_card(&app), Some("c1-0"));
+    assert!(app.search.is_none(), "the Inbox filter is untouched");
+}
+
+#[test]
+fn n_and_capital_n_cycle_through_the_matches_on_the_board() {
+    let mut app = on_board(&[2, 2, 2]);
+    keys(&mut app, "/card 1-");
+    enter(&mut app);
+
+    keys(&mut app, "n");
+    assert_eq!(selected_card(&app), Some("c1-1"));
+    keys(&mut app, "n");
+    assert_eq!(selected_card(&app), Some("c1-0"));
+    keys(&mut app, "N");
+    assert_eq!(selected_card(&app), Some("c1-1"));
+}
+
+#[test]
+fn a_board_search_without_a_match_says_so_and_stays() {
+    let mut app = on_board(&[2, 2]);
+    keys(&mut app, "l/banner");
+
+    enter(&mut app);
+
+    assert_eq!(selected_card(&app), Some("c1-0"));
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.contains("banner"))
+    );
+    keys(&mut app, "n");
+    assert_eq!(selected_card(&app), Some("c1-0"));
+}
+
+#[test]
+fn esc_cancels_a_board_search_being_typed() {
+    let mut app = on_board(&[2, 2]);
+    keys(&mut app, "/card 1-");
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    keys(&mut app, "l");
+
+    assert!(app.board_search.is_none());
+    assert_eq!(
+        selected_card(&app),
+        Some("c1-0"),
+        "keys move the board again"
+    );
+}
+
+#[test]
+fn esc_after_a_board_search_ends_it() {
+    let mut app = on_board(&[2, 2]);
+    keys(&mut app, "/card 1-");
+    enter(&mut app);
+
+    key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+    keys(&mut app, "n");
+
+    assert!(app.board_search.is_none());
+    assert_eq!(selected_card(&app), Some("c1-0"));
+}

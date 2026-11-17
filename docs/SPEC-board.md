@@ -80,7 +80,7 @@ A card's column is its membership whose `project.gid` is this project. Other mem
 | `h` / `l` | board | previous / next column (pages when needed) | vim |
 | `j` / `k`, `{count}j` | board | down / up within the column | vim and Asana |
 | `gg` / `G`, `Ctrl-d` / `Ctrl-u` | board | top / bottom / half page within the column | vim |
-| `/`, `n` / `N` | board | jump to cards whose name matches, across columns, in board order | vim |
+| `/`, `n` / `N` | board | jump to cards whose name matches, across columns, in board order (Enter jumps to the first; `Esc` ends the search). Separate from the Inbox filter, which it never changes | vim |
 | `Enter` | board | open the task detail full-width | — |
 | `P` | anywhere | project switcher | asn |
 | `b` | Inbox | open the selected task's project board | asn |

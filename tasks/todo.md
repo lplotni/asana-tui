@@ -199,16 +199,16 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ---
 
-### - [ ] T8: `/`, `n`, `N` jump on the board
+### - [x] T8: `/`, `n`, `N` jump on the board
 
 **Description:** On the board, `/` takes a query (the same prompt as the Inbox filter). It jumps to the first card whose name matches, in board order (column by column, top to bottom), without filtering anything out. `n`/`N` go to the next and previous match, wrapping. No match shows a toast.
 
 **Acceptance criteria:**
-- [ ] `/` with a matching query selects the first match (across columns, paging if needed). `n`/`N` cycle and wrap.
-- [ ] No match leaves the cursor where it was and shows a toast.
+- [x] `/` with a matching query selects the first match (across columns, paging if needed). `n`/`N` cycle and wrap.
+- [x] No match leaves the cursor where it was and shows a toast.
 
 **Verification:**
-- [ ] Tests: `tui/board.rs` match iteration, and `app_tests.rs` for the key flow.
+- [x] Tests: `tui/board.rs` match iteration, and `app_tests.rs` for the key flow.
 
 **Dependencies:** T5
 

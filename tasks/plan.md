@@ -58,7 +58,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T5: `Enter` → full-width detail, and actions on cards (F10)
 - [x] T6: `P` project switcher, session cache of boards, and Inbox ↔ board peers (F11)
 - [x] T7: `b` from an Inbox task (F11)
-- [ ] T8: `/`, `n`, `N` jump on the board (F12)
+- [x] T8: `/`, `n`, `N` jump on the board (F12)
 
 ### Checkpoint C: feature complete
 - [ ] Success criteria 1–8 of SPEC-board.md hold

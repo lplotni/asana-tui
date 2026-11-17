@@ -197,6 +197,13 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         ];
     }
     let moves = pair(normal(Cmd::MoveDown), normal(Cmd::MoveUp));
+    if app.screen == Screen::Board && app.board_search.as_ref().is_some_and(|s| s.editing) {
+        return vec![
+            (lit("type"), "to find a card"),
+            (input(Cmd::Submit), "jump"),
+            (input(Cmd::Cancel), "cancel"),
+        ];
+    }
     if app.screen == Screen::Board && app.focus == Focus::Detail {
         return vec![
             (moves, "scroll"),
@@ -210,19 +217,28 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
         ];
     }
     if app.screen == Screen::Board {
-        return vec![
-            (moves, "move"),
+        let mut hints = vec![(moves, "move")];
+        if app.board_search.is_some() {
+            hints.push((
+                pair(normal(Cmd::NextMatch), normal(Cmd::PrevMatch)),
+                "next/previous match",
+            ));
+            hints.push((normal(Cmd::Back), "end search"));
+        }
+        hints.extend([
             (normal(Cmd::Open), "open"),
             (
                 pair(normal(Cmd::FocusLeft), normal(Cmd::FocusRight)),
                 "column",
             ),
             (normal(Cmd::SwitchProject), "projects"),
+            (normal(Cmd::Search), "find"),
             (pair(normal(Cmd::Top), normal(Cmd::Bottom)), "top/bottom"),
             (normal(Cmd::Refresh), "refresh"),
             (normal(Cmd::Help), "help"),
             (normal(Cmd::Quit), "quit"),
-        ];
+        ]);
+        return hints;
     }
     if app.visual_anchor.is_some() {
         return vec![
@@ -847,7 +863,11 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         return;
     }
     // While typing a `:` command or `/` query, the bar is the input line.
-    let input = match (&app.command, &app.search) {
+    let search = match app.screen {
+        Screen::Board => &app.board_search,
+        Screen::Inbox => &app.search,
+    };
+    let input = match (&app.command, search) {
         (Some(command), _) => Some((" COMMAND ", format!(":{command}"))),
         (None, Some(search)) if search.editing => Some((" SEARCH ", format!("/{}", search.query))),
         _ => None,
@@ -1314,6 +1334,37 @@ mod tests {
         press(&mut app, "P");
 
         insta::assert_snapshot!(draw_at(&mut app, 100).backend());
+    }
+
+    #[test]
+    fn a_board_search_being_typed_shows_in_the_status_bar() {
+        let mut app = board_app();
+        press(&mut app, "/font");
+
+        let terminal = draw_at(&mut app, 100);
+        let buffer = terminal.backend().buffer();
+        let status: String = (0..100)
+            .map(|x| buffer[(x, 22)].symbol().to_owned())
+            .collect();
+
+        assert!(status.contains("SEARCH"), "{status:?}");
+        assert!(status.contains("/font"), "{status:?}");
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+        assert!(labels.contains(&"jump"), "{labels:?}");
+    }
+
+    #[test]
+    fn after_a_board_search_the_hints_offer_the_next_match() {
+        let mut app = board_app();
+        press(&mut app, "/font");
+        app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Enter,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        )));
+
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+
+        assert!(labels.contains(&"next/previous match"), "{labels:?}");
     }
 
     #[test]

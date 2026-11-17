@@ -394,6 +394,8 @@ pub struct App {
     pub help: bool,
     /// The `/` filter, when active.
     pub search: Option<Search>,
+    /// The `/` search on the board: it jumps between cards, filters nothing.
+    pub board_search: Option<Search>,
     /// The `:` command line being typed, when open.
     pub command: Option<String>,
     /// The "add to project" picker, when open.
@@ -501,6 +503,13 @@ impl App {
                 if self.command.is_some() {
                     let outcome = self.keys.feed(Context::Input, event);
                     return self.command_key(outcome);
+                }
+                if self.screen == Screen::Board
+                    && self.board_search.as_ref().is_some_and(|s| s.editing)
+                {
+                    let outcome = self.keys.feed(Context::Input, event);
+                    self.board_search_key(outcome);
+                    return Vec::new();
                 }
                 if self.search.as_ref().is_some_and(|s| s.editing) {
                     let outcome = self.keys.feed(Context::Input, event);
@@ -984,6 +993,19 @@ impl App {
         }
         match cmd {
             Cmd::Open if self.selected_card().is_some() => self.set_focus(Focus::Detail),
+            Cmd::Search => {
+                self.board_search = Some(Search {
+                    query: String::new(),
+                    editing: true,
+                });
+            }
+            Cmd::NextMatch | Cmd::PrevMatch => {
+                let query = self.board_search.as_ref().map(|s| s.query.clone());
+                if let (Some(query), Some(view)) = (query, self.board_view_mut()) {
+                    view.next_match(&query, cmd == Cmd::NextMatch);
+                }
+            }
+            Cmd::Back => self.board_search = None,
             Cmd::Comment => return self.start_comment(),
             Cmd::EditDescription => return self.start_description(),
             Cmd::AddToProject => return self.open_picker(),
@@ -1000,6 +1022,43 @@ impl App {
             _ => {}
         }
         Vec::new()
+    }
+
+    /// A key while typing the board's `/` query: Enter jumps to the first
+    /// matching card (or says there is none), Esc cancels.
+    fn board_search_key(&mut self, outcome: Outcome) {
+        let Some(search) = &mut self.board_search else {
+            return;
+        };
+        match outcome {
+            Outcome::Insert(c) => search.query.push(c),
+            Outcome::Action(Action {
+                cmd: Cmd::DeleteChar,
+                ..
+            }) => {
+                search.query.pop();
+            }
+            Outcome::Action(Action {
+                cmd: Cmd::Cancel, ..
+            }) => self.board_search = None,
+            Outcome::Action(Action {
+                cmd: Cmd::Submit, ..
+            }) => {
+                search.editing = false;
+                let query = search.query.clone();
+                let found = !query.is_empty()
+                    && self
+                        .board_view_mut()
+                        .is_some_and(|view| view.first_match(&query));
+                if !found {
+                    self.board_search = None;
+                    if !query.is_empty() {
+                        self.toast = Some(Toast::info(format!("No card matches \"{query}\"")));
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Reloads the board on screen, unless a load of it is running.
@@ -1033,6 +1092,7 @@ impl App {
             },
         };
         self.boards.insert(0, slot);
+        self.board_search = None;
         self.screen = Screen::Board;
         self.set_focus(Focus::List);
         let sizes = self.sizes;
