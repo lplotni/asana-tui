@@ -89,6 +89,7 @@ T0 API spike + fixtures
 ### After v0.1 (from use)
 - [x] Commenting marks the task's unread notifications read
 - [x] A hint line always shows the shortcuts for the current context
+- [x] Review leftovers (2026-11-17): partial mark-read failures undo only the failed batch; refresh fetches the newest 30 and merges (was: everything loaded); task-view content moved to `present` (CLI and state machine no longer use TUI rendering); local-date overdue; wrap keeps indentation; clearer token-command error
 
 ## Risks and Mitigations
 
