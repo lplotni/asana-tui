@@ -26,10 +26,13 @@ At the start, if the git branch name contains a GID (10 or more digits) or the u
 asn task 1200000000000042 --brief     # identify a task: where it is, who has it, counts (read receipt)
 asn search checkout redirect          # tasks by words: gid, ✓ if completed, name
 asn users ada                         # people: gid and name
+asn projects todo                     # projects by name: gid and name
 asn project sections 1200000000000045 # a project's sections: gid and name
 asn board 1200000000000045            # open tasks by section
 asn inbox --unread                    # the user's unread notifications
 ```
+
+When the user names a project, look it up with `asn projects` and use its GID (rule 4 if several match). Questions about a project's tasks ("what's overdue in Todo?", "who has the most open tasks?") are answered from `asn board <gid> --json`: each task has `name`, `assignee`, `due_on`/`due_at` and its section.
 
 To identify a task, `--brief` is enough. Read the full task only when its content is needed (to summarise it, or to work from its description):
 

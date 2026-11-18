@@ -106,6 +106,12 @@ enum Command {
         #[arg(required = true, value_name = "QUERY")]
         query: Vec<String>,
     },
+    /// Find projects in the workspace (gid and name), e.g. for `asn board`
+    Projects {
+        /// Part of a name
+        #[arg(required = true, value_name = "QUERY")]
+        query: Vec<String>,
+    },
     /// List a project's open tasks by section, in board order
     Board {
         #[arg(value_name = "PROJECT_GID")]
@@ -372,6 +378,15 @@ async fn main() -> ExitCode {
             match core::search_users(&client, &config.workspace, &query.join(" ")).await {
                 Ok(people) => {
                     print!("{}", asn::cli::render_named(&people));
+                    ExitCode::SUCCESS
+                }
+                Err(err) => fail(&err, err.exit_code()),
+            }
+        }
+        Some(Command::Projects { query }) => {
+            match core::search_projects(&client, &config.workspace, &query.join(" ")).await {
+                Ok(projects) => {
+                    print!("{}", asn::cli::render_named(&projects));
                     ExitCode::SUCCESS
                 }
                 Err(err) => fail(&err, err.exit_code()),

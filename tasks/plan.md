@@ -95,6 +95,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 #### 6a: Receipt and a first skill (de-risk the model, C1/C4)
 - [x] T24: `asn task <gid> --brief` read receipt (F18)
 - [ ] T25: The `asn` skill, v1 over GIDs and the existing lookup commands (F20)
+- [x] T31: `asn projects <query>`, pulled forward from T28 (Checkpoint S1 finding: the skill could not find a project by name)
 
 #### Checkpoint S1: does the habit stick?
 - [ ] The user works with the skill for a day: count receipt and confirmation misses (C1), and note which lookups Claude gets wrong (input for C2)
@@ -103,7 +104,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 #### 6b: Names where GIDs are taken (F19)
 - [ ] T26: Name resolution in `core`, and users by name in `asn task assign`
 - [ ] T27: Sections by name in `asn project move`
-- [ ] T28: Projects by name, `asn projects`, and section names in `project new`/`add`
+- [ ] T28: Projects by name and section names in `project new`/`add`
 - [ ] T29: The skill uses names (v2)
 
 #### Checkpoint S2: acceptance

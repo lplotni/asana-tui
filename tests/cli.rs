@@ -151,6 +151,20 @@ fn task_help_lists_assign_and_done() {
 }
 
 #[test]
+fn asn_projects_takes_words_to_search_for() {
+    let output = asn(
+        &["projects", "web", "platform"],
+        &[("ASANA_WORKSPACE", "1234567890123456")],
+    );
+    // Parsed: it gets as far as needing a token (exit 2).
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+
+    let output = asn(&["projects"], &[]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("QUERY"), "{}", stderr(&output));
+}
+
+#[test]
 fn task_brief_and_json_cannot_be_combined() {
     let output = asn(&["task", "1200000000000031", "--brief", "--json"], &[]);
 

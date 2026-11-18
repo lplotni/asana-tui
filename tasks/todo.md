@@ -591,6 +591,26 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
+### - [x] T31: `asn projects <query>`
+
+**Description:** Pulled forward from T28 at Checkpoint S1: asked about "the Todo project", the skill had no way to find a project GID by name, and (correctly) didn't guess or go around `asn`. `asn projects <query…>` prints matching projects as `gid  name`, like `asn users`, using the existing `core::search_projects` (the `P` switcher's typeahead). The skill looks projects up with it and answers project questions from `asn board --json`.
+
+**Acceptance criteria:**
+- [x] `asn projects todo` prints `gid  name` lines; no query is a usage error.
+- [x] The skill uses `asn projects` for a named project, and the drift test covers it.
+
+**Verification:**
+- [x] `tests/cli.rs` (parsing and usage error); `core::search_projects` is already covered by `tests/api_project.rs`; `cargo test`, clippy, fmt.
+- [ ] Manual: "what's overdue in <project>?" in Claude Code.
+
+**Dependencies:** T25
+
+**Files likely touched:** `src/main.rs`, `tests/cli.rs`, `skills/asn/SKILL.md`
+
+**Estimated scope:** XS
+
+---
+
 ### - [ ] Checkpoint S1: does the habit stick?
 
 - [ ] The user works with the skill for a day. Count missed receipts and unconfirmed writes (C1).
@@ -639,12 +659,11 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T28: Projects by name, `asn projects`, and section names in `new`/`add`
+### - [ ] T28: Projects by name, and section names in `new`/`add`
 
-**Description:** `asn projects <query…>` prints `gid  name` like `asn users`. `asn project new` and `asn project add` accept a project name (project typeahead) and a `--section` name (that project's sections). `add` prints `added to <Project>[ › <Section>]`; `new` keeps printing the new GID.
+**Description:** (`asn projects` moved to T31.) `asn project new` and `asn project add` accept a project name (project typeahead) and a `--section` name (that project's sections). `add` prints `added to <Project>[ › <Section>]`; `new` keeps printing the new GID.
 
 **Acceptance criteria:**
-- [ ] `asn projects web` lists matching projects.
 - [ ] `asn project new "Web Platform" --section Backlog Write the launch post` creates the task in that section; an ambiguous or unknown project or section creates nothing (no `POST /tasks`) and lists candidates.
 - [ ] GID arguments behave exactly as today.
 
