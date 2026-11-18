@@ -91,12 +91,21 @@ mod tests {
 
     #[test]
     fn query_without_a_terminal_gives_up_quickly() {
-        // `cargo test` runs without a TTY on stdin.
+        // The query is only sent when a stdio stream is a terminal. That's
+        // the case for `cargo test` run in a terminal (libtest captures
+        // output internally, so stdout/stderr stay the terminal), which may
+        // answer with its real colors. Without one (CI), there's no answer.
+        use std::io::IsTerminal;
+        let has_terminal = std::io::stdin().is_terminal()
+            || std::io::stdout().is_terminal()
+            || std::io::stderr().is_terminal();
         let started = Instant::now();
 
         let colors = query_terminal_colors();
 
-        assert_eq!(colors, None);
+        if !has_terminal {
+            assert_eq!(colors, None);
+        }
         assert!(
             started.elapsed() < QUERY_TIMEOUT * 3,
             "{:?}",
