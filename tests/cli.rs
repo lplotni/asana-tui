@@ -180,6 +180,44 @@ fn project_move_takes_a_section_name_as_well_as_a_gid() {
 }
 
 #[test]
+fn project_new_and_add_take_project_and_section_names() {
+    for sub in ["new", "add"] {
+        let output = asn(&["project", sub, "--help"], &[]);
+        let help = String::from_utf8_lossy(&output.stdout);
+
+        assert!(help.contains("PROJECT_GID|NAME"), "{sub}: {help}");
+        assert!(help.contains("SECTION_GID|NAME"), "{sub}: {help}");
+    }
+
+    let env = [("ASANA_WORKSPACE", "1234567890123456")];
+    let new = asn(
+        &[
+            "project",
+            "new",
+            "Web Platform",
+            "--section",
+            "Backlog",
+            "Write",
+            "it",
+        ],
+        &env,
+    );
+    assert_eq!(new.status.code(), Some(2), "{}", stderr(&new));
+    let add = asn(
+        &[
+            "project",
+            "add",
+            "1200000000000031",
+            "Web Platform",
+            "--section",
+            "Backlog",
+        ],
+        &env,
+    );
+    assert_eq!(add.status.code(), Some(2), "{}", stderr(&add));
+}
+
+#[test]
 fn asn_projects_takes_words_to_search_for() {
     let output = asn(
         &["projects", "web", "platform"],

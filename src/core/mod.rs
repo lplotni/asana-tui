@@ -366,21 +366,18 @@ pub async fn move_to(
     let section_gid = if resolve::is_gid(section) {
         section.to_owned()
     } else {
-        // Sections of the task's projects whose name contains the name asked
-        // for, each with its `Project › Section` label.
+        // The sections of the task's projects, each with its
+        // `Project › Section` label for the candidate list.
         let task = client.task(task_gid).await?;
-        let wanted = section.trim().to_lowercase();
         let mut found: Vec<(Named, String)> = Vec::new();
         for membership in &task.memberships {
             for candidate in sections(client, &membership.project.gid).await? {
-                if candidate.name.to_lowercase().contains(&wanted) {
-                    let label = format!("{} › {}", membership.project.name, candidate.name);
-                    found.push((candidate, label));
-                }
+                let label = format!("{} › {}", membership.project.name, candidate.name);
+                found.push((candidate, label));
             }
         }
         let names = found.iter().map(|(s, _)| s.clone()).collect();
-        match resolve::pick("section", section, names) {
+        match resolve::pick_containing("section", section, names) {
             Ok(picked) => picked.gid,
             Err(mut unresolved) => {
                 for candidate in &mut unresolved.candidates {
@@ -402,6 +399,85 @@ pub async fn move_to(
             .map(crate::api::tasks::Membership::place)
     });
     Ok(Ok(place))
+}
+
+/// Creates a task like [`create_task`], with the project and section given
+/// as a GID or a name (F19). A project or section name that doesn't resolve
+/// to one is returned as [`resolve::Unresolved`], and nothing is created.
+pub async fn create_in(
+    client: &Client,
+    workspace: &str,
+    project: &str,
+    section: Option<&str>,
+    name: &str,
+) -> Result<Result<CreatedTask, resolve::Unresolved>, ApiError> {
+    let (project_gid, section_gid) =
+        match project_and_section(client, workspace, project, section).await? {
+            Ok(found) => found,
+            Err(unresolved) => return Ok(Err(unresolved)),
+        };
+    create_task(client, &project_gid, section_gid.as_deref(), name)
+        .await
+        .map(Ok)
+}
+
+/// Adds the task to a project (and section) like [`add_to_project`], given
+/// as a GID or a name (F19). Returns where the task is now in that project
+/// (`Project › Section`, if Asana reports it). A name that doesn't resolve is
+/// returned as [`resolve::Unresolved`], and nothing is added.
+pub async fn add_to(
+    client: &Client,
+    workspace: &str,
+    task_gid: &str,
+    project: &str,
+    section: Option<&str>,
+) -> Result<Result<Option<String>, resolve::Unresolved>, ApiError> {
+    let (project_gid, section_gid) =
+        match project_and_section(client, workspace, project, section).await? {
+            Ok(found) => found,
+            Err(unresolved) => return Ok(Err(unresolved)),
+        };
+    add_to_project(client, task_gid, &project_gid, section_gid.as_deref()).await?;
+    // Added; where it landed is only reported, so a failed read isn't an error.
+    let place = client.task(task_gid).await.ok().and_then(|task| {
+        task.memberships
+            .iter()
+            .find(|m| m.project.gid == project_gid)
+            .map(crate::api::tasks::Membership::place)
+    });
+    Ok(Ok(place))
+}
+
+/// The GIDs of `project` and, if given, `section` within it, each given as
+/// a GID or a name: a project by the project typeahead, a section among the
+/// project's sections.
+async fn project_and_section(
+    client: &Client,
+    workspace: &str,
+    project: &str,
+    section: Option<&str>,
+) -> Result<Result<(String, Option<String>), resolve::Unresolved>, ApiError> {
+    let project_gid = if resolve::is_gid(project) {
+        project.to_owned()
+    } else {
+        let found = search_projects(client, workspace, project).await?;
+        match resolve::pick("project", project, found) {
+            Ok(picked) => picked.gid,
+            Err(unresolved) => return Ok(Err(unresolved)),
+        }
+    };
+    let section_gid = match section {
+        None => None,
+        Some(gid) if resolve::is_gid(gid) => Some(gid.to_owned()),
+        Some(name) => {
+            let found = sections(client, &project_gid).await?;
+            match resolve::pick_containing("section", name, found) {
+                Ok(picked) => Some(picked.gid),
+                Err(unresolved) => return Ok(Err(unresolved)),
+            }
+        }
+    };
+    Ok(Ok((project_gid, section_gid)))
 }
 
 /// Why a description couldn't be saved.

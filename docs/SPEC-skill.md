@@ -46,7 +46,7 @@ The commands the skill uses accept a name wherever they take a user, section or 
 - **Projects** (`asn project new`, `asn project add`): matched through the project typeahead (F5). Same rule as users.
 - **New `asn projects <query…>`:** prints matching projects as `gid  name` (tab-separated), like `asn users`.
 - **No match or several matches:** nothing is written. Exit 1, and stderr lists what was found, one `gid  label` line each (`Project › Section` for sections), so the caller can retry with a GID. Names never resolve by guessing.
-- On success, write commands print what they resolved to (e.g. `moved to Web Platform › In Review`), so the receipt for a write is also fixed-format.
+- On success, write commands print what they resolved to (`moved to Web Platform › In Review`, `added to Ops › Backlog`; `new` keeps printing the new GID), read back from Asana after the write. If that read fails, the write still succeeded and they print `moved`/`added`.
 
 ### F20. The `asn` skill
 

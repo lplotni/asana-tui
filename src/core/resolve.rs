@@ -40,6 +40,22 @@ pub fn pick(kind: &'static str, name: &str, candidates: Vec<Named>) -> Result<Na
     })
 }
 
+/// [`pick`] among the candidates whose name contains `name` (ignoring
+/// case), for lists that aren't already a search result (a project's
+/// sections).
+pub fn pick_containing(
+    kind: &'static str,
+    name: &str,
+    candidates: Vec<Named>,
+) -> Result<Named, Unresolved> {
+    let wanted = name.trim().to_lowercase();
+    let containing = candidates
+        .into_iter()
+        .filter(|c| c.name.to_lowercase().contains(&wanted))
+        .collect();
+    pick(kind, name, containing)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +137,34 @@ mod tests {
         let picked = pick("person", "Grace", Vec::new());
 
         assert_eq!(picked.unwrap_err().candidates, Vec::new());
+    }
+
+    #[test]
+    fn containing_ignores_candidates_without_the_name() {
+        let sections = vec![
+            named("1", "Backlog"),
+            named("2", "In Review"),
+            named("3", "Done"),
+        ];
+
+        let picked = pick_containing("section", "review", sections);
+
+        assert_eq!(picked, Ok(named("2", "In Review")));
+    }
+
+    #[test]
+    fn containing_a_name_that_no_candidate_has_is_unresolved_with_none() {
+        let picked = pick_containing("section", "Backlog", vec![named("3", "Done")]);
+
+        assert_eq!(picked.unwrap_err().candidates, Vec::new());
+    }
+
+    #[test]
+    fn containing_still_lets_an_exact_name_win() {
+        let sections = vec![named("1", "Review"), named("2", "In Review")];
+
+        let picked = pick_containing("section", "review", sections);
+
+        assert_eq!(picked, Ok(named("1", "Review")));
     }
 }

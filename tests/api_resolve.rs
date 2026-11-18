@@ -336,3 +336,202 @@ async fn a_failed_read_after_the_move_still_counts_as_moved() {
 
     assert!(matches!(moved, Ok(Ok(None))), "{moved:?}");
 }
+
+// --- Projects and sections by name in `project new` / `project add` (T28) ---
+
+const BACKLOG: &str = "1200000000000048";
+
+async fn projects(server: &MockServer, query: &str, found: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(format!("/workspaces/{WS}/typeahead")))
+        .and(query_param("resource_type", "project"))
+        .and(query_param("query", query))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": found })))
+        .mount(server)
+        .await;
+}
+
+async fn no_writes(server: &MockServer) {
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn a_task_is_created_in_a_project_and_section_given_by_name() {
+    let server = MockServer::start().await;
+    projects(
+        &server,
+        "Web",
+        json!([
+            { "gid": WEB, "name": "Web" },
+            { "gid": OPS, "name": "Web Ops" }
+        ]),
+    )
+    .await;
+    sections(
+        &server,
+        WEB,
+        json!([
+            { "gid": BACKLOG, "name": "Backlog" },
+            { "gid": WEB_DONE, "name": "Done" }
+        ]),
+    )
+    .await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .and(body_json(
+            json!({ "data": { "name": "Write the launch post", "projects": [WEB] } }),
+        ))
+        .respond_with(ResponseTemplate::new(201).set_body_json(
+            json!({ "data": { "gid": "1200000000000099", "name": "Write the launch post" } }),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/sections/{BACKLOG}/addTask")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = core::create_in(
+        &client(&server),
+        WS,
+        "Web",
+        Some("backlog"),
+        "Write the launch post",
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(created.task.gid, "1200000000000099");
+    assert!(created.section_error.is_none());
+}
+
+#[tokio::test]
+async fn an_ambiguous_project_creates_nothing() {
+    let server = MockServer::start().await;
+    projects(
+        &server,
+        "Web",
+        json!([
+            { "gid": WEB, "name": "Web Platform" },
+            { "gid": OPS, "name": "Web Ops" }
+        ]),
+    )
+    .await;
+    no_writes(&server).await;
+
+    let unresolved = core::create_in(&client(&server), WS, "Web", None, "Write the launch post")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "project");
+    assert_eq!(unresolved.candidates.len(), 2);
+}
+
+#[tokio::test]
+async fn an_unknown_section_in_the_project_creates_nothing() {
+    let server = MockServer::start().await;
+    projects(&server, "Web", json!([{ "gid": WEB, "name": "Web" }])).await;
+    sections(&server, WEB, json!([{ "gid": WEB_DONE, "name": "Done" }])).await;
+    no_writes(&server).await;
+
+    let unresolved = core::create_in(&client(&server), WS, "Web", Some("Backlog"), "Write it")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "section");
+}
+
+#[tokio::test]
+async fn project_and_section_gids_create_without_a_lookup() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .respond_with(
+            ResponseTemplate::new(201).set_body_json(
+                json!({ "data": { "gid": "1200000000000099", "name": "Write it" } }),
+            ),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/sections/{BACKLOG}/addTask")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = core::create_in(&client(&server), WS, WEB, Some(BACKLOG), "Write it").await;
+
+    assert!(matches!(created, Ok(Ok(_))), "{created:?}");
+}
+
+#[tokio::test]
+async fn a_task_is_added_to_a_project_and_section_by_name_and_says_where() {
+    let server = MockServer::start().await;
+    projects(&server, "ops", json!([{ "gid": OPS, "name": "Ops" }])).await;
+    sections(
+        &server,
+        OPS,
+        json!([
+            { "gid": OPS_REVIEW, "name": "In Review" },
+            { "gid": BACKLOG, "name": "Backlog" }
+        ]),
+    )
+    .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/tasks/{TASK}/addProject")))
+        .and(body_json(
+            json!({ "data": { "project": OPS, "section": OPS_REVIEW } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    task_in(
+        &server,
+        &[
+            (WEB, "Web", WEB_DONE, "Done"),
+            (OPS, "Ops", OPS_REVIEW, "In Review"),
+        ],
+        1,
+    )
+    .await;
+
+    let added = core::add_to(&client(&server), WS, TASK, "ops", Some("review"))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(added.as_deref(), Some("Ops › In Review"));
+}
+
+#[tokio::test]
+async fn an_unknown_project_adds_nothing() {
+    let server = MockServer::start().await;
+    projects(&server, "Mobile", json!([])).await;
+    no_writes(&server).await;
+
+    let unresolved = core::add_to(&client(&server), WS, TASK, "Mobile", None)
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "project");
+    assert!(unresolved.candidates.is_empty());
+}

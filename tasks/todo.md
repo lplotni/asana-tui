@@ -659,16 +659,16 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T28: Projects by name, and section names in `new`/`add`
+### - [x] T28: Projects by name, and section names in `new`/`add`
 
 **Description:** (`asn projects` moved to T31.) `asn project new` and `asn project add` accept a project name (project typeahead) and a `--section` name (that project's sections). `add` prints `added to <Project>[ › <Section>]`; `new` keeps printing the new GID.
 
 **Acceptance criteria:**
-- [ ] `asn project new "Web Platform" --section Backlog Write the launch post` creates the task in that section; an ambiguous or unknown project or section creates nothing (no `POST /tasks`) and lists candidates.
-- [ ] GID arguments behave exactly as today.
+- [x] `asn project new "Web Platform" --section Backlog Write the launch post` creates the task in that section; an ambiguous or unknown project or section creates nothing (no `POST /tasks`) and lists candidates.
+- [x] GID arguments behave exactly as today.
 
 **Verification:**
-- [ ] Wiremock tests for the project and section cases, asserting no write on errors; CLI tests for `asn projects` output and the `add` line.
+- [x] Wiremock tests for the project and section cases, asserting no write on errors; CLI tests for `asn projects` output and the `add` line.
 
 **Dependencies:** T26
 

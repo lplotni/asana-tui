@@ -154,10 +154,11 @@ enum ProjectCommand {
     Add {
         #[arg(value_name = "TASK_GID")]
         task: String,
-        #[arg(value_name = "PROJECT_GID")]
+        /// A project gid, or a project name (exact, or the only match)
+        #[arg(value_name = "PROJECT_GID|NAME")]
         project: String,
-        /// Section within the project
-        #[arg(long, value_name = "SECTION_GID")]
+        /// Section within the project, by gid or name
+        #[arg(long, value_name = "SECTION_GID|NAME")]
         section: Option<String>,
     },
     /// Move a task to another section of a project it's in
@@ -176,10 +177,11 @@ enum ProjectCommand {
     },
     /// Create an unassigned task in a project and print its gid
     New {
-        #[arg(value_name = "PROJECT_GID")]
+        /// A project gid, or a project name (exact, or the only match)
+        #[arg(value_name = "PROJECT_GID|NAME")]
         project: String,
-        /// Put it in this section (at the top)
-        #[arg(long, value_name = "SECTION_GID")]
+        /// Put it in this section (at the top), by gid or name
+        #[arg(long, value_name = "SECTION_GID|NAME")]
         section: Option<String>,
         /// The task's name
         #[arg(required = true, value_name = "NAME")]
@@ -414,8 +416,26 @@ async fn main() -> ExitCode {
                     project,
                     section,
                 },
-        }) => match core::add_to_project(&client, &task, &project, section.as_deref()).await {
-            Ok(()) => ExitCode::SUCCESS,
+        }) => match core::add_to(
+            &client,
+            &config.workspace,
+            &task,
+            &project,
+            section.as_deref(),
+        )
+        .await
+        {
+            Ok(Ok(place)) => {
+                match place {
+                    Some(place) => println!("added to {}", asn::cli::terminal_safe(&place)),
+                    None => println!("added"),
+                }
+                ExitCode::SUCCESS
+            }
+            Ok(Err(unresolved)) => {
+                eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                ExitCode::from(1)
+            }
             Err(err) => fail(&err, err.exit_code()),
         },
         Some(Command::Project {
@@ -452,8 +472,20 @@ async fn main() -> ExitCode {
                 },
         }) => {
             let name = name.join(" ");
-            match core::create_task(&client, &project, section.as_deref(), &name).await {
-                Ok(created) => {
+            match core::create_in(
+                &client,
+                &config.workspace,
+                &project,
+                section.as_deref(),
+                &name,
+            )
+            .await
+            {
+                Ok(Err(unresolved)) => {
+                    eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                    ExitCode::from(1)
+                }
+                Ok(Ok(created)) => {
                     println!("{}", created.task.gid);
                     match created.section_error {
                         None => ExitCode::SUCCESS,
