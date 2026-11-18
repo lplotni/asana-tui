@@ -614,8 +614,8 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 ### - [ ] Checkpoint S1: does the habit stick?
 
 - [ ] The user works with the skill for a day. Count missed receipts and unconfirmed writes (C1).
-- [ ] List the lookups Claude got wrong or took many calls for (input for T26–T28 and C2).
-- [ ] Decide: go on with 6b, change the skill first, or stop (C4).
+- [x] List the lookups Claude got wrong or took many calls for (input for T26–T28 and C2). So far: no way to find a project by name (fixed in T31).
+- [x] Decide: go on with 6b, change the skill first, or stop (C4). The user chose 6b (2026-11-18).
 
 ---
 

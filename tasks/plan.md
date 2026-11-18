@@ -99,7 +99,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### Checkpoint S1: does the habit stick?
 - [ ] The user works with the skill for a day: count receipt and confirmation misses (C1), and note which lookups Claude gets wrong (input for C2)
-- [ ] Human review: go on with names (6b), change the skill, or stop (C4)
+- [x] Human review: go on with names (6b) — decided by the user, 2026-11-18. Finding so far: project lookup by name was missing (fixed in T31); the day of use continues alongside 6b
 
 #### 6b: Names where GIDs are taken (F19)
 - [ ] T26: Name resolution in `core`, and users by name in `asn task assign`
