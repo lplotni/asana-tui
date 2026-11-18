@@ -164,7 +164,9 @@ enum ProjectCommand {
     Move {
         #[arg(value_name = "TASK_GID")]
         task: String,
-        #[arg(value_name = "SECTION_GID")]
+        /// A section gid, or a section name in one of the task's projects
+        /// (exact, or the only section containing it)
+        #[arg(value_name = "SECTION_GID|NAME")]
         section: String,
     },
     /// List a project's sections (gid and name)
@@ -418,8 +420,18 @@ async fn main() -> ExitCode {
         },
         Some(Command::Project {
             command: ProjectCommand::Move { task, section },
-        }) => match core::move_to_section(&client, &task, &section).await {
-            Ok(()) => ExitCode::SUCCESS,
+        }) => match core::move_to(&client, &task, &section).await {
+            Ok(Ok(place)) => {
+                match place {
+                    Some(place) => println!("moved to {}", asn::cli::terminal_safe(&place)),
+                    None => println!("moved"),
+                }
+                ExitCode::SUCCESS
+            }
+            Ok(Err(unresolved)) => {
+                eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                ExitCode::from(1)
+            }
             Err(err) => fail(&err, err.exit_code()),
         },
         Some(Command::Project {

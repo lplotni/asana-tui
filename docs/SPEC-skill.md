@@ -42,7 +42,7 @@ That is also why the skill exists alongside Asana's own MCP connector: it gives 
 The commands the skill uses accept a name wherever they take a user, section or project GID. An argument of 10+ digits (or `me`/`none` for users) is a GID, as today. Anything else is a name.
 
 - **Users** (`asn task assign`): matched through the workspace user typeahead (F15). The case-insensitive exact full name wins. Otherwise a single typeahead result is used.
-- **Sections** (`asn project move <task> <section>`, `asn project new … --section`, `asn project add … --section`): matched case-insensitively against the sections of the task's projects (for `move`) or of the given project (for `new`/`add`).
+- **Sections** (`asn project move <task> <section>`, `asn project new … --section`, `asn project add … --section`): matched against the sections of the task's projects (for `move`) or of the given project (for `new`/`add`): sections whose name contains the name asked for (ignoring case) are the candidates, and the same rule as for users applies (an exact name wins, else the only candidate). `move` reports the destination from a read after the move; if that read fails, the move still succeeded and prints `moved`.
 - **Projects** (`asn project new`, `asn project add`): matched through the project typeahead (F5). Same rule as users.
 - **New `asn projects <query…>`:** prints matching projects as `gid  name` (tab-separated), like `asn users`.
 - **No match or several matches:** nothing is written. Exit 1, and stderr lists what was found, one `gid  label` line each (`Project › Section` for sections), so the caller can retry with a GID. Names never resolve by guessing.

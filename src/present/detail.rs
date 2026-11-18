@@ -62,11 +62,7 @@ pub fn lines_with_images(
     push(&task.name, Role::Title, &mut out);
     out.extend(status_lines(detail, width, now));
     for membership in &task.memberships {
-        let place = match &membership.section {
-            Some(section) => format!("{} › {}", membership.project.name, section.name),
-            None => membership.project.name.clone(),
-        };
-        push(&place, Role::TaskMeta, &mut out);
+        push(&membership.place(), Role::TaskMeta, &mut out);
     }
     if !task.tags.is_empty() {
         let tags: Vec<&str> = task.tags.iter().map(|t| t.name.as_str()).collect();

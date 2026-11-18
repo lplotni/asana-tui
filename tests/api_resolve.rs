@@ -139,3 +139,200 @@ async fn a_gid_me_and_none_are_used_as_given_without_a_lookup() {
         assert!(matches!(result, Ok(Ok(_))), "{who}: {result:?}");
     }
 }
+
+// --- Sections by name in `asn project move` (T27) ---
+
+const WEB: &str = "1200000000000043";
+const OPS: &str = "1200000000000045";
+const WEB_REVIEW: &str = "1200000000000044";
+const WEB_DONE: &str = "1200000000000046";
+const OPS_REVIEW: &str = "1200000000000047";
+
+/// The task, in the given (project gid, project name, section gid, section
+/// name) memberships. `times` limits how often this answer is given, so a
+/// later mount can answer the read after the move.
+async fn task_in(server: &MockServer, memberships: &[(&str, &str, &str, &str)], times: u64) {
+    let memberships: Vec<_> = memberships
+        .iter()
+        .map(|(pg, pn, sg, sn)| {
+            json!({ "project": { "gid": pg, "name": pn }, "section": { "gid": sg, "name": sn } })
+        })
+        .collect();
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {
+            "gid": TASK,
+            "name": "Fix checkout redirect loop",
+            "completed": false,
+            "permalink_url": "https://app.asana.com/0/0/1200000000000031",
+            "memberships": memberships,
+        } })))
+        .up_to_n_times(times)
+        .mount(server)
+        .await;
+}
+
+async fn sections(server: &MockServer, project: &str, found: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{project}/sections")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": found })))
+        .mount(server)
+        .await;
+}
+
+async fn add_to_section(server: &MockServer, section: &str, times: u64) {
+    Mock::given(method("POST"))
+        .and(path(format!("/sections/{section}/addTask")))
+        .and(body_json(json!({ "data": { "task": TASK } })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(times)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn a_task_moves_to_a_section_named_in_any_case_and_reports_where() {
+    let server = MockServer::start().await;
+    task_in(&server, &[(WEB, "Web", WEB_DONE, "Done")], 1).await;
+    task_in(&server, &[(WEB, "Web", WEB_REVIEW, "In Review")], 1).await;
+    sections(
+        &server,
+        WEB,
+        json!([
+            { "gid": WEB_REVIEW, "name": "In Review" },
+            { "gid": WEB_DONE, "name": "Done" }
+        ]),
+    )
+    .await;
+    add_to_section(&server, WEB_REVIEW, 1).await;
+
+    let moved = core::move_to(&client(&server), TASK, "in review")
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(moved.as_deref(), Some("Web › In Review"));
+}
+
+#[tokio::test]
+async fn part_of_a_section_name_is_enough_when_only_one_section_has_it() {
+    let server = MockServer::start().await;
+    task_in(&server, &[(WEB, "Web", WEB_DONE, "Done")], 2).await;
+    sections(
+        &server,
+        WEB,
+        json!([
+            { "gid": WEB_REVIEW, "name": "In Review" },
+            { "gid": WEB_DONE, "name": "Done" }
+        ]),
+    )
+    .await;
+    add_to_section(&server, WEB_REVIEW, 1).await;
+
+    let moved = core::move_to(&client(&server), TASK, "review")
+        .await
+        .unwrap();
+
+    assert!(moved.is_ok(), "{moved:?}");
+}
+
+#[tokio::test]
+async fn the_same_section_name_in_two_projects_moves_nothing_and_lists_both() {
+    let server = MockServer::start().await;
+    task_in(
+        &server,
+        &[
+            (WEB, "Web", WEB_DONE, "Done"),
+            (OPS, "Ops", OPS_REVIEW, "In Review"),
+        ],
+        1,
+    )
+    .await;
+    sections(
+        &server,
+        WEB,
+        json!([
+            { "gid": WEB_REVIEW, "name": "In Review" },
+            { "gid": WEB_DONE, "name": "Done" }
+        ]),
+    )
+    .await;
+    sections(
+        &server,
+        OPS,
+        json!([{ "gid": OPS_REVIEW, "name": "In Review" }]),
+    )
+    .await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let unresolved = core::move_to(&client(&server), TASK, "In Review")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "section");
+    let labels: Vec<_> = unresolved
+        .candidates
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(labels, ["Web › In Review", "Ops › In Review"]);
+}
+
+#[tokio::test]
+async fn an_unknown_section_moves_nothing() {
+    let server = MockServer::start().await;
+    task_in(&server, &[(WEB, "Web", WEB_DONE, "Done")], 1).await;
+    sections(&server, WEB, json!([{ "gid": WEB_DONE, "name": "Done" }])).await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let unresolved = core::move_to(&client(&server), TASK, "Backlog")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert!(unresolved.candidates.is_empty());
+}
+
+#[tokio::test]
+async fn a_section_gid_moves_without_a_lookup_and_still_reports_where() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{WEB}/sections")))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+    add_to_section(&server, WEB_REVIEW, 1).await;
+    task_in(&server, &[(WEB, "Web", WEB_REVIEW, "In Review")], 1).await;
+
+    let moved = core::move_to(&client(&server), TASK, WEB_REVIEW)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(moved.as_deref(), Some("Web › In Review"));
+}
+
+#[tokio::test]
+async fn a_failed_read_after_the_move_still_counts_as_moved() {
+    let server = MockServer::start().await;
+    add_to_section(&server, WEB_REVIEW, 1).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}")))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+
+    let moved = core::move_to(&client(&server), TASK, WEB_REVIEW).await;
+
+    assert!(matches!(moved, Ok(Ok(None))), "{moved:?}");
+}

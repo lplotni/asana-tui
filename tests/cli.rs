@@ -166,6 +166,20 @@ fn task_assign_takes_a_name_as_well_as_a_gid() {
 }
 
 #[test]
+fn project_move_takes_a_section_name_as_well_as_a_gid() {
+    let output = asn(&["project", "move", "--help"], &[]);
+    let help = String::from_utf8_lossy(&output.stdout);
+
+    assert!(help.contains("SECTION_GID|NAME"), "{help}");
+
+    let output = asn(
+        &["project", "move", "1200000000000031", "In Review"],
+        &[("ASANA_WORKSPACE", "1234567890123456")],
+    );
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}
+
+#[test]
 fn asn_projects_takes_words_to_search_for() {
     let output = asn(
         &["projects", "web", "platform"],

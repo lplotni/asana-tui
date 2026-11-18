@@ -352,6 +352,58 @@ pub async fn move_to_section(
     client.add_task_to_section(section_gid, task_gid).await
 }
 
+/// Moves the task to `section`: a section GID, or a section name (exact, or
+/// the only section containing it) among the task's projects (F19). Returns
+/// where the task is now (`Project › Section`, if Asana reports it). A name
+/// that doesn't resolve to one section is returned as
+/// [`resolve::Unresolved`], with candidates labelled `Project › Section`, and
+/// nothing is moved.
+pub async fn move_to(
+    client: &Client,
+    task_gid: &str,
+    section: &str,
+) -> Result<Result<Option<String>, resolve::Unresolved>, ApiError> {
+    let section_gid = if resolve::is_gid(section) {
+        section.to_owned()
+    } else {
+        // Sections of the task's projects whose name contains the name asked
+        // for, each with its `Project › Section` label.
+        let task = client.task(task_gid).await?;
+        let wanted = section.trim().to_lowercase();
+        let mut found: Vec<(Named, String)> = Vec::new();
+        for membership in &task.memberships {
+            for candidate in sections(client, &membership.project.gid).await? {
+                if candidate.name.to_lowercase().contains(&wanted) {
+                    let label = format!("{} › {}", membership.project.name, candidate.name);
+                    found.push((candidate, label));
+                }
+            }
+        }
+        let names = found.iter().map(|(s, _)| s.clone()).collect();
+        match resolve::pick("section", section, names) {
+            Ok(picked) => picked.gid,
+            Err(mut unresolved) => {
+                for candidate in &mut unresolved.candidates {
+                    if let Some((_, label)) = found.iter().find(|(s, _)| s.gid == candidate.gid) {
+                        candidate.name.clone_from(label);
+                    }
+                }
+                return Ok(Err(unresolved));
+            }
+        }
+    };
+    move_to_section(client, task_gid, &section_gid).await?;
+    // The move is done; where the task is now is only reported, so a failed
+    // read must not turn it into an error (and a retry).
+    let place = client.task(task_gid).await.ok().and_then(|task| {
+        task.memberships
+            .iter()
+            .find(|m| m.section.as_ref().is_some_and(|s| s.gid == section_gid))
+            .map(crate::api::tasks::Membership::place)
+    });
+    Ok(Ok(place))
+}
+
 /// Why a description couldn't be saved.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveNotesError {

@@ -43,6 +43,16 @@ pub struct Membership {
     pub section: Option<Named>,
 }
 
+impl Membership {
+    /// `Project › Section`, or the project alone when it has no section.
+    pub fn place(&self) -> String {
+        match &self.section {
+            Some(section) => format!("{} › {}", self.project.name, section.name),
+            None => self.project.name.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CustomField {
     pub gid: String,

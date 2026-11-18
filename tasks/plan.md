@@ -103,7 +103,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### 6b: Names where GIDs are taken (F19)
 - [x] T26: Name resolution in `core`, and users by name in `asn task assign`
-- [ ] T27: Sections by name in `asn project move`
+- [x] T27: Sections by name in `asn project move`
 - [ ] T28: Projects by name and section names in `project new`/`add`
 - [ ] T29: The skill uses names (v2)
 

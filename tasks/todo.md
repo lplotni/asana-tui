@@ -639,17 +639,17 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T27: Sections by name in `asn project move`
+### - [x] T27: Sections by name in `asn project move`
 
 **Description:** A non-GID section is matched against the sections of every project the task is in (labels `Project › Section`). On success, `move` prints `moved to <Project> › <Section>`.
 
 **Acceptance criteria:**
-- [ ] `asn project move <task> "in review"` moves the task when exactly one of its projects has that section (case-insensitive).
-- [ ] The same section name in two of the task's projects is ambiguous: nothing is moved, and both `Project › Section` labels are listed.
-- [ ] A section GID moves as today, and success now prints the destination.
+- [x] `asn project move <task> "in review"` moves the task when exactly one of its projects has that section (case-insensitive).
+- [x] The same section name in two of the task's projects is ambiguous: nothing is moved, and both `Project › Section` labels are listed.
+- [x] A section GID moves as today, and success now prints the destination.
 
 **Verification:**
-- [ ] Wiremock tests (one project, two projects with the same name, no match), asserting no `addTask` in the error cases; CLI test for the printed line.
+- [x] Wiremock tests (one project, two projects with the same name, no match), asserting no `addTask` in the error cases; CLI test for the printed line.
 
 **Dependencies:** T26
 

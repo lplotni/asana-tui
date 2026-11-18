@@ -15,11 +15,7 @@ pub fn lines(detail: &TaskDetail, now: i64) -> Vec<String> {
         out.push("  where no project".to_owned());
     }
     for membership in &task.memberships {
-        let place = match &membership.section {
-            Some(section) => format!("{} › {}", membership.project.name, section.name),
-            None => membership.project.name.clone(),
-        };
-        out.push(format!("  where {place}"));
+        out.push(format!("  where {}", membership.place()));
     }
 
     let mut who = vec![
