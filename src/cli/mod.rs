@@ -24,6 +24,18 @@ pub fn render_named(items: &[crate::api::tasks::Named]) -> String {
     items.iter().map(|i| tsv_line(&[&i.gid, &i.name])).collect()
 }
 
+/// What to print (on stderr) when a name didn't resolve to one thing (F19):
+/// the candidates as `gid  name` lines, or that nothing matched.
+pub fn render_unresolved(unresolved: &crate::core::resolve::Unresolved) -> String {
+    let name = terminal_safe(&unresolved.name);
+    let kind = unresolved.kind;
+    if unresolved.candidates.is_empty() {
+        return format!("no {kind} matches \"{name}\"\n");
+    }
+    format!("\"{name}\" matches more than one {kind}; use a GID:\n")
+        + &render_named(&unresolved.candidates)
+}
+
 /// One line of tab-separated output, every field made [`terminal_safe`]
 /// (so a field can't contain a tab or newline that breaks the columns).
 pub fn tsv_line(fields: &[&str]) -> String {
@@ -50,6 +62,48 @@ mod tests {
         ];
 
         assert_eq!(render_named(&items), "1\tTo do\n2\tDone [2J\n");
+    }
+
+    #[test]
+    fn an_ambiguous_name_lists_the_candidates_to_retry_with() {
+        use crate::api::tasks::Named;
+        use crate::core::resolve::Unresolved;
+        let unresolved = Unresolved {
+            kind: "person",
+            name: "ada".into(),
+            candidates: vec![
+                Named {
+                    gid: "1200000000000011".into(),
+                    name: "Ada Lovelace".into(),
+                },
+                Named {
+                    gid: "1200000000000012".into(),
+                    name: "Ada\u{202e} Byron".into(),
+                },
+            ],
+        };
+
+        assert_eq!(
+            render_unresolved(&unresolved),
+            "\"ada\" matches more than one person; use a GID:\n\
+             1200000000000011\tAda Lovelace\n\
+             1200000000000012\tAda Byron\n"
+        );
+    }
+
+    #[test]
+    fn an_unknown_name_says_nothing_matched() {
+        use crate::core::resolve::Unresolved;
+        let unresolved = Unresolved {
+            kind: "person",
+            name: "Grace\u{1b}[2J".into(),
+            candidates: Vec::new(),
+        };
+
+        assert_eq!(
+            render_unresolved(&unresolved),
+            "no person matches \"Grace [2J\"\n"
+        );
     }
 
     #[test]

@@ -619,17 +619,17 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T26: Name resolution in `core`, and users by name
+### - [x] T26: Name resolution in `core`, and users by name
 
-**Description:** F19's primitive: `core::Resolved { One(Named), Ambiguous(Vec<Named>), None }` and the matching rule (case-insensitive exact name wins, else a single candidate). Users come from the user typeahead. `asn task assign <task> <name>` resolves a non-GID that isn't `me`/`none`. A CLI helper prints `Ambiguous`/`None` as `gid  label` lines on stderr and exits 1.
+**Description:** F19's primitive: `core::resolve::{is_gid, pick, Unresolved}` (built as `pick(..) -> Result<Named, Unresolved>` rather than a three-way enum) and the matching rule (case-insensitive exact name wins, else a single candidate). Users come from the user typeahead. `asn task assign <task> <name>` resolves a non-GID that isn't `me`/`none`. A CLI helper prints `Ambiguous`/`None` as `gid  label` lines on stderr and exits 1.
 
 **Acceptance criteria:**
-- [ ] `asn task assign <task> "Ada Lovelace"` assigns when the name matches exactly or the typeahead returns one person, and prints the new assignee as today.
-- [ ] Several matches or none: no `PUT` is sent, stderr lists the candidates, and the exit code is 1.
-- [ ] A GID, `me` and `none` make exactly the requests they make today.
+- [x] `asn task assign <task> "Ada Lovelace"` assigns when the name matches exactly or the typeahead returns one person, and prints the new assignee as today.
+- [x] Several matches or none: no `PUT` is sent, stderr lists the candidates, and the exit code is 1.
+- [x] A GID, `me` and `none` make exactly the requests they make today.
 
 **Verification:**
-- [ ] Unit tests for the matching rule; wiremock tests for one, several and no matches, asserting no `PUT /tasks` in the error cases; `tests/cli.rs` for the exit code and stderr.
+- [x] Unit tests for the matching rule; wiremock tests for one, several and no matches, asserting no `PUT /tasks` in the error cases; `tests/cli.rs` for the exit code and stderr.
 
 **Dependencies:** T25 (after Checkpoint S1)
 

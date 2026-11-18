@@ -1,6 +1,7 @@
 //! Operations shared by the CLI and the TUI.
 
 pub mod mention;
+pub mod resolve;
 
 use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
@@ -287,6 +288,30 @@ pub async fn assign(
     assignee: Option<&str>,
 ) -> Result<Option<Named>, ApiError> {
     client.set_assignee(task_gid, assignee).await
+}
+
+/// Assigns the task to `who`: a user GID, `me`, `none`, or a person's name
+/// (F19). A name that doesn't resolve to exactly one person is returned as
+/// [`resolve::Unresolved`], and the task is left as it is.
+pub async fn assign_to(
+    client: &Client,
+    workspace: &str,
+    task_gid: &str,
+    who: &str,
+) -> Result<Result<Option<Named>, resolve::Unresolved>, ApiError> {
+    let assignee = match who {
+        "none" => None,
+        "me" => Some("me".to_owned()),
+        gid if resolve::is_gid(gid) => Some(gid.to_owned()),
+        name => {
+            let found = search_users(client, workspace, name).await?;
+            match resolve::pick("person", name, found) {
+                Ok(person) => Some(person.gid),
+                Err(unresolved) => return Ok(Err(unresolved)),
+            }
+        }
+    };
+    assign(client, task_gid, assignee.as_deref()).await.map(Ok)
 }
 
 /// A task made by [`create_task`], and why it isn't in the section asked

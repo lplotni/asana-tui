@@ -77,20 +77,24 @@ A Claude Code skill shipped in the repo (`skills/asn/SKILL.md`, packaged as a pl
 - **Where things go:**
   - `present/`: the receipt lines (UI-neutral, next to `detail`)
   - `cli/task.rs`: `--brief` rendering
-  - `core/`: name resolution (`resolve_user`, `resolve_section`, `resolve_project`) returning a match or the candidates, used by `main.rs`
+  - `core/resolve.rs`: `is_gid` and the one matching rule (`pick`); `core` operations such as `assign_to` resolve, then write, and return the candidates instead of writing when a name doesn't resolve
+  - `cli/mod.rs`: `render_unresolved`, the stderr message with the candidates
   - `skills/asn/SKILL.md` and `.claude-plugin/`: the skill and its plugin manifest
 
 ## Code Style
 
-As in the board spec: thin `core` functions over `api`, doc comments that say what something is for, `Result<_, ApiError>`. Resolution keeps "not found" and "ambiguous" as values, not strings:
+As in the board spec: thin `core` functions over `api`, doc comments that say what something is for, `Result<_, ApiError>`. Resolution keeps "not found" and "ambiguous" as a value, not a string, so callers print the candidates and never write:
 
 ```rust
-/// What a name resolved to: one GID, or the candidates to show the caller.
-pub enum Resolved {
-    One(Named),
-    Ambiguous(Vec<Named>),
-    None,
+/// A name that didn't resolve to exactly one thing: the candidates found
+/// (empty when nothing matched), so the caller can retry with a GID.
+pub struct Unresolved {
+    pub kind: &'static str,
+    pub name: String,
+    pub candidates: Vec<Named>,
 }
+
+pub fn pick(kind: &'static str, name: &str, candidates: Vec<Named>) -> Result<Named, Unresolved>;
 ```
 
 The skill is written like the README: short, command-first, with the rules stated as rules.

@@ -141,8 +141,9 @@ enum TaskCommand {
     Assign {
         #[arg(value_name = "TASK_GID")]
         gid: String,
-        /// A user gid (see `asn users`), `me`, or `none` to unassign
-        #[arg(value_name = "USER_GID|me|none")]
+        /// A user gid, a person's name (exact, or the only match), `me`, or
+        /// `none` to unassign
+        #[arg(value_name = "USER_GID|NAME|me|none")]
         assignee: String,
     },
 }
@@ -301,17 +302,18 @@ async fn main() -> ExitCode {
         Some(Command::Task {
             command: Some(TaskCommand::Assign { gid, assignee }),
             ..
-        }) => {
-            let assignee = (assignee != "none").then_some(assignee.as_str());
-            match core::assign(&client, &gid, assignee).await {
-                Ok(now) => {
-                    let name = now.map_or("unassigned".to_owned(), |a| a.name);
-                    println!("{}", asn::cli::terminal_safe(&name));
-                    ExitCode::SUCCESS
-                }
-                Err(err) => fail(&err, err.exit_code()),
+        }) => match core::assign_to(&client, &config.workspace, &gid, &assignee).await {
+            Ok(Ok(now)) => {
+                let name = now.map_or("unassigned".to_owned(), |a| a.name);
+                println!("{}", asn::cli::terminal_safe(&name));
+                ExitCode::SUCCESS
             }
-        }
+            Ok(Err(unresolved)) => {
+                eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                ExitCode::from(1)
+            }
+            Err(err) => fail(&err, err.exit_code()),
+        },
         Some(Command::Task {
             gid: Some(gid),
             json,

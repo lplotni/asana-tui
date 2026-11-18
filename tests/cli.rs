@@ -151,6 +151,21 @@ fn task_help_lists_assign_and_done() {
 }
 
 #[test]
+fn task_assign_takes_a_name_as_well_as_a_gid() {
+    let output = asn(&["task", "assign", "--help"], &[]);
+    let help = String::from_utf8_lossy(&output.stdout);
+
+    assert!(help.contains("USER_GID|NAME|me|none"), "{help}");
+
+    // A name with a space is one argument, and parses up to the token check.
+    let output = asn(
+        &["task", "assign", "1200000000000031", "Ada Lovelace"],
+        &[("ASANA_WORKSPACE", "1234567890123456")],
+    );
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}
+
+#[test]
 fn asn_projects_takes_words_to_search_for() {
     let output = asn(
         &["projects", "web", "platform"],
