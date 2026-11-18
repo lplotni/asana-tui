@@ -569,19 +569,19 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T25: The `asn` skill, v1
+### - [x] T25: The `asn` skill, v1
 
 **Description:** F20 over today's commands. `skills/asn/SKILL.md` gives the vocabulary, the GID lookups (`search`, `users`, `project sections`), the current-task rule (the conversation, plus an offer from a GID in the branch name or a pasted Asana URL), the receipt rule, confirm-before-write, comment-by-default capture, and the untrusted-text rule. It is packaged as a Claude Code plugin with a marketplace entry in this repo (decided 2026-11-17), so `/plugin` installs it from `lplotni/asana-tui`.
 
 **Acceptance criteria:**
-- [ ] With the skill installed, reading a task starts the reply with the `--brief` receipt verbatim, and `search`/`board`/`users` results get the one-line notice.
-- [ ] Every write is shown (resolved task, person or `Project › Section`, and the exact command) and runs only after a yes; "capture this" becomes `asn comment <gid> -`.
+- [x] With the skill installed, reading a task starts the reply with the `--brief` receipt verbatim, and `search`/`board`/`users` results get the one-line notice.
+- [x] Every write is shown (resolved task, person or `Project › Section`, and the exact command) and runs only after a yes; "capture this" becomes `asn comment <gid> -`.
 - [x] A test walks every `asn` command in the skill's code blocks through the help output (subcommand path and long flags), so a renamed subcommand or flag fails CI. Checked by mutating the skill.
 
 **Verification:**
 - [x] The drift test (`tests/skill.rs`); `cargo test`, clippy, fmt. `claude plugin validate .` passes (warnings: no version, by design; no icon).
 - [x] Only invented GIDs and names: `the_skill_uses_only_invented_gids` enforces the GIDs.
-- [ ] Manual: install it in Claude Code, then read, move, assign, create and capture on a test task.
+- [x] Manual: install it in Claude Code, then read, move, assign, create and capture on a test task (confirmed by the user, 2026-11-18).
 
 **Dependencies:** T24
 
@@ -601,7 +601,7 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 **Verification:**
 - [x] `tests/cli.rs` (parsing and usage error); `core::search_projects` is already covered by `tests/api_project.rs`; `cargo test`, clippy, fmt.
-- [ ] Manual: "what's overdue in <project>?" in Claude Code.
+- [x] Manual: "what's overdue in <project>?" in Claude Code (confirmed by the user, 2026-11-18).
 
 **Dependencies:** T25
 
