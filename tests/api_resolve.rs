@@ -120,9 +120,10 @@ async fn an_unknown_name_assigns_nobody() {
 }
 
 #[tokio::test]
-async fn a_gid_me_and_none_are_used_as_given_without_a_lookup() {
+async fn a_gid_an_email_me_and_none_are_used_as_given_without_a_lookup() {
     for (who, sent) in [
         ("1200000000000011", json!("1200000000000011")),
+        ("ada@example.com", json!("ada@example.com")),
         ("me", json!("me")),
         ("none", serde_json::Value::Null),
     ] {

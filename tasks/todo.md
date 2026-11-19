@@ -930,7 +930,7 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 - [x] R6: a blank name never resolves, not even to the only candidate.
 - [x] R7: section names are matched against all of a project's sections, not the first 100.
 - [x] R8: the config file is replaced atomically, keeps mode 0600 and a dotfile symlink.
-- [ ] R9: an email address as assignee goes to Asana as it is.
+- [x] R9: an email address as assignee goes to Asana as it is.
 
 ---
 

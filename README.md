@@ -127,7 +127,7 @@ asn search checkout redirect           # find tasks: gid, ✓ if completed, name
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
 asn task <task-gid> --brief             # a short receipt: where it is, who has it, due, counts (no description or comment text)
 asn task done <task-gid> [--undo]       # mark it complete (or incomplete again)
-asn task assign <task-gid> "Ada Lovelace"   # a name, a user gid, `me`, or `none`; prints the new assignee
+asn task assign <task-gid> "Ada Lovelace"   # a name, a user gid or email, `me`, or `none`; prints the new assignee
 asn task field <task-gid> Initiative Checkout   # set a single-select field (or `none` to clear it); prints "Initiative: Checkout"
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project

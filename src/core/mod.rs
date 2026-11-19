@@ -332,6 +332,8 @@ pub async fn assign_to(
         "none" => None,
         "me" => Some("me".to_owned()),
         gid if resolve::is_gid(gid) => Some(gid.to_owned()),
+        // Asana takes an email address wherever it takes a user.
+        email if email.contains('@') => Some(email.to_owned()),
         name => {
             let found = search_users(client, workspace, name).await?;
             match resolve::pick("person", name, found) {

@@ -39,7 +39,7 @@ That is also why the skill exists alongside Asana's own MCP connector: it gives 
 
 ### F19. Names where GIDs are taken
 
-The commands the skill uses accept a name wherever they take a user, section or project GID. An argument of 10+ digits (or `me`/`none` for users) is a GID, as today. Anything else is a name.
+The commands the skill uses accept a name wherever they take a user, section or project GID. An argument of 10+ digits (or `me`/`none` for users) is a GID, as today, and a user argument with an `@` is an email address, passed to Asana as it is (Asana takes one wherever it takes a user). Anything else is a name.
 
 - **Users** (`asn task assign`): matched through the workspace user typeahead (F15). The case-insensitive exact full name wins. Otherwise a single typeahead result is used.
 - **Sections** (`asn project move <task> <section>`, `asn project new … --section`, `asn project add … --section`): matched against the sections of the task's projects (for `move`) or of the given project (for `new`/`add`): sections whose name contains the name asked for (ignoring case) are the candidates, and the same rule as for users applies (an exact name wins, else the only candidate). `move` reports the destination from a read after the move; if that read fails, the move still succeeded and prints `moved`.

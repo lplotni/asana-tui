@@ -144,8 +144,8 @@ enum TaskCommand {
     Assign {
         #[arg(value_name = "TASK_GID")]
         gid: String,
-        /// A user gid, a person's name (exact, or the only match), `me`, or
-        /// `none` to unassign
+        /// A user gid or email, a person's name (exact, or the only match),
+        /// `me`, or `none` to unassign
         #[arg(value_name = "USER_GID|NAME|me|none")]
         assignee: String,
     },
