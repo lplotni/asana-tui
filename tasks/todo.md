@@ -932,7 +932,7 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 - [x] R8: the config file is replaced atomically, keeps mode 0600 and a dotfile symlink.
 - [x] R9: an email address as assignee goes to Asana as it is.
 - [x] R10: the board drawing moves from `ui.rs` to `ui/board.rs`.
-- [ ] R11: nits: the completion animation keeps grapheme clusters whole; the interview's 401 message says it once and its Asana text is terminal-safe; F23 and F26 match the code.
+- [x] R11: nits: the completion animation keeps grapheme clusters whole; the interview's 401 message says it once and its Asana text is terminal-safe; F23 and F26 match the code.
 
 ---
 
