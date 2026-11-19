@@ -22,6 +22,13 @@ const ITEM_HEIGHT: u16 = 2;
 /// Lines per board card.
 const CARD_HEIGHT: u16 = 2;
 
+/// Commands that share one help line (`j / k  down / up`), to keep the
+/// overlay within 24 rows. Pairs must not make the widest line wider.
+const HELP_PAIRS: &[(Cmd, Cmd)] = &[
+    (Cmd::MoveDown, Cmd::MoveUp),
+    (Cmd::NextMatch, Cmd::PrevMatch),
+];
+
 /// The help overlay's lines: every binding, generated from the keymap.
 pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
@@ -39,21 +46,33 @@ pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
             if seen.contains(&binding.cmd) {
                 continue;
             }
-            seen.push(binding.cmd);
-            let same: Vec<_> = BINDINGS
+            // The command, and the one sharing its line, if any.
+            let partner = HELP_PAIRS
                 .iter()
-                .filter(|b| b.context == context && b.cmd == binding.cmd)
-                .collect();
-            let keys: Vec<String> = same.iter().map(|b| sequence_label(b.keys)).collect();
-            let asana = same
-                .iter()
-                .any(|b| matches!(b.origin, Origin::Asana | Origin::VimAndAsana));
+                .find_map(|&(a, b)| (a == binding.cmd).then_some(b));
+            let cmds: Vec<Cmd> = std::iter::once(binding.cmd).chain(partner).collect();
+            seen.extend(&cmds);
+            let mut keys = Vec::new();
+            let mut helps = Vec::new();
+            let mut asana = false;
+            for cmd in &cmds {
+                let same: Vec<_> = BINDINGS
+                    .iter()
+                    .filter(|b| b.context == context && b.cmd == *cmd)
+                    .collect();
+                let labels: Vec<String> = same.iter().map(|b| sequence_label(b.keys)).collect();
+                keys.push(labels.join(", "));
+                helps.extend(same.first().map(|b| b.help));
+                asana |= same
+                    .iter()
+                    .any(|b| matches!(b.origin, Origin::Asana | Origin::VimAndAsana));
+            }
             let mut spans = vec![
                 Span::styled(
-                    format!("{:<12} ", keys.join(", ")),
+                    format!("{:<12} ", keys.join(" / ")),
                     theme.style(Role::PickerMatch),
                 ),
-                Span::styled(binding.help.to_owned(), theme.style(Role::Text)),
+                Span::styled(helps.join(" / "), theme.style(Role::Text)),
             ];
             if asana {
                 spans.push(Span::styled("  · Asana", theme.style(Role::TextMuted)));
@@ -1977,7 +1996,40 @@ mod tests {
         commands.sort_by_key(|(context, cmd)| format!("{context:?}{cmd:?}"));
         commands.dedup();
         let entries = lines.iter().filter(|l| l.spans.len() >= 2).count();
-        assert_eq!(entries, commands.len());
+        assert_eq!(entries, commands.len() - HELP_PAIRS.len());
+    }
+
+    #[test]
+    fn the_help_overlay_has_room_for_three_more_entries_at_100_by_24() {
+        let lines = help_lines(&terminal_theme());
+        let width = lines.iter().map(Line::width).max().unwrap();
+
+        // Two columns must fit 100 cells, and 24 rows hold 22 lines each.
+        assert!(2 * width + 6 <= 100, "lines are {width} wide");
+        assert!(
+            (lines.len() + 3).div_ceil(2) + 2 <= 24,
+            "{} lines leave no room for three more",
+            lines.len()
+        );
+    }
+
+    #[test]
+    fn paired_commands_share_one_help_line() {
+        let text: String = help_lines(&terminal_theme())
+            .iter()
+            .map(|l| line_text(l) + "\n")
+            .collect();
+
+        for (keys, help) in [
+            ("j / k", "down / up"),
+            ("n / N", "next match / previous match"),
+        ] {
+            let line = text
+                .lines()
+                .find(|l| l.starts_with(keys))
+                .unwrap_or_else(|| panic!("no line for {keys}:\n{text}"));
+            assert!(line.contains(help), "{line}");
+        }
     }
 
     #[test]

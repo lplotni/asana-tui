@@ -231,7 +231,7 @@ asn project fields <project-gid|name>          # a project's single-select field
 - `asn task field` resolves the field among the task's single-select fields and the option among that field's enabled options, both as in F19; `none` clears the field. It prints `<Field>: <Option>` (or `<Field>: none`). An unresolved name, a disabled option, or a field that isn't single-select writes nothing and exits 1.
 - `asn project fields` prints each single-select field as `gid  name`, followed by its enabled options as indented `gid  name` lines.
 - Fields, options and `--lanes` fields come from lists known up front, so a name that matches nothing lists *all* of them (not none), and a GID must be one of them.
-- `asn task --json`: each custom field also includes `resource_subtype`, `enum_value` and `enum_options` (additive; needed to set single-select fields).
+- `asn task --json`: each custom field also includes `resource_subtype`, `enum_value` and `enum_options` (additive; needed to set single-select fields; agreed by the user 2026-11-19).
 
 ### F26. Lanes view (`v`)
 

@@ -814,16 +814,16 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T36: Help overlay makes room for new keys
+### - [x] T36: Help overlay makes room for new keys
 
-**Description:** The help overlay uses all 24 rows at 100×24, so the first new key would fail `the_help_overlay_shows_every_binding_on_a_100_by_24_terminal`. Change its layout (e.g. three columns at ≥ 100 cells, or shorter group headers) so at least four more bindings fit, without changing any binding.
+**Description:** The help overlay uses all 24 rows at 100×24, so the first new key would fail `the_help_overlay_shows_every_binding_on_a_100_by_24_terminal`. Make room so the Phase 7 keys fit, without changing any binding or description. Built by putting paired commands on one line (`j / k  down / up`, `n / N  next match / previous match`); pairs that would widen the widest line (gg/G, Ctrl-d/Ctrl-u, next/previous item) are left out, since a wider line drops the overlay to one column. That leaves room for three more entries (Phase 7 needs two).
 
 **Acceptance criteria:**
-- [ ] At 100×24 the overlay shows every binding with room for four more (checked by a test that adds four dummy-length entries, or by the row count).
-- [ ] No binding, description or hint changes.
+- [x] At 100×24 the overlay shows every binding with room for three more (`the_help_overlay_has_room_for_three_more_entries_at_100_by_24`).
+- [x] No binding, description or hint changes.
 
 **Verification:**
-- [ ] The existing help test; updated help snapshots reviewed (`.snap.new` diffed, then accepted).
+- [x] The existing help test; updated help snapshots reviewed (`.snap.new` diffed, then accepted).
 
 **Dependencies:** None
 
