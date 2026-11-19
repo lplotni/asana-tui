@@ -4129,6 +4129,61 @@ fn choosing_none_clears_the_field() {
 }
 
 #[test]
+fn f_on_a_board_card_works_before_its_detail_loads() {
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_initiative()),
+    });
+
+    keys(&mut app, "F");
+
+    assert_eq!(
+        app.picker.as_ref().unwrap().stage,
+        picker::Stage::SetFieldOption {
+            field: named("f1", "Initiative")
+        }
+    );
+    assert_eq!(
+        picker_items(&app),
+        [("(none)".to_owned(), false), ("Checkout".to_owned(), true)]
+    );
+}
+
+#[test]
+fn f_on_a_board_card_with_several_fields_asks_which_before_its_detail_loads() {
+    use crate::api::projects::{SelectField, SelectOption};
+    let mut board = board_with_initiative();
+    board.fields.push(SelectField {
+        gid: "f2".into(),
+        name: "Priority".into(),
+        options: vec![SelectOption {
+            gid: "p1".into(),
+            name: "High".into(),
+            enabled: true,
+        }],
+    });
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board),
+    });
+
+    keys(&mut app, "F");
+    let names: Vec<String> = picker_items(&app).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Initiative: Checkout", "Priority: —"]);
+
+    keys(&mut app, "j");
+    enter(&mut app);
+    assert_eq!(
+        app.picker.as_ref().unwrap().stage,
+        picker::Stage::SetFieldOption {
+            field: named("f2", "Priority")
+        }
+    );
+}
+
+#[test]
 fn f_on_a_task_without_single_select_fields_says_so() {
     let mut app = on_board(&[2, 2]);
     load_task(

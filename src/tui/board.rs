@@ -7,7 +7,7 @@
 //! lane holding the board's columns, so navigation is written once.
 
 use crate::api::projects::BoardTask;
-use crate::api::tasks::Named;
+use crate::api::tasks::{CustomField, Named};
 use crate::core::lanes::Lane;
 use crate::core::{Board, Column};
 
@@ -270,6 +270,37 @@ impl BoardView {
 
     pub fn selected_task(&self) -> Option<&BoardTask> {
         self.cell(self.lane, self.column).get(self.row)
+    }
+
+    /// The selected card's single-select fields, as the board knows them
+    /// (the project's fields and the card's values, F24), shaped like a
+    /// task's own so `F` works before the card's detail loads.
+    pub fn selected_fields(&self) -> Option<Vec<CustomField>> {
+        let task = self.selected_task()?;
+        Some(
+            self.board
+                .fields
+                .iter()
+                .map(|field| {
+                    let current = task.option_of(&field.gid);
+                    CustomField {
+                        gid: field.gid.clone(),
+                        name: field.name.clone(),
+                        display_value: None,
+                        resource_subtype: "enum".into(),
+                        enum_value: field
+                            .options
+                            .iter()
+                            .find(|o| current == Some(o.gid.as_str()))
+                            .map(|o| Named {
+                                gid: o.gid.clone(),
+                                name: o.name.clone(),
+                            }),
+                        enum_options: field.options.clone(),
+                    }
+                })
+                .collect(),
+        )
     }
 
     /// Sets the space the columns get: `width` cells across, `card_rows`

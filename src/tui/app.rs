@@ -1776,16 +1776,14 @@ impl App {
         let lane_field = (self.screen == Screen::Board)
             .then(|| self.board_view()?.lane_field())
             .flatten();
-        let Some((task_gid, detail)) = self.loaded_shown_task("Only tasks have fields") else {
+        let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
+            self.toast = Some(Toast::info("Only tasks have fields"));
             return Vec::new();
         };
-        let fields: Vec<CustomField> = detail
-            .task
-            .custom_fields
-            .iter()
-            .filter(|f| f.resource_subtype == "enum")
-            .cloned()
-            .collect();
+        let Some(fields) = self.select_fields_of(&task_gid) else {
+            self.toast = Some(Toast::info("Wait for the task to load"));
+            return Vec::new();
+        };
         let start = lane_field
             .and_then(|lane| fields.iter().find(|f| f.gid == lane.gid))
             .or_else(|| (fields.len() == 1).then(|| &fields[0]));
@@ -1813,6 +1811,28 @@ impl App {
             )),
         };
         Vec::new()
+    }
+
+    /// Task `gid`'s single-select fields: from its loaded detail, or else,
+    /// on the board, from the selected card's values the board loaded
+    /// (F24). `None` while neither is there.
+    fn select_fields_of(&self, gid: &str) -> Option<Vec<CustomField>> {
+        if let Some(Detail::Loaded(detail)) = self.details.get(gid) {
+            return Some(
+                detail
+                    .task
+                    .custom_fields
+                    .iter()
+                    .filter(|f| f.resource_subtype == "enum")
+                    .cloned()
+                    .collect(),
+            );
+        }
+        (self.screen == Screen::Board)
+            .then(|| self.board_view())
+            .flatten()
+            .filter(|view| view.selected_task().is_some_and(|t| t.gid == gid))
+            .and_then(BoardView::selected_fields)
     }
 
     /// Scrolls the detail pane for a motion command. Returns false for
@@ -2178,15 +2198,11 @@ impl App {
         match picker.stage.clone() {
             picker::Stage::SetFieldChoice => {
                 let task_gid = picker.task_gid.clone();
-                let field = match self.details.get(&task_gid) {
-                    Some(Detail::Loaded(detail)) => detail
-                        .task
-                        .custom_fields
-                        .iter()
-                        .find(|f| item.gid.as_deref() == Some(f.gid.as_str()))
-                        .cloned(),
-                    _ => None,
-                };
+                let field = self
+                    .select_fields_of(&task_gid)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .find(|f| item.gid.as_deref() == Some(f.gid.as_str()));
                 self.picker = field.map(|field| field_options_picker(task_gid, &field));
                 Vec::new()
             }
