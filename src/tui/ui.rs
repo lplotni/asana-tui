@@ -1979,6 +1979,27 @@ mod tests {
     }
 
     #[test]
+    fn the_field_picker_lists_none_and_the_options_with_the_current_one_checked() {
+        let mut app = board_app();
+        let item = |gid: &str, name: &str, checked: bool| crate::tui::picker::Item {
+            gid: Some(gid.into()),
+            name: name.into(),
+            checked,
+            note: None,
+        };
+        app.picker = Some(crate::tui::picker::Picker::field_options(
+            "t1".into(),
+            crate::api::tasks::Named {
+                gid: "f1".into(),
+                name: "Initiative".into(),
+            },
+            vec![item("o1", "Performance", false), item("o2", "Brand", true)],
+        ));
+
+        insta::assert_snapshot!(draw_at(&mut app, 100).backend());
+    }
+
+    #[test]
     fn the_board_hint_line_offers_lanes() {
         let app = board_app();
 
