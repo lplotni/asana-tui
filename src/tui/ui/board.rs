@@ -251,23 +251,21 @@ fn completing_card_lines<'a>(
     frame: u8,
 ) -> Vec<Line<'a>> {
     let name = card::truncate(&task.name, width);
-    let total = name.chars().count();
+    let characters = characters(&name);
+    let total = characters.len();
     let struck = if frame < STRIKE_FRAMES {
         (total * usize::from(frame + 1)).div_ceil(usize::from(STRIKE_FRAMES))
     } else {
         total
     };
-    let split = name
-        .char_indices()
-        .nth(struck)
-        .map_or(name.len(), |(i, _)| i);
+    let split: usize = characters[..struck].iter().map(|c| c.len()).sum();
     let crossed = |role| theme.style(role).add_modifier(Modifier::CROSSED_OUT);
     let mut spans: Vec<Span> = if frame < STRIKE_FRAMES {
         // A band of colours that moves along with the strike.
-        name[..split]
-            .chars()
+        characters[..struck]
+            .iter()
             .enumerate()
-            .map(|(i, c)| Span::styled(c.to_string(), crossed(celebrate(i + usize::from(frame)))))
+            .map(|(i, c)| Span::styled((*c).to_owned(), crossed(celebrate(i + usize::from(frame)))))
             .collect()
     } else {
         vec![Span::styled(
@@ -288,6 +286,29 @@ fn completing_card_lines<'a>(
     }
 }
 
+/// `text` split into the characters a reader sees: a zero-width code point
+/// (a combining mark, a variation selector, a zero-width joiner) stays with
+/// the one before it, and so does the code point after a joiner, so accents
+/// and joined emoji are struck and coloured whole.
+fn characters(text: &str) -> Vec<&str> {
+    use unicode_width::UnicodeWidthChar;
+    let mut characters: Vec<&str> = Vec::new();
+    let mut start = 0;
+    let mut joined = false;
+    for (i, c) in text.char_indices() {
+        let attaches = joined || c.width() == Some(0);
+        if i > 0 && !attaches {
+            characters.push(&text[start..i]);
+            start = i;
+        }
+        joined = c == '\u{200d}';
+    }
+    if start < text.len() {
+        characters.push(&text[start..]);
+    }
+    characters
+}
+
 /// The `n`th colour of the completion animation, cycling.
 fn celebrate(n: usize) -> Role {
     [
@@ -296,4 +317,43 @@ fn celebrate(n: usize) -> Role {
         Role::Celebrate3,
         Role::Celebrate4,
     ][n % 4]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(name: &str) -> crate::api::projects::BoardTask {
+        crate::api::projects::BoardTask {
+            custom_fields: Vec::new(),
+            gid: "1200000000000001".into(),
+            name: name.into(),
+            assignee: None,
+            due_on: None,
+            due_at: None,
+            memberships: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_strike_colours_whole_characters_not_their_parts() {
+        // A ZWJ emoji, then e with a combining acute accent.
+        let name = "👩\u{200d}💻 e\u{301}x";
+        let lines = completing_card_lines(&task(name), 40, &Theme::no_color(), STRIKE_FRAMES - 1);
+
+        let parts: Vec<&str> = lines[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        assert_eq!(parts, ["👩\u{200d}💻", " ", "e\u{301}", "x", ""]);
+    }
+
+    #[test]
+    fn the_strike_advances_by_whole_characters() {
+        let name = "e\u{301}e\u{301}e\u{301}";
+        let lines = completing_card_lines(&task(name), 40, &Theme::no_color(), 0);
+
+        let struck: String = lines[0].spans[..lines[0].spans.len() - 1]
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert_eq!(struck, "e\u{301}");
+    }
 }
