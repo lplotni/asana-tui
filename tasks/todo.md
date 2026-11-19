@@ -936,11 +936,11 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 
 ---
 
-### - [ ] T41: Release v0.3.0 (ask first)
+### - [x] T41: Release v0.3.0 (ask first)
 
 **Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.3.0`, push `main`, push the annotated tag, pull the formula commit. README: the skill needs `asn` 0.3.0 or later.
 
-**Dependencies:** T40, and the user's go-ahead. On hold at the user's request (2026-11-19).
+**Dependencies:** T40, and the user's go-ahead. Released at the user's request (2026-11-19), after the review fixes.
 
 **Files likely touched:** `Cargo.toml`, `Cargo.lock`, `README.md`
 

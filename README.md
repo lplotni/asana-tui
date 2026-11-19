@@ -13,7 +13,7 @@ I built `asn` to get a simple terminal UI for the way I work with Asana:
 
 The CLI is deliberately small as well. It covers the same use cases (`init`, `inbox`, `read`, `task`, `comment`, `desc`, `project add`, `project new`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
 
-> v0.2 adds project boards, creating, completing and assigning tasks, and @-mentions ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
+> v0.3 adds swimlanes and single-select fields on boards, a config file set up with `asn init`, names instead of GIDs in the CLI, and the asn skill for Claude Code. v0.2 added project boards, creating, completing and assigning tasks, and @-mentions ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
 
 ## Install
 
@@ -157,7 +157,7 @@ The repo is also a [Claude Code](https://claude.com/claude-code) plugin with an 
 /plugin install asn@asn
 ```
 
-The skill needs `asn` on your `PATH`, set up with `asn init`, and a version newer than 0.2.0 (until the next release: `cargo install --git https://github.com/lplotni/asana-tui`). It talks to Asana only through `asn`, and it follows four rules:
+The skill needs `asn` on your `PATH`, set up with `asn init`, and version 0.3.0 or later. It talks to Asana only through `asn`, and it follows four rules:
 
 - **Every read is announced.** When a task's content enters the conversation, Claude's reply starts with the task's `asn task --brief` receipt, which `asn` builds from fields only, so a task's own text can't change it.
 - **Every write is confirmed.** Claude shows the task, the target and the exact command, and runs it only after you say yes.
