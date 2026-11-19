@@ -31,7 +31,7 @@ cargo run --example screenshot -- lanes > docs/lanes.svg
 | `src/tui/mod.rs` | Event loop: runs `Effect`s as tokio tasks and sends back `Msg`s |
 | `src/tui/board.rs`, `picker.rs` | Pure sub-state: `BoardView` (columns or lanes, one grid of lanes × columns), and the pickers (stages) |
 | `src/tui/keys.rs` | The one keymap table (`BINDINGS`). Help and hints are generated from it |
-| `src/tui/ui.rs` | Rendering only. Styles come from `Theme` roles, never colours (ADR-004) |
+| `src/tui/ui.rs`, `ui/board.rs` | Rendering only (`ui/board.rs`: the board screen and its cards). Styles come from `Theme` roles, never colours (ADR-004) |
 | `tests/` | `wiremock` tests per API area, `cli.rs` (runs the binary), `fixtures/` (anonymized) |
 | `skills/asn/SKILL.md`, `.claude-plugin/` | The Claude Code skill and its plugin/marketplace manifests (F20). `tests/skill.rs` checks every `asn` command in the skill against the real help |
 
