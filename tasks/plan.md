@@ -117,7 +117,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 ### Phase 7: Swimlanes and single-select fields (F24–F27, see below; before v0.3.0)
 
 #### 7a: Data and CLI first (ADR-001)
-- [ ] T32: Spec F24–F27 in SPEC-board.md
+- [x] T32: Spec F24–F27 in SPEC-board.md
 - [ ] T33: Single-select fields on the board (project field settings, values on cards)
 - [ ] T34: `asn board <gid> --lanes <field>` (pure lane grouping)
 - [ ] T35: `asn task field` and `asn project fields` (set a single-select field by name)

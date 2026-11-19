@@ -730,13 +730,13 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-7-swimlanes-and-single-select-fields).
 
-### - [ ] T32: Spec F24–F27
+### - [x] T32: Spec F24–F27
 
 **Description:** New F sections in `docs/SPEC-board.md`: F24 single-select fields on the board (data, request budget), F25 `asn board --lanes`, `asn task field`, `asn project fields`, F26 the lane view and `v`, F27 `F` to set a field. Plus the API surface rows, keymap rows, assumptions (L1: the project's field settings list the fields cards use; L2: lanes stay readable at 80 columns) and Not Doing (other field types, multi-select lanes, editing field definitions, reordering lanes).
 
 **Acceptance criteria:**
-- [ ] F24–F27 describe the behaviour this plan builds, including empty lanes, the `(no <Field>)` lane, the `v` cycle and the picker.
-- [ ] The two Phase 7 open questions are answered and recorded.
+- [x] F24–F27 describe the behaviour this plan builds, including empty lanes, the `(no <Field>)` lane, the `v` cycle and the picker.
+- [x] The two Phase 7 open questions are answered and recorded.
 
 **Dependencies:** None
 
@@ -788,7 +788,7 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ### - [ ] T35: `asn task field` and `asn project fields`
 
-**Description:** `TASK_FIELDS` gains `custom_fields.resource_subtype,custom_fields.enum_value.name,custom_fields.enum_options.name,custom_fields.enum_options.enabled`. `core::set_field(client, task, field, option)` resolves the field among the task's single-select fields and the option among its enabled options (`resolve::pick`; `none` clears), then `PUT /tasks/{gid}` `{custom_fields: {field: option|null}}`. `asn task field <task> <field> <option|none>` prints `Initiative: Checkout`. `asn project fields <project>` prints each single-select field (`gid  name`) with its options indented.
+**Description:** `TASK_FIELDS` gains `custom_fields.resource_subtype,custom_fields.enum_value.name,custom_fields.enum_options.name,custom_fields.enum_options.enabled`. `core::set_field(client, task, field, option)` resolves the field among the task's single-select fields and the option among its enabled options (`resolve::pick`; `none` clears), then `PUT /tasks/{gid}` `{custom_fields: {field: option|null}}`. `asn task field <task> <field> <option|none>` prints `Initiative: Checkout`. `asn project fields <project gid|name>` (the project resolved as in F19) prints each single-select field (`gid  name`) with its options indented.
 
 **Acceptance criteria:**
 - [ ] Setting by names (any case, or the only match) writes the option GID; `none` writes `null`.
@@ -882,6 +882,7 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 - [ ] The picker lists only single-select fields and enabled options; `(none)` clears.
 - [ ] In the lanes view the card ends up selected in its new lane after the reload.
 - [ ] `F` is in `BINDINGS` (help and hints pick it up); the hint line shows `field` on the board.
+- [ ] `Tab q` in a lane creates the task in that section and sets the lane's option (F26); if that fails, a toast says so and the card is in `(no <Field>)`.
 
 **Verification:**
 - [ ] App tests (picker stages, effect, reload, cursor follows, failure); a snapshot of the option picker.

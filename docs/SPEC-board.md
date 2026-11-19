@@ -27,6 +27,9 @@ You reach a board three ways: the project switcher (`P`), `b` on an Inbox task, 
 | New task (F14) | `POST /tasks` `{name, projects: [project]}`, then `POST /sections/{section}/addTask` `{task}` | Unassigned. `addTask` puts it at the top of the section. |
 | Cards | `GET /projects/{gid}/tasks?completed_since=now&limit=100&opt_fields=name,assignee.name,due_on,due_at,memberships.project.gid,memberships.section.gid` | Follows `next_page` until `null`. `completed_since=now` returns open tasks only. Top-level tasks only (subtasks aren't project members unless added). |
 | Project switcher | `GET /workspaces/{gid}/typeahead?resource_type=project` | Already used by F5 (`core::search_projects`). |
+| Single-select fields (F24) | `GET /projects/{gid}/custom_field_settings?opt_fields=custom_field.name,custom_field.resource_subtype,custom_field.enum_options.name,custom_field.enum_options.enabled` | Follows `next_page`. Only `enum` fields are kept. |
+| Card values (F24) | `custom_fields.gid,custom_fields.enum_value.gid` added to the cards' `opt_fields` | |
+| Set a field (F25, F27) | `PUT /tasks/{gid}` `{custom_fields: {<field gid>: <option gid> \| null}}` | The task's own fields and options come from `GET /tasks/{gid}` (`custom_fields.resource_subtype,enum_value.name,enum_options.name,enum_options.enabled`). |
 
 A card's column is its membership whose `project.gid` is this project. Other memberships are ignored, because a task can be in several projects. A task whose section isn't in the section list goes into a leading **(no section)** column, which is shown only when it has cards.
 
@@ -89,6 +92,8 @@ A card's column is its membership whose `project.gid` is this project. Other mem
 | `Tab q` | board | new task in the selected column (F14) | Asana |
 | `d` | Inbox, board | complete / reopen the task (F16); `d` again right after undoes | asn |
 | `Tab a` | Inbox, board | assign the task (F17) | Asana |
+| `v` | board | columns ↔ lanes by each single-select field (F26) | asn |
+| `F` | Inbox, board | set a single-select field (F27) | asn |
 
 `V` (visual mode), `e`/`u`/`x` (read state) and `f` (unread filter) are Inbox-only and do nothing on the board. The hint line gets a `board` context. The help overlay and the no-collision test both cover the new bindings, because they are generated from the same table in `keys.rs`.
 
@@ -203,6 +208,51 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
 - App tests: the animation's state from `d` through the frames to removal; undo during it; a reload during it is held; a failure restores; animations off removes at once.
 - Snapshots: a card mid-strike and mid-collapse.
 
+## Feature Spec — Swimlanes and single-select fields (F24–F27)
+
+Added after F23 at the user's request (2026-11-19), before v0.3.0. The user chose a grid of lanes, lanes by any single-select field, and editing single-select fields only.
+
+### F24. Single-select fields on the board
+
+- A board also loads the project's custom field settings (`GET /projects/{gid}/custom_field_settings`, in the same parallel load as the rest). Its **single-select fields** (Asana `resource_subtype` `enum`) are kept, each with its options in Asana's order. Disabled options are kept but never offered for editing. Other field types are ignored by F24–F27.
+- Each card also carries its value for those fields (`custom_fields.gid`, `custom_fields.enum_value.gid`).
+- **Request budget:** one load is 3 + ⌈tasks / 100⌉ requests (6 for 300 tasks), still polled only while the board is on screen.
+
+### F25. CLI
+
+```
+asn board <project-gid> --lanes <field>        # tasks by lane, then section
+asn task field <task-gid> <field> <option|none> # set (or clear) a single-select field
+asn project fields <project-gid|name>          # a project's single-select fields and their options
+```
+
+- `--lanes` takes a field name or GID among the board's single-select fields, matched as in F19 (exact name ignoring case, else the only match; otherwise nothing is printed, exit 1, candidates on stderr). Text output: per lane, a line `option-gid  option-name` (empty gid and `(no <Field>)` for tasks without a value), then that lane's sections and tasks as in F13, each indented one more level. Every lane lists every section, so lanes line up.
+- `--json`: each task in `tasks` now includes its `custom_fields` (field and option GIDs; additive, agreed 2026-11-19). With `--lanes`, the object also has `"lanes": [{"option": {gid, name} | null, "sections": [{"section": gid | null, "tasks": [task gids]}]}]`.
+- `asn task field` resolves the field among the task's single-select fields and the option among that field's enabled options, both as in F19; `none` clears the field. It prints `<Field>: <Option>` (or `<Field>: none`). An unresolved name, a disabled option, or a field that isn't single-select writes nothing and exits 1.
+- `asn project fields` prints each single-select field as `gid  name`, followed by its enabled options as indented `gid  name` lines.
+
+### F26. Lanes view (`v`)
+
+- **Toggle:** `v` on a board cycles Columns → Lanes by each single-select field (a field named "Initiative" first, ignoring case, then the project's order) → Columns. A board without single-select fields shows the toast `No single-select fields on this board`. The layout is remembered per board for the session, like its cursor.
+- **Layout:** the header reads `<Project> · lanes: <Field>`. Each lane is a header line `<Option> (n)` in the `title` role over the board's section columns, separated from the next lane by a `border` line. Lanes follow the field's option order, then `(no <Field>)`; lanes without cards are hidden. Columns have the same widths and horizontal paging as F9, shared by all lanes, so they line up. A lane is as tall as its tallest cell; the whole grid scrolls vertically to keep the selected card visible.
+- **Cursor:** `h`/`l` move between columns within the lane (an empty cell can be selected, as an empty column can in F9). `j`/`k` move within a cell and continue into the same column of the next or previous lane that has a card there. `gg`/`G` go to the first or last card of the column across lanes. `/`, `n`, `N` search in grid order. After a reload, a layout switch or a field change, the cursor stays on the same task GID.
+- **Actions** work as in columns view: `Enter`, `c`, `Tab e`, `p`, `m`, `o`, `d` (the F23 animation plays in the cell), `Tab a`, `F`. `Tab q` creates the task in the selected cell's section **and sets the lane's option**, as a further request after F14's two. If that fails, a toast says `Created, but not in <Option>: …`, and the task is in `(no <Field>)`.
+- Card text, `NO_COLOR` and the bidi pass are as in F9.
+
+### F27. Set a single-select field (`F`)
+
+- `F` on a task (an Inbox task, a board card, or its detail) opens a picker titled `Set field` with the task's single-select fields as `<Field>: <current option or —>`. In the lanes view it starts with the lane field; with a single field it starts there too. Choosing a field lists its enabled options (the current one marked) and `(none)`. The picker uses the fzf keys of F5. `Esc` goes back a step, then closes.
+- `Enter` on an option writes it (`PUT /tasks/{gid}` `{custom_fields: {<field>: <option> | null}}`). On success a toast says `<Field>: <Option>`, the detail shows the new value, and a board reloads with the cursor following the card into its new lane. On failure an error toast is shown and nothing changes.
+- A task without single-select fields gets the toast `No single-select fields on this task`.
+
+**Tests (F24–F27):**
+- Wiremock: field settings (single-select kept; multi-select and text dropped; pagination), card values, `set_field` by names and GIDs, clearing, and no `PUT` for an ambiguous or disabled option.
+- `core::lanes`: option order, `(no <Field>)`, hidden empty lanes, every lane has every section, a task in two projects.
+- `tui/board.rs`: grid navigation across uneven lanes and empty cells, paging, cursor by GID across layouts and reloads.
+- App tests: the `v` cycle and its toast, the `F` picker stages, the write effect, the reload, the cursor following the card, `Tab q` in a lane.
+- Snapshots: lanes fitting, lanes paged, a tall grid scrolled down, `NO_COLOR`, the option picker.
+- CLI: `--lanes` text and JSON, `asn task field`, `asn project fields`, and exit 1 with candidates.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**
@@ -304,6 +354,10 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [ ] **A4: Hiding completed tasks matches how the board is read.** Test: dogfood. The web board collapses them by default.
 - [x] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Confirmed in planning: `selected_task_gid()` was already that seam (search used it); T5 made it return the selected card. Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
 
+- [ ] **L1: The project's custom field settings list the single-select fields its cards use (Initiative).** Test: Checkpoint L1, `asn project fields` and `asn board --lanes Initiative` against the web board. If cards use fields that aren't the project's, lanes can't show them; `F` still edits them through the task.
+- [ ] **L2: The grid stays readable at 80 columns with several lanes.** Test: Checkpoint L2. If not, first try hiding the lane separator line, before collapsing lanes.
+- [ ] **L3: Option order is how the team reads lanes.** Test: dogfood. If not, consider sorting by card count.
+
 - [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.
 
 ## Not Doing (and Why)
@@ -315,6 +369,11 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** 60 s polling and session recents cover the job, and nothing is written to disk.
 - **Showing completed tasks:** they are hidden, to keep columns about current work.
 - **Multiple boards side by side, portfolios, My Tasks board:** one project at a time. "My Tasks" as a startup view stays a separate idea.
+
+- **(F24–F27) Editing other field types** (multi-select, text, number, date, people): single-select covers Initiative; each other type needs its own editor.
+- **(F24–F27) Lanes by multi-select fields:** a card would need to appear in several lanes.
+- **(F24–F27) Lanes by assignee, section or due date:** only single-select fields for now.
+- **(F24–F27) Editing field definitions or options, reordering or collapsing lanes:** done in Asana; the board shows the result.
 
 ## Findings from Use
 
