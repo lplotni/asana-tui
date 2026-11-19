@@ -806,11 +806,11 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] Checkpoint L1: data is right
+### - [x] Checkpoint L1: data is right
 
-- [ ] `asn board <gid> --lanes Initiative` on 1–2 real projects matches the web board grouped by Initiative.
-- [ ] `asn task field <task> Initiative <option>` and `… none` show up in the web app.
-- [ ] Human review before the TUI.
+- [x] `asn board <gid> --lanes Initiative` on 1–2 real projects matches the web board grouped by Initiative.
+- [x] `asn task field <task> Initiative <option>` and `… none` show up in the web app.
+- [x] Human review before the TUI. Confirmed by the user on real data (2026-11-19).
 
 ---
 

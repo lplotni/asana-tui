@@ -123,9 +123,9 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T35: `asn task field` and `asn project fields` (set a single-select field by name)
 
 #### Checkpoint L1: data is right
-- [ ] `asn board --lanes Initiative` matches the web board grouped by Initiative on 1–2 real projects
-- [ ] `asn task field <task> Initiative <option>` shows up in the web app; clearing it too
-- [ ] Human review before the TUI
+- [x] `asn board --lanes Initiative` matches the web board grouped by Initiative on 1–2 real projects
+- [x] `asn task field <task> Initiative <option>` shows up in the web app; clearing it too
+- [x] Human review before the TUI (the user, 2026-11-19)
 
 #### 7b: TUI
 - [x] T36: Help overlay makes room for new keys (room for three; Phase 7 needs two)
