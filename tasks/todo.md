@@ -903,12 +903,12 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T40: Skill, README, help and screenshot
+### - [x] T40: Skill, README, help and screenshot
 
 **Description:** The skill learns `asn board --lanes`, `asn task field` and `asn project fields` (a write, so rule 2 applies); the drift test covers them. README: the lanes view, `v`, `F`, the new commands, the additive `custom_fields` in `asn board --json`. A lanes screenshot from the screenshot example (made-up data). Spec ticks and findings.
 
 **Acceptance criteria:**
-- [ ] README, `asn --help`, the help overlay, the skill and F24–F27 agree.
+- [x] README, `asn --help`, the help overlay, the skill and F24–F27 agree.
 
 **Dependencies:** T39
 

@@ -382,6 +382,8 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 
 - Checkpoints A–C (2026-11-17): board order, load time, card readability and every success criterion confirmed by the user on real projects.
 - The editor and pickers were too small on large terminals; they now grow with the terminal, and the editor soft-wraps long lines (a change outside this spec, made at the user's request during Checkpoint C).
+- Checkpoints L1 and L2 (2026-11-19): `asn board --lanes`, `asn task field` and `asn project fields` matched the web app on real projects; the lanes view, `v` and `F` worked at 80, 120 and 200 columns.
+- Building F26–F27: the help overlay was full, so `j / k` and `n / N` now share a line each (one spare row is left); the board's status position counts the selected cell; the grid never scrolls past its end; the `F` picker works like `m` (no typed filter).
 
 ## Open Questions
 

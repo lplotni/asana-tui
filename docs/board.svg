@@ -50,37 +50,41 @@
 <rect x="16.0" y="402.4" width="8.4" height="16.8" fill="#282828"/>
 <rect x="24.4" y="402.4" width="25.2" height="16.8" fill="#282828"/>
 <text x="24.4" y="415.5" fill="#fabd2f" font-weight="bold" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">j/k</text>
-<rect x="49.6" y="402.4" width="67.2" height="16.8" fill="#282828"/>
-<text x="49.6" y="415.5" fill="#928374" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> move   </text>
-<rect x="116.8" y="402.4" width="42.0" height="16.8" fill="#282828"/>
-<text x="116.8" y="415.5" fill="#fabd2f" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Enter</text>
-<rect x="158.8" y="402.4" width="67.2" height="16.8" fill="#282828"/>
-<text x="158.8" y="415.5" fill="#928374" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> open   </text>
-<rect x="226.0" y="402.4" width="25.2" height="16.8" fill="#282828"/>
-<text x="226.0" y="415.5" fill="#fabd2f" font-weight="bold" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">h/l</text>
-<rect x="251.2" y="402.4" width="84.0" height="16.8" fill="#282828"/>
-<text x="251.2" y="415.5" fill="#928374" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> column   </text>
-<rect x="335.2" y="402.4" width="8.4" height="16.8" fill="#282828"/>
-<text x="335.2" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">P</text>
-<rect x="343.6" y="402.4" width="100.8" height="16.8" fill="#282828"/>
-<text x="343.6" y="415.5" fill="#928374" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> projects   </text>
-<rect x="444.4" y="402.4" width="8.4" height="16.8" fill="#282828"/>
-<text x="444.4" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">/</text>
-<rect x="452.8" y="402.4" width="67.2" height="16.8" fill="#282828"/>
-<text x="452.8" y="415.5" fill="#928374" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> find   </text>
-<rect x="520.0" y="402.4" width="33.6" height="16.8" fill="#282828"/>
-<text x="520.0" y="415.5" fill="#fabd2f" font-weight="bold" textLength="33.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">gg/G</text>
-<rect x="553.6" y="402.4" width="117.6" height="16.8" fill="#282828"/>
-<text x="553.6" y="415.5" fill="#928374" textLength="117.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> top/bottom   </text>
-<rect x="671.2" y="402.4" width="8.4" height="16.8" fill="#282828"/>
-<text x="671.2" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">R</text>
-<rect x="679.6" y="402.4" width="92.4" height="16.8" fill="#282828"/>
-<text x="679.6" y="415.5" fill="#928374" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> refresh   </text>
-<rect x="772.0" y="402.4" width="8.4" height="16.8" fill="#282828"/>
-<text x="772.0" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">?</text>
-<rect x="780.4" y="402.4" width="67.2" height="16.8" fill="#282828"/>
-<text x="780.4" y="415.5" fill="#928374" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> help   </text>
-<rect x="847.6" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<rect x="49.6" y="402.4" width="58.8" height="16.8" fill="#282828"/>
+<text x="49.6" y="415.5" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> move  </text>
+<rect x="108.4" y="402.4" width="42.0" height="16.8" fill="#282828"/>
+<text x="108.4" y="415.5" fill="#fabd2f" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Enter</text>
+<rect x="150.4" y="402.4" width="58.8" height="16.8" fill="#282828"/>
+<text x="150.4" y="415.5" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> open  </text>
+<rect x="209.2" y="402.4" width="25.2" height="16.8" fill="#282828"/>
+<text x="209.2" y="415.5" fill="#fabd2f" font-weight="bold" textLength="25.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">h/l</text>
+<rect x="234.4" y="402.4" width="75.6" height="16.8" fill="#282828"/>
+<text x="234.4" y="415.5" fill="#928374" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> column  </text>
+<rect x="310.0" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<text x="310.0" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">c</text>
+<rect x="318.4" y="402.4" width="84.0" height="16.8" fill="#282828"/>
+<text x="318.4" y="415.5" fill="#928374" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> comment  </text>
+<rect x="402.4" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<text x="402.4" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">m</text>
+<rect x="410.8" y="402.4" width="58.8" height="16.8" fill="#282828"/>
+<text x="410.8" y="415.5" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> move  </text>
+<rect x="469.6" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<text x="469.6" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">p</text>
+<rect x="478.0" y="402.4" width="84.0" height="16.8" fill="#282828"/>
+<text x="478.0" y="415.5" fill="#928374" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> project  </text>
+<rect x="562.0" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<text x="562.0" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">d</text>
+<rect x="570.4" y="402.4" width="58.8" height="16.8" fill="#282828"/>
+<text x="570.4" y="415.5" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> done  </text>
+<rect x="629.2" y="402.4" width="42.0" height="16.8" fill="#282828"/>
+<text x="629.2" y="415.5" fill="#fabd2f" font-weight="bold" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Tab q</text>
+<rect x="671.2" y="402.4" width="92.4" height="16.8" fill="#282828"/>
+<text x="671.2" y="415.5" fill="#928374" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> new task  </text>
+<rect x="763.6" y="402.4" width="8.4" height="16.8" fill="#282828"/>
+<text x="763.6" y="415.5" fill="#fabd2f" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">?</text>
+<rect x="772.0" y="402.4" width="58.8" height="16.8" fill="#282828"/>
+<text x="772.0" y="415.5" fill="#928374" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> help  </text>
+<rect x="830.8" y="402.4" width="25.2" height="16.8" fill="#282828"/>
 <path d="M20.2 41.2L24.4 41.2M20.2 41.2L20.2 49.6" stroke="#83a598" stroke-width="2.4" stroke-linecap="square"/>
 <path d="M137.8 41.2L133.6 41.2M137.8 41.2L142.0 41.2" stroke="#83a598" stroke-width="2.4" stroke-linecap="square"/>
 <path d="M146.2 41.2L142.0 41.2M146.2 41.2L150.4 41.2" stroke="#83a598" stroke-width="2.4" stroke-linecap="square"/>

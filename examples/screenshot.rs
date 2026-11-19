@@ -2,9 +2,10 @@
 //!
 //!     cargo run --example screenshot > docs/screenshot.svg
 //!     cargo run --example screenshot -- board > docs/board.svg
+//!     cargo run --example screenshot -- lanes > docs/lanes.svg
 
 use asn::api::notifications::{Actor, Notification, Story, WorkObject};
-use asn::api::projects::BoardTask;
+use asn::api::projects::{BoardTask, FieldValue, OptionRef, SelectField, SelectOption};
 use asn::api::tasks::{CustomField, Membership, Named, Task, TaskStory};
 use asn::core::{Board, Column, TaskDetail};
 use asn::present::format;
@@ -32,6 +33,7 @@ fn main() {
 
     let app = match std::env::args().nth(1).as_deref() {
         Some("board") => board_app(),
+        Some("lanes") => lanes_app(),
         _ => inbox_app(),
     };
 
@@ -67,6 +69,54 @@ fn board_app() -> App {
         result: Ok(demo_board()),
     });
     app
+}
+
+/// The project board in lanes by Initiative, as after pressing `v`.
+fn lanes_app() -> App {
+    let (mut app, _) = App::new_on_board("5000000000000000".into());
+    app.update(Msg::Resize(ui::sizes(Rect::new(0, 0, WIDTH, HEIGHT))));
+    app.update(Msg::BoardLoaded {
+        project_gid: "5000000000000000".into(),
+        result: Ok(demo_lanes_board()),
+    });
+    app.update(Msg::Key(ratatui::crossterm::event::KeyEvent::new(
+        ratatui::crossterm::event::KeyCode::Char('v'),
+        ratatui::crossterm::event::KeyModifiers::NONE,
+    )));
+    app
+}
+
+/// The demo board with a fictional Initiative field: Performance, Brand,
+/// and two cards without one.
+fn demo_lanes_board() -> Board {
+    let option = |gid: &str, name: &str| SelectOption {
+        gid: gid.into(),
+        name: name.into(),
+        enabled: true,
+    };
+    let mut board = demo_board();
+    board.fields = vec![SelectField {
+        gid: "5000000000000010".into(),
+        name: "Initiative".into(),
+        options: vec![
+            option("5000000000000011", "Performance"),
+            option("5000000000000012", "Brand"),
+        ],
+    }];
+    for column in &mut board.columns {
+        for task in &mut column.tasks {
+            let value = match task.gid.as_str() {
+                "52" | "55" | "58" => Some("5000000000000011"),
+                "51" | "56" | "57" => Some("5000000000000012"),
+                _ => None,
+            };
+            task.custom_fields = vec![FieldValue {
+                gid: "5000000000000010".into(),
+                enum_value: value.map(|v| OptionRef { gid: v.into() }),
+            }];
+        }
+    }
+    board
 }
 
 /// A fictional project: four sections, so one is paged off to the right.

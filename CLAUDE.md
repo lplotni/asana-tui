@@ -13,6 +13,7 @@ cargo test                       # unit, wiremock API tests, TestBackend snapsho
 cargo run -- --project <gid>     # the TUI on a board (needs ASANA_TOKEN and ASANA_WORKSPACE)
 cargo run --example screenshot > docs/screenshot.svg            # README images (made-up data)
 cargo run --example screenshot -- board > docs/board.svg
+cargo run --example screenshot -- lanes > docs/lanes.svg
 ```
 
 - If `cargo` isn't found, rustup lives at `/opt/homebrew/opt/rustup/bin`: `export PATH="/opt/homebrew/opt/rustup/bin:$PATH"`.
@@ -28,7 +29,7 @@ cargo run --example screenshot -- board > docs/board.svg
 | `src/present/` | UI-neutral text: task detail lines, card text, date formatting |
 | `src/tui/app.rs` | Pure state machine: `App::update(Msg) -> Vec<Effect>`, no I/O (ADR-002) |
 | `src/tui/mod.rs` | Event loop: runs `Effect`s as tokio tasks and sends back `Msg`s |
-| `src/tui/board.rs`, `picker.rs` | Pure sub-state: `BoardView`, and the search pickers (stages) |
+| `src/tui/board.rs`, `picker.rs` | Pure sub-state: `BoardView` (columns or lanes, one grid of lanes × columns), and the pickers (stages) |
 | `src/tui/keys.rs` | The one keymap table (`BINDINGS`). Help and hints are generated from it |
 | `src/tui/ui.rs` | Rendering only. Styles come from `Theme` roles, never colours (ADR-004) |
 | `tests/` | `wiremock` tests per API area, `cli.rs` (runs the binary), `fixtures/` (anonymized) |

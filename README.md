@@ -95,6 +95,12 @@ The bottom line always shows the keys that work in the current context, and `?` 
 
 ![asn showing a project board with four sections, one of them paged off to the right](docs/board.svg)
 
+**Swimlanes.** `v` splits the board into lanes by a single-select field such as Initiative: one lane per option (in the field's order, then the cards without one), each with the board's sections as columns, lined up across lanes. `v` again goes to the board's next single-select field (Initiative first), then back to columns; each board remembers its layout for the session. In lanes, `j`/`k` continue into the next or previous lane, and `Tab q` creates the task in that lane.
+
+![asn showing the board in lanes by Initiative: Performance, Brand and cards without an initiative](docs/lanes.svg)
+
+`F` sets a single-select field of the selected task, on a board or in the Inbox: choose the field (in lanes it starts with the lane field), then an option or `(none)`. On a board the card moves to its new lane.
+
 | Keys | |
 |---|---|
 | `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move within the column (with counts) |
@@ -103,7 +109,9 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
 | `d` | Complete the card: it's struck through and leaves the column (at once with `animations = false`); `d` as the very next key reopens it |
 | `Tab a` | Assign the card (its initials change once the board reloads) |
-| `Tab q` | New task in this column: type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
+| `Tab q` | New task in this column (and lane): type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
+| `v` | Columns, then lanes by each single-select field, then columns again |
+| `F` | Set a single-select field (e.g. Initiative) of the card |
 | `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
 | `P` | Open another board; with nothing typed, `Enter` goes back to the last one |
 | `Tab i` | Back to the Inbox, where you left it (boards keep their place too) |
@@ -120,20 +128,23 @@ asn task <task-gid>                     # a task with its description, attachmen
 asn task <task-gid> --brief             # a short receipt: where it is, who has it, due, counts (no description or comment text)
 asn task done <task-gid> [--undo]       # mark it complete (or incomplete again)
 asn task assign <task-gid> "Ada Lovelace"   # a name, a user gid, `me`, or `none`; prints the new assignee
+asn task field <task-gid> Initiative Checkout   # set a single-select field (or `none` to clear it); prints "Initiative: Checkout"
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project
 asn users ada                           # people in the workspace: gid and name (tab-separated)
 asn projects web                        # projects in the workspace: gid and name (tab-separated)
 asn project add <task-gid> Ops [--section "In Review"]       # keeps the task's other projects; prints where it landed
 asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
+asn project fields "Web Platform"       # a project's single-select fields, each followed by its options
 asn project move <task-gid> "In Review"      # to another section of a project it's in; prints where it went
 asn project new "Web Platform" [--section Backlog] Write the launch post   # create an unassigned task; prints its gid
 asn board <project-gid>                 # open tasks by section: section lines, then indented gid, name, assignee, due (--json too)
+asn board <project-gid> --lanes Initiative   # the same, per lane: lane lines, then that lane's sections and tasks
 asn --project <project-gid>             # open the TUI on that project's board
 asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
 ```
 
-`asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.
+`asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem. With `--json`, tasks from `asn board` and `asn task` include their `custom_fields` (field and option GIDs, and for `asn task` the field type and options).
 
 People, projects and sections can be given by name or by gid. A name is used only when it matches exactly (ignoring case) or matches a single candidate; sections are matched among the task's (or the named project's) own sections, and part of a section name is enough. Anything else writes nothing, exits `1`, and lists the candidates on stderr as `gid  name` lines, so you can run the command again with a gid.
 
@@ -196,9 +207,10 @@ These come from Asana's public API (most from the [Notifications API](https://fo
 cargo test
 cargo run --example screenshot > docs/screenshot.svg            # regenerate the screenshots (made-up data)
 cargo run --example screenshot -- board > docs/board.svg
+cargo run --example screenshot -- lanes > docs/lanes.svg
 ```
 
-Why it's built this way: [architecture decisions](docs/decisions/README.md). Specs: [v0.1](docs/SPEC.md), [v0.2](docs/SPEC-board.md).
+Why it's built this way: [architecture decisions](docs/decisions/README.md). Specs: [v0.1](docs/SPEC.md), [v0.2 and boards](docs/SPEC-board.md), [Claude Code](docs/SPEC-skill.md).
 
 Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.
 

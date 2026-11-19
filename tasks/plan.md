@@ -138,7 +138,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] Human review
 
 #### 7c: Ship
-- [ ] T40: Skill, README, help, screenshot and spec updates
+- [x] T40: Skill, README, help, screenshot and spec updates
 - [ ] T41: Release v0.3.0 (ask first)
 
 ## Phase 6: asn in Claude Code
