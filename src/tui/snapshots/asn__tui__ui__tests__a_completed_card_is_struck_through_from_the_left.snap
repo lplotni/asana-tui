@@ -25,4 +25,4 @@ expression: terminal.backend()
 "┃                            ┃│                            ││                            ││                            │"
 "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛└────────────────────────────┘└────────────────────────────┘└────────────────────────────┘"
 " NORMAL  1/2                                                                                                            "
-" j/k move  Enter open  h/l column  c comment  m move  p project  d done  Tab q new task  Tab a assign  ? help           "
+" j/k move  Enter open  h/l column  c comment  m move  p project  d done  Tab q new task  Tab a assign  v lanes  ? help  "

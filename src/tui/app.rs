@@ -1213,6 +1213,14 @@ impl App {
             }
             Cmd::Help => self.help = true,
             Cmd::Refresh => return self.reload_board(),
+            Cmd::CycleLayout => {
+                if self
+                    .board_view_mut()
+                    .is_some_and(|view| !view.cycle_layout())
+                {
+                    self.toast = Some(Toast::info("No single-select fields on this board"));
+                }
+            }
             Cmd::Quit | Cmd::ForceQuit => self.should_quit = true,
             _ => {}
         }

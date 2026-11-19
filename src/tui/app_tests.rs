@@ -3874,3 +3874,61 @@ fn tab_a_works_on_an_inbox_task_too() {
         }]
     );
 }
+
+// --- Lanes (F26, T38) ---
+
+/// The [2, 2] project board with an Initiative field (o1 Checkout): card
+/// c0-0 is in Checkout, the others have no value.
+fn board_with_initiative() -> crate::core::Board {
+    use crate::api::projects::{FieldValue, OptionRef, SelectField, SelectOption};
+    let mut board = project_board(&[2, 2]);
+    board.fields = vec![SelectField {
+        gid: "f1".into(),
+        name: "Initiative".into(),
+        options: vec![SelectOption {
+            gid: "o1".into(),
+            name: "Checkout".into(),
+            enabled: true,
+        }],
+    }];
+    board.columns[0].tasks[0].custom_fields = vec![FieldValue {
+        gid: "f1".into(),
+        enum_value: Some(OptionRef { gid: "o1".into() }),
+    }];
+    board
+}
+
+#[test]
+fn v_switches_the_board_to_lanes_and_back() {
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_initiative()),
+    });
+
+    keys(&mut app, "v");
+    assert_eq!(
+        app.board_view().unwrap().layout(),
+        &crate::tui::board::Layout::Lanes { field: "f1".into() }
+    );
+    keys(&mut app, "v");
+    assert_eq!(
+        app.board_view().unwrap().layout(),
+        &crate::tui::board::Layout::Columns
+    );
+}
+
+#[test]
+fn v_on_a_board_without_single_select_fields_says_so() {
+    let mut app = on_board(&[2, 2]);
+
+    keys(&mut app, "v");
+
+    let toast = app.toast.as_ref().unwrap();
+    assert_eq!(toast.text, "No single-select fields on this board");
+    assert!(!toast.is_error);
+    assert_eq!(
+        app.board_view().unwrap().layout(),
+        &crate::tui::board::Layout::Columns
+    );
+}

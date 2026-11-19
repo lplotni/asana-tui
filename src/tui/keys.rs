@@ -67,6 +67,8 @@ pub enum Cmd {
     OpenInBrowser,
     ToggleFilter,
     Refresh,
+    /// Board: columns, then lanes by each single-select field (F26).
+    CycleLayout,
     CommandLine,
     /// Back out of visual mode or the detail pane, else quit.
     Quit,
@@ -261,6 +263,13 @@ pub const BINDINGS: &[Binding] = &[
     ),
     bind(Normal, &[Tab, Char('a')], Cmd::Assign, Asana, "assign"),
     bind(Normal, &[Char('R')], Cmd::Refresh, Asn, "refresh"),
+    bind(
+        Normal,
+        &[Char('v')],
+        Cmd::CycleLayout,
+        Asn,
+        "board lanes / columns",
+    ),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),
     bind(
         Normal,
@@ -704,6 +713,7 @@ mod tests {
             (&[Char('o')], Cmd::OpenInBrowser),
             (&[Char('f')], Cmd::ToggleFilter),
             (&[Char('R')], Cmd::Refresh),
+            (&[Char('v')], Cmd::CycleLayout),
             (&[Char(':')], Cmd::CommandLine),
             (&[Char('q')], Cmd::Quit),
             (&[Char('?')], Cmd::Help),

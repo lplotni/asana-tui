@@ -853,17 +853,17 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T38: `v` toggles columns ↔ lanes, and the grid is drawn
+### - [x] T38: `v` toggles columns ↔ lanes, and the grid is drawn
 
 **Description:** `v` on the board cycles Columns → Lanes by each single-select field (Initiative first if present, then the project's order) → Columns; with no single-select field a toast says so. The header shows `lanes: <Field>`. The grid draws each lane as a header line (`<Option> (n)`, `title` role) over the section columns, with lanes scrolling vertically to keep the selected card visible. The layout is remembered per board for the session.
 
 **Acceptance criteria:**
-- [ ] `v` cycles as described and the toast appears on a board without single-select fields.
-- [ ] At 80, 120 and 200 columns the grid is readable; hidden-column markers work as in columns view.
-- [ ] `NO_COLOR` and the bidi pass apply (drawn inside `ui::render`).
+- [x] `v` cycles as described and the toast appears on a board without single-select fields.
+- [x] At 80, 120 and 200 columns the grid is readable; hidden-column markers work as in columns view.
+- [x] `NO_COLOR` and the bidi pass apply (drawn inside `ui::render`).
 
 **Verification:**
-- [ ] App tests for the cycle and the toast; `TestBackend` snapshots: lanes fitting, lanes paged, a tall grid scrolled to a lower lane, `NO_COLOR`.
+- [x] App tests for the cycle and the toast; `TestBackend` snapshots: lanes fitting, lanes paged, a tall grid scrolled to a lower lane, `NO_COLOR`.
 - [ ] Manual: a real board with Initiative.
 
 **Dependencies:** T36, T37

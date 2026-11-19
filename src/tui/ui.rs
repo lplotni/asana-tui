@@ -9,7 +9,7 @@ use ratatui::widgets::{
 };
 
 use super::app::{App, BoardState, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Screen, Sizes};
-use super::board::{BoardView, STRIKE_FRAMES};
+use super::board::{BoardView, CARD_LINES, STRIKE_FRAMES};
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -20,7 +20,7 @@ use crate::present::{card, detail};
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
 /// Lines per board card.
-const CARD_HEIGHT: u16 = 2;
+const CARD_HEIGHT: u16 = CARD_LINES as u16;
 
 /// Commands that share one help line (`j / k  down / up`), to keep the
 /// overlay within 24 rows. Pairs must not make the widest line wider.
@@ -268,6 +268,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::NewTask), "new task"),
             (normal(Cmd::Assign), "assign"),
+            (normal(Cmd::CycleLayout), "lanes"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Search), "find"),
@@ -501,7 +502,10 @@ fn render_board_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) 
     let title = match view {
         Some(view) => {
             let open: usize = view.columns().iter().map(|c| c.tasks.len()).sum();
-            format!(" {} · {open} open", view.project().name)
+            match view.lane_field_name() {
+                Some(field) => format!(" {} · {open} open · lanes: {field}", view.project().name),
+                None => format!(" {} · {open} open", view.project().name),
+            }
         }
         None => " Board".to_owned(),
     };
@@ -538,7 +542,10 @@ fn render_board_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) 
 fn render_board(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
     let message = match app.board().map(|b| &b.state) {
         Some(BoardState::Loaded(view)) => {
-            render_columns(frame, area, view, theme, now);
+            match view.lane_field_name() {
+                Some(field) => render_lanes(frame, area, view, field, theme, now),
+                None => render_columns(frame, area, view, theme, now),
+            }
             return;
         }
         Some(BoardState::Failed(message)) => {
@@ -584,9 +591,9 @@ fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme
             .iter()
             .map(|task| match completing {
                 Some((gid, frame)) if gid == task.gid => {
-                    completing_card_item(task, text_width, theme, frame)
+                    ListItem::new(completing_card_lines(task, text_width, theme, frame))
                 }
-                _ => card_item(task, text_width, theme, now),
+                _ => ListItem::new(card_lines(task, text_width, theme, now)),
             })
             .collect();
         let list = List::new(items)
@@ -601,13 +608,106 @@ fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme
     }
 }
 
+/// The board in lanes (F26): each visible section a bordered column, and
+/// in it, lane by lane, a header line (the lane's name and card count in
+/// the first visible column, a border line in the others) over the lane's
+/// cards. Lanes are as tall as their fullest cell, so they line up across
+/// columns, and the grid scrolls as one.
+fn render_lanes(
+    frame: &mut Frame,
+    area: Rect,
+    view: &BoardView,
+    field: &str,
+    theme: &Theme,
+    now: i64,
+) {
+    let visible = view.visible_columns();
+    let first = visible.start;
+    let count = visible.len() as u32;
+    let areas = Layout::horizontal((0..count).map(|_| Constraint::Ratio(1, count))).split(area);
+    let completing = view.completing();
+    for (index, column_area) in visible.zip(areas.iter()) {
+        let column = &view.columns()[index];
+        let name = column
+            .section
+            .as_ref()
+            .map_or("(no section)", |s| s.name.as_str());
+        let focused = index == view.column();
+        let block = pane(&format!("{name} ({})", column.tasks.len()), focused, theme);
+        let inner = block.inner(*column_area);
+        frame.render_widget(block, *column_area);
+        let width = usize::from(inner.width);
+        // After the one-cell selection marker.
+        let text_width = width.saturating_sub(1);
+        let mut lines: Vec<Line> = Vec::new();
+        for (l, lane) in view.lanes().iter().enumerate() {
+            if index == first {
+                let label = lane
+                    .option
+                    .as_ref()
+                    .map_or_else(|| format!("(no {field})"), |o| o.name.clone());
+                let cards: usize = lane.columns.iter().map(|c| c.tasks.len()).sum();
+                lines.push(Line::styled(
+                    card::truncate(&format!("{label} ({cards})"), width),
+                    theme.style(Role::Title),
+                ));
+            } else {
+                lines.push(Line::styled("─".repeat(width), theme.style(Role::Border)));
+            }
+            let here = focused && l == view.lane();
+            let cell = &lane.columns[index].tasks;
+            let mut cell_lines: Vec<Line> = Vec::new();
+            for (row, task) in cell.iter().enumerate() {
+                let card = match completing {
+                    Some((gid, frame)) if gid == task.gid => {
+                        completing_card_lines(task, text_width, theme, frame)
+                    }
+                    _ => card_lines(task, text_width, theme, now),
+                };
+                let selected = here && row == view.row();
+                cell_lines.extend(
+                    card.into_iter()
+                        .map(|line| marked(line, selected, width, theme)),
+                );
+            }
+            if cell.is_empty() && here {
+                let none = Line::styled("no tasks", theme.style(Role::TextMuted));
+                cell_lines.push(marked(none, true, width, theme));
+            }
+            cell_lines.resize(view.lane_cards(l) * CARD_LINES, Line::default());
+            lines.extend(cell_lines);
+        }
+        let shown: Vec<Line> = lines
+            .into_iter()
+            .skip(view.grid_scroll())
+            .take(usize::from(inner.height))
+            .collect();
+        frame.render_widget(Paragraph::new(shown), inner);
+    }
+}
+
+/// A card line behind the one-cell selection marker (`▌` when `selected`),
+/// filled to `width` and in the selection style when selected.
+fn marked<'a>(line: Line<'a>, selected: bool, width: usize, theme: &Theme) -> Line<'a> {
+    let marker = if selected { "▌" } else { " " };
+    let mut spans = vec![Span::raw(marker)];
+    spans.extend(line.spans);
+    let mut line = Line::from(spans);
+    if selected {
+        let fill = width.saturating_sub(line.width());
+        line.spans.push(Span::raw(" ".repeat(fill)));
+        line = line.patch_style(theme.style(Role::Selection));
+    }
+    line
+}
+
 /// A card: the task name, then the assignee's initials and the due date.
-fn card_item<'a>(
+fn card_lines<'a>(
     task: &crate::api::projects::BoardTask,
     width: usize,
     theme: &Theme,
     now: i64,
-) -> ListItem<'a> {
+) -> Vec<Line<'a>> {
     let name = Line::styled(card::truncate(&task.name, width), theme.style(Role::Text));
     let mut meta = vec![Span::styled(
         card::initials(task),
@@ -622,17 +722,17 @@ fn card_item<'a>(
             meta.push(Span::styled(due.text, theme.style(Role::TaskMeta)));
         }
     }
-    ListItem::new(vec![name, Line::from(meta)])
+    vec![name, Line::from(meta)]
 }
 
 /// A completed card's animation frame (F23): the name struck through from
 /// the left with `✓ done` below it, then the name line alone.
-fn completing_card_item<'a>(
+fn completing_card_lines<'a>(
     task: &crate::api::projects::BoardTask,
     width: usize,
     theme: &Theme,
     frame: u8,
-) -> ListItem<'a> {
+) -> Vec<Line<'a>> {
     let name = card::truncate(&task.name, width);
     let total = name.chars().count();
     let struck = if frame < STRIKE_FRAMES {
@@ -665,9 +765,9 @@ fn completing_card_item<'a>(
     let name_line = Line::from(spans);
     if frame < STRIKE_FRAMES {
         let done = Line::styled("✓ done", theme.style(celebrate(usize::from(frame))));
-        ListItem::new(vec![name_line, done])
+        vec![name_line, done]
     } else {
-        ListItem::new(vec![name_line])
+        vec![name_line]
     }
 }
 
@@ -1058,10 +1158,17 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     };
     let mut left = vec![Span::styled(mode, theme.style(Role::StatusbarMode))];
     let on_board = app.screen == Screen::Board;
-    // Position in the list on screen: the Inbox, or the board's column.
+    // Position in the list on screen: the Inbox, or the board's selected
+    // cell (its column, in the columns layout).
     let position = if on_board {
         app.board_view().and_then(|view| {
-            let cards = view.columns().get(view.column())?.tasks.len();
+            let cards = view
+                .lanes()
+                .get(view.lane())?
+                .columns
+                .get(view.column())?
+                .tasks
+                .len();
             (cards > 0).then(|| (view.row() + 1, cards))
         })
     } else {
@@ -1753,6 +1860,129 @@ mod tests {
         assert_eq!(labels, ["the task's name", "create", "cancel"]);
     }
 
+    /// The sample board with an Initiative field: Performance has t2 and t5,
+    /// Brand t1 and t3; t4 and t6 have no value.
+    fn lanes_board() -> crate::core::Board {
+        use crate::api::projects::{FieldValue, OptionRef, SelectField, SelectOption};
+        let mut board = sample_board();
+        let option = |gid: &str, name: &str| SelectOption {
+            gid: gid.into(),
+            name: name.into(),
+            enabled: true,
+        };
+        board.fields = vec![SelectField {
+            gid: "f1".into(),
+            name: "Initiative".into(),
+            options: vec![option("o1", "Performance"), option("o2", "Brand")],
+        }];
+        for column in &mut board.columns {
+            for task in &mut column.tasks {
+                let value = match task.gid.as_str() {
+                    "t2" | "t5" => Some("o1"),
+                    "t1" | "t3" => Some("o2"),
+                    _ => None,
+                };
+                task.custom_fields = vec![FieldValue {
+                    gid: "f1".into(),
+                    enum_value: value.map(|v| OptionRef { gid: v.into() }),
+                }];
+            }
+        }
+        board
+    }
+
+    /// The lanes board, switched to lanes by Initiative.
+    fn lanes_app() -> App {
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(lanes_board()),
+        });
+        press(&mut app, "v");
+        app
+    }
+
+    #[test]
+    fn board_lanes() {
+        let mut app = lanes_app();
+
+        insta::assert_snapshot!(draw_at(&mut app, 120).backend());
+    }
+
+    #[test]
+    fn board_lanes_paged_to_the_right() {
+        let mut app = lanes_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 80, 24))));
+        press(&mut app, "lll");
+
+        insta::assert_snapshot!(draw_at(&mut app, 80).backend());
+    }
+
+    #[test]
+    fn board_lanes_scrolled_to_a_lower_lane() {
+        let mut app = lanes_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 12))));
+        press(&mut app, "lG");
+
+        insta::assert_snapshot!(draw_sized(&app, &terminal_theme(), 120, 12).backend());
+    }
+
+    #[test]
+    fn the_board_header_names_the_lane_field() {
+        let mut app = lanes_app();
+
+        let text = screen_text(&draw_at(&mut app, 120));
+        let header: String = text.chars().take(120).collect();
+
+        assert!(header.contains("lanes: Initiative"), "{header}");
+    }
+
+    #[test]
+    fn no_color_lanes_have_no_colors() {
+        let mut app = lanes_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 24))));
+        let terminal = draw_sized(&app, &Theme::no_color(), 120, 24);
+
+        assert!(
+            terminal.backend().buffer().content().iter().all(|c| c
+                .style()
+                .fg
+                .is_none_or(|fg| fg == ratatui::style::Color::Reset)
+                && c.style()
+                    .bg
+                    .is_none_or(|bg| bg == ratatui::style::Color::Reset)),
+            "a cell has a color under NO_COLOR"
+        );
+        assert!(screen_text(&terminal).contains("Performance (2)"));
+    }
+
+    #[test]
+    fn in_lanes_the_status_counts_the_cards_of_the_selected_cell() {
+        let mut app = lanes_app();
+        app.update(Msg::Resize(sizes(Rect::new(0, 0, 120, 24))));
+        press(&mut app, "lG");
+
+        let terminal = draw_at(&mut app, 120);
+        let buffer = terminal.backend().buffer();
+        let status: String = (0..120)
+            .map(|x| buffer[(x, 22)].symbol().to_owned())
+            .collect();
+
+        assert!(
+            status.contains(" 1/1"),
+            "Cookie banner is alone in its cell: {status:?}"
+        );
+    }
+
+    #[test]
+    fn the_board_hint_line_offers_lanes() {
+        let app = board_app();
+
+        let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
+
+        assert!(labels.contains(&"lanes"), "{labels:?}");
+    }
+
     #[test]
     fn the_board_hint_line_offers_columns_not_inbox_actions() {
         let app = board_app();
@@ -2000,15 +2230,15 @@ mod tests {
     }
 
     #[test]
-    fn the_help_overlay_has_room_for_three_more_entries_at_100_by_24() {
+    fn the_help_overlay_has_room_for_two_more_entries_at_100_by_24() {
         let lines = help_lines(&terminal_theme());
         let width = lines.iter().map(Line::width).max().unwrap();
 
         // Two columns must fit 100 cells, and 24 rows hold 22 lines each.
         assert!(2 * width + 6 <= 100, "lines are {width} wide");
         assert!(
-            (lines.len() + 3).div_ceil(2) + 2 <= 24,
-            "{} lines leave no room for three more",
+            (lines.len() + 2).div_ceil(2) + 2 <= 24,
+            "{} lines leave no room for two more",
             lines.len()
         );
     }

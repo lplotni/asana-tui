@@ -129,6 +129,18 @@ impl BoardView {
         self.set_row(0);
     }
 
+    /// The name of the field the lanes are by (lanes layout).
+    pub fn lane_field_name(&self) -> Option<&str> {
+        let Layout::Lanes { field } = &self.layout else {
+            return None;
+        };
+        self.board
+            .fields
+            .iter()
+            .find(|f| &f.gid == field)
+            .map(|f| f.name.as_str())
+    }
+
     /// First visible line of the lanes grid (lanes layout).
     pub fn grid_scroll(&self) -> usize {
         self.grid_scroll
@@ -531,6 +543,9 @@ impl BoardView {
                 if start < self.grid_scroll {
                     self.grid_scroll = start;
                 }
+                // Never further than needed to show the grid's end.
+                let total = self.lane_top(self.grid.len());
+                self.grid_scroll = self.grid_scroll.min(total.saturating_sub(window));
             }
         }
         let count = self.fitting_columns().min(self.column_count()).max(1);
@@ -1189,5 +1204,17 @@ mod tests {
         assert_eq!(v.grid_scroll(), 5, "lines 6–8 in a 4-line window");
         v.top();
         assert_eq!(v.grid_scroll(), 0);
+    }
+
+    #[test]
+    fn growing_the_window_scrolls_back_up_when_the_whole_grid_fits() {
+        let mut v = lanes_view();
+        v.resize(100, 1);
+        v.select("b");
+        assert!(v.grid_scroll() > 0);
+
+        v.resize(100, 10);
+
+        assert_eq!(v.grid_scroll(), 0, "9 lines fit in 20");
     }
 }
