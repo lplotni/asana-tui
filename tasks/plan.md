@@ -105,14 +105,14 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T26: Name resolution in `core`, and users by name in `asn task assign`
 - [x] T27: Sections by name in `asn project move`
 - [x] T28: Projects by name and section names in `project new`/`add`
-- [ ] T29: The skill uses names (v2)
+- [x] T29: The skill uses names (v2)
 
 #### Checkpoint S2: acceptance
-- [ ] The manual acceptance script (T29) passes, including the prompt-injection task
-- [ ] Success criteria 1–6 of SPEC-skill.md hold
+- [x] The manual acceptance script (T29) passes, including the prompt-injection task (the user, 2026-11-19)
+- [x] Success criteria 1–6 of SPEC-skill.md hold (6: fmt, clippy and tests are clean locally; CI runs on push)
 
 #### 6c: Ship
-- [ ] T30: Docs (F21)
+- [x] T30: Docs (F21)
 
 ## Phase 6: asn in Claude Code
 

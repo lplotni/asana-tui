@@ -137,6 +137,12 @@ The skill is written like the README: short, command-first, with the rules state
 - [ ] **C3: Comments as the default capture aren't too noisy for teammates.** Test: ask one teammate after a week.
 - [ ] **C4: The skill is used often enough to beat opening the TUI.** Test: the two-week success criterion. If not, drop F20 and keep F18/F19 for scripts.
 
+## Findings from Use
+
+- Checkpoint S1 (2026-11-18): with GIDs only, the skill could not find "the Todo project" by name; it said so instead of guessing or using another tool. `asn projects` was pulled forward from F19 (T31). The user then chose to go on with names.
+- Checkpoint S2 (2026-11-19): the acceptance script passed in Claude Code, including the ambiguous section, the prompt-injection description and a declined confirmation. C1 held in those sessions; C1–C4 stay open until longer use.
+- Building F19 showed that the confirmation can't show what `asn` resolves a name to, since resolution happens inside the write. F20 now passes full names as given, checks partial names of people and projects first, and relays what `asn` reports.
+
 ## Not Doing (and Why)
 
 - **Persisted current task (`asn focus`):** another file on disk; the conversation plus the branch-name convention cover the job.

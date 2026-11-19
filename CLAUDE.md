@@ -23,7 +23,7 @@ cargo run --example screenshot -- board > docs/board.svg
 | Path | What |
 |---|---|
 | `src/api/` | HTTP client: typed requests and responses, pagination (`next_page` until `null`), 429 retry, errors |
-| `src/core/` | Operations used by both CLI and TUI. `core::mention` holds rich text and mention parsing |
+| `src/core/` | Operations used by both CLI and TUI. `core::mention` holds rich text and mention parsing; `core::resolve` turns names into GIDs (exact, or the only match) |
 | `src/cli/` | Text and `--json` rendering for subcommands |
 | `src/present/` | UI-neutral text: task detail lines, card text, date formatting |
 | `src/tui/app.rs` | Pure state machine: `App::update(Msg) -> Vec<Effect>`, no I/O (ADR-002) |
@@ -32,6 +32,7 @@ cargo run --example screenshot -- board > docs/board.svg
 | `src/tui/keys.rs` | The one keymap table (`BINDINGS`). Help and hints are generated from it |
 | `src/tui/ui.rs` | Rendering only. Styles come from `Theme` roles, never colours (ADR-004) |
 | `tests/` | `wiremock` tests per API area, `cli.rs` (runs the binary), `fixtures/` (anonymized) |
+| `skills/asn/SKILL.md`, `.claude-plugin/` | The Claude Code skill and its plugin/marketplace manifests (F20). `tests/skill.rs` checks every `asn` command in the skill against the real help |
 
 ## Conventions
 

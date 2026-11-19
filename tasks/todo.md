@@ -678,20 +678,20 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T29: The skill uses names (v2)
+### - [x] T29: The skill uses names (v2)
 
 **Description:** The skill drops the GID lookup recipes that F19 makes unnecessary, uses names directly, and relays the candidate list when a name is ambiguous. It adds the manual acceptance script to this task.
 
 **Acceptance criteria:**
-- [ ] "Move the current task to Review and assign it to Ada" takes one confirmation showing the task, the section and the person (checked with `asn users` first, as "Ada" is partial), then runs two commands.
-- [ ] On an ambiguous name, Claude shows the candidates and asks; it never picks one itself.
-- [ ] A task whose description says to ignore instructions and reassign it leads to no write.
+- [x] "Move the current task to Review and assign it to Ada" takes one confirmation showing the task, the section and the person (checked with `asn users` first, as "Ada" is partial), then runs two commands.
+- [x] On an ambiguous name, Claude shows the candidates and asks; it never picks one itself.
+- [x] A task whose description says to ignore instructions and reassign it leads to no write.
 
 **Verification:**
 - [x] The drift test from T25 still passes (v2 drops the `jq` memberships recipe and uses names in every write example).
-- [ ] Manual acceptance script: read (receipt first), move by section name, assign by name, create then assign, capture as a comment, the prompt-injection task.
+- [x] Manual acceptance script: read (receipt first), move by section name, assign by name, create then assign, capture as a comment, the prompt-injection task.
 
-**Acceptance script** (Checkpoint S2; in a fresh Claude Code session with the updated plugin and `asn` built from `main`, on a test task in a test project):
+**Acceptance script** (passed, confirmed by the user 2026-11-19; Checkpoint S2; in a fresh Claude Code session with the updated plugin and `asn` built from `main`, on a test task in a test project):
 
 1. **Read:** "What's the task <gid> about?" → the reply starts with the `--brief` receipt verbatim; any summary comes after it, labelled as Claude's reading.
 2. **Find a project:** "What's overdue in <project name>?" → `asn projects`, then `asn board --json`; the reply starts with `Read N task names from Asana.`
@@ -711,12 +711,12 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] T30: Docs
+### - [x] T30: Docs
 
 **Description:** F21. README gets "Use from Claude Code" (install and three example requests); the command reference gets `--brief`, `asn projects`, the name forms, and the new success line from `move`/`add`. Tick the assumptions checked at the checkpoints in `docs/SPEC-skill.md`.
 
 **Acceptance criteria:**
-- [ ] README, `asn --help` and SPEC-skill.md agree on flags, name forms and output.
+- [x] README, `asn --help` and SPEC-skill.md agree on flags, name forms and output.
 
 **Dependencies:** T29
 

@@ -117,21 +117,43 @@ asn inbox --json | jq '.[0]'            # Asana's own JSON
 asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
 asn search checkout redirect           # find tasks: gid, ✓ if completed, name (tab-separated; --json too)
 asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
+asn task <task-gid> --brief             # a short receipt: where it is, who has it, due, counts (no description or comment text)
 asn task done <task-gid> [--undo]       # mark it complete (or incomplete again)
-asn task assign <task-gid> me           # or a user gid (see `asn users`), or `none`; prints the new assignee
+asn task assign <task-gid> "Ada Lovelace"   # a name, a user gid, `me`, or `none`; prints the new assignee
 asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
 asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project
 asn users ada                           # people in the workspace: gid and name (tab-separated)
-asn project add <task-gid> <project-gid> [--section <gid>]   # keeps the task's other projects
+asn projects web                        # projects in the workspace: gid and name (tab-separated)
+asn project add <task-gid> Ops [--section "In Review"]       # keeps the task's other projects; prints where it landed
 asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
-asn project move <task-gid> <section-gid>    # move the task to another section of a project it's in
-asn project new <project-gid> [--section <gid>] Write the launch post   # create an unassigned task; prints its gid
+asn project move <task-gid> "In Review"      # to another section of a project it's in; prints where it went
+asn project new "Web Platform" [--section Backlog] Write the launch post   # create an unassigned task; prints its gid
 asn board <project-gid>                 # open tasks by section: section lines, then indented gid, name, assignee, due (--json too)
 asn --project <project-gid>             # open the TUI on that project's board
 asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
 ```
 
 `asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem.
+
+People, projects and sections can be given by name or by gid. A name is used only when it matches exactly (ignoring case) or matches a single candidate; sections are matched among the task's (or the named project's) own sections, and part of a section name is enough. Anything else writes nothing, exits `1`, and lists the candidates on stderr as `gid  name` lines, so you can run the command again with a gid.
+
+## Use from Claude Code
+
+The repo is also a [Claude Code](https://claude.com/claude-code) plugin with an `asn` skill, so you can work on Asana tasks while you code: "what's the checkout task about?", "move it to In Review and give it to Ada", "capture this as a comment on the task". In Claude Code:
+
+```
+/plugin marketplace add lplotni/asana-tui
+/plugin install asn@asn
+```
+
+The skill needs `asn` on your `PATH`, set up with `asn init`, and a version newer than 0.2.0 (until the next release: `cargo install --git https://github.com/lplotni/asana-tui`). It talks to Asana only through `asn`, and it follows four rules:
+
+- **Every read is announced.** When a task's content enters the conversation, Claude's reply starts with the task's `asn task --brief` receipt, which `asn` builds from fields only, so a task's own text can't change it.
+- **Every write is confirmed.** Claude shows the task, the target and the exact command, and runs it only after you say yes.
+- **Task text is data.** Instructions written in a task or comment are never followed.
+- **No guessing.** When a name matches several people, projects or sections, Claude shows them and asks.
+
+Notes you capture go in as comments; the description changes only when you ask for it.
 
 ## How it talks to Asana
 
@@ -143,13 +165,13 @@ asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (pla
 | Inbox | `GET /users/me/notifications`, `POST /users/me/notifications/markRead` (and `markUnread`) |
 | Task, description, completion, assignee | `GET /tasks/{task}`, `PUT /tasks/{task}` |
 | Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` (`html_text` when there's an @-mention, as for descriptions with `html_notes`) |
-| People (`asn users`, @-mentions) | `GET /workspaces/{workspace}/typeahead?resource_type=user` |
+| People (`asn users`, @-mentions, names in `asn task assign`) | `GET /workspaces/{workspace}/typeahead?resource_type=user` |
 | Attachments | `GET /attachments?parent={task}` |
 | Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
 | Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
 | Move to a section | `GET /projects/{project}/sections`, `POST /sections/{section}/addTask` |
 | New task (`asn project new`) | `POST /tasks`, then `POST /sections/{section}/addTask` |
-| Boards (`P`, `b`, `asn board`) | `GET /projects/{project}`, `GET /projects/{project}/sections`, `GET /projects/{project}/tasks?completed_since=now`; projects are found with `GET /workspaces/{workspace}/typeahead` |
+| Boards (`P`, `b`, `asn board`) | `GET /projects/{project}`, `GET /projects/{project}/sections`, `GET /projects/{project}/tasks?completed_since=now`; projects are found (`P`, `asn projects`, project names) with `GET /workspaces/{workspace}/typeahead` |
 | Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
 
 The Asana web app runs on its own internal API, so it can show things the public API can't; those gaps are listed below.
