@@ -874,18 +874,18 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T39: `F` sets a single-select field
+### - [x] T39: `F` sets a single-select field
 
-**Description:** `F` on a task (board card, its detail, an Inbox task) opens a picker of the task's single-select fields (skipped when there's one, or in the lanes view, where it starts with the lane field), then its enabled options plus `(none)`, using the fzf keys of the existing pickers. `Enter` runs `core::set_field` by GIDs. On success a toast says `Initiative: Checkout`, the detail shows the new value, and a board reloads with the cursor following the card into its new lane. A failure shows an error toast and changes nothing.
+**Description:** `F` on a task (board card, its detail, an Inbox task) opens a picker of the task's single-select fields (skipped when there's one, or in the lanes view, where it starts with the lane field), then its enabled options plus `(none)`, using the keys of the `m` picker (no typed filter). `Enter` runs `core::set_field` by GIDs. On success a toast says `Initiative: Checkout`, the detail shows the new value, and a board reloads with the cursor following the card into its new lane. A failure shows an error toast and changes nothing.
 
 **Acceptance criteria:**
-- [ ] The picker lists only single-select fields and enabled options; `(none)` clears.
-- [ ] In the lanes view the card ends up selected in its new lane after the reload.
-- [ ] `F` is in `BINDINGS` (help and hints pick it up); the hint line shows `field` on the board.
-- [ ] `Tab q` in a lane creates the task in that section and sets the lane's option (F26); if that fails, a toast says so and the card is in `(no <Field>)`.
+- [x] The picker lists only single-select fields and enabled options; `(none)` clears.
+- [x] In the lanes view the card ends up selected in its new lane after the reload.
+- [x] `F` is in `BINDINGS` (help and hints pick it up); the hint line shows `field` on the board.
+- [x] `Tab q` in a lane creates the task in that section and sets the lane's option (F26); if that fails, a toast says so and the card is in `(no <Field>)`.
 
 **Verification:**
-- [ ] App tests (picker stages, effect, reload, cursor follows, failure); a snapshot of the option picker.
+- [x] App tests (picker stages, effect, reload, cursor follows, failure); a snapshot of the option picker.
 - [ ] Manual: change a card's Initiative in the lanes view.
 
 **Dependencies:** T35, T38

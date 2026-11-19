@@ -69,6 +69,8 @@ pub enum Cmd {
     Refresh,
     /// Board: columns, then lanes by each single-select field (F26).
     CycleLayout,
+    /// Set one of the task's single-select fields (F27).
+    SetField,
     CommandLine,
     /// Back out of visual mode or the detail pane, else quit.
     Quit,
@@ -270,6 +272,7 @@ pub const BINDINGS: &[Binding] = &[
         Asn,
         "board lanes / columns",
     ),
+    bind(Normal, &[Char('F')], Cmd::SetField, Asn, "set a field"),
     bind(Normal, &[Char(':')], Cmd::CommandLine, Vim, "command line"),
     bind(
         Normal,
@@ -714,6 +717,7 @@ mod tests {
             (&[Char('f')], Cmd::ToggleFilter),
             (&[Char('R')], Cmd::Refresh),
             (&[Char('v')], Cmd::CycleLayout),
+            (&[Char('F')], Cmd::SetField),
             (&[Char(':')], Cmd::CommandLine),
             (&[Char('q')], Cmd::Quit),
             (&[Char('?')], Cmd::Help),

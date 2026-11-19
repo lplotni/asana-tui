@@ -239,6 +239,7 @@ fn run_effects(
                 | Effect::PostComment { .. }
                 | Effect::AddToProject { .. }
                 | Effect::MoveToSection { .. }
+                | Effect::SetField { .. }
                 | Effect::SaveNotes { .. }
         );
         let task = async move {
@@ -260,22 +261,48 @@ fn run_effects(
                 Effect::CreateTask {
                     project_gid,
                     section,
+                    lane,
                     name,
                 } => {
                     let section_gid = section.as_ref().map(|s| s.gid.as_str());
-                    let result = core::create_task(&client, &project_gid, section_gid, &name)
-                        .await
-                        .map(|created| {
-                            let error = created.section_error.map(|e| e.to_string());
-                            (created.task.gid, error)
-                        })
-                        .map_err(|e| e.to_string());
+                    let result =
+                        match core::create_task(&client, &project_gid, section_gid, &name).await {
+                            Ok(created) => {
+                                // In a lane, the new task gets the lane's option too.
+                                let lane_error = match &lane {
+                                    Some(lane) => set_field(
+                                        &client,
+                                        &created.task.gid,
+                                        &lane.field,
+                                        Some(&lane.option),
+                                    )
+                                    .await
+                                    .err(),
+                                    None => None,
+                                };
+                                Ok(app::Created {
+                                    gid: created.task.gid,
+                                    section_error: created.section_error.map(|e| e.to_string()),
+                                    lane_error,
+                                })
+                            }
+                            Err(e) => Err(e.to_string()),
+                        };
                     Msg::TaskCreated {
                         project_gid,
                         section,
+                        lane,
                         name,
                         result,
                     }
+                }
+                Effect::SetField {
+                    task_gid,
+                    field,
+                    option,
+                } => {
+                    let result = set_field(&client, &task_gid, &field, option.as_ref()).await;
+                    Msg::FieldSet { task_gid, result }
                 }
                 Effect::LoadMore { offset } => Msg::MoreLoaded(
                     core::inbox_pages(&client, &workspace, 1, Some(&offset), |_| true)
@@ -524,6 +551,26 @@ async fn finish_writes(writes: &mut JoinSet<()>, timeout: std::time::Duration) -
     let all_done = async { while writes.join_next().await.is_some() {} };
     let _ = tokio::time::timeout(timeout, all_done).await;
     writes.len()
+}
+
+/// Sets single-select `field` of `task_gid` to `option` (or clears it), by
+/// GIDs. A name that doesn't resolve can't happen with GIDs, but is reported
+/// as an error all the same.
+async fn set_field(
+    client: &Client,
+    task_gid: &str,
+    field: &crate::api::tasks::Named,
+    option: Option<&crate::api::tasks::Named>,
+) -> Result<core::FieldSet, String> {
+    let option = option.map_or("none", |o| o.gid.as_str());
+    match core::set_field(client, task_gid, &field.gid, option).await {
+        Ok(Ok(set)) => Ok(set),
+        Ok(Err(unresolved)) => Err(format!(
+            "no such {} as {}",
+            unresolved.kind, unresolved.name
+        )),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[cfg(test)]

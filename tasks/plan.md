@@ -131,7 +131,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T36: Help overlay makes room for new keys (room for three; Phase 7 needs two)
 - [x] T37: Pure lane state in `tui/board.rs` (grid cursor, paging, cursor by GID across layouts)
 - [x] T38: `v` toggles columns ↔ lanes and draws the grid
-- [ ] T39: `F` sets a single-select field (field, then option), and the card follows
+- [x] T39: `F` sets a single-select field (field, then option), and the card follows
 
 #### Checkpoint L2: glance and edit work
 - [ ] The user dogfoods lanes at 80, 120 and 200 columns, with `v` and `F`
@@ -240,7 +240,7 @@ T34 and T35 are independent after T33, and T36 can be done any time before T38. 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| The help overlay is full | High (the help test fails on the first new key) | T36 put `j / k` and `n / N` on one line each: room for three more entries; `v` used one, `F` takes another. A further key needs another layout change (e.g. shorter descriptions or a scrolling overlay). |
+| The help overlay is full | High (the help test fails on the first new key) | T36 put `j / k` and `n / N` on one line each: room for three more entries; `v` and `F` used two, so one is left. A further key needs another layout change (e.g. shorter descriptions or a scrolling overlay). |
 | A tall grid in a short terminal: many lanes × 2-line cards | Med | Lanes scroll vertically as one list and keep the selected card visible; empty lanes are hidden; lane height is its tallest column. Checked at Checkpoint L2. |
 | `app.rs` (≈2500 lines) grows further | Med | Grid navigation and cursor logic live in `tui/board.rs`; `app.rs` only adds the `v`/`F` dispatch and two effects. |
 | Fields on tasks that aren't the project's fields (added from other projects) | Low | Lanes use only the project's single-select fields; `F` uses the task's own fields, so it can still edit those. |

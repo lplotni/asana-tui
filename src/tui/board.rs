@@ -129,6 +129,21 @@ impl BoardView {
         self.set_row(0);
     }
 
+    /// The field the lanes are by (lanes layout), as GID and name.
+    pub fn lane_field(&self) -> Option<Named> {
+        let Layout::Lanes { field } = &self.layout else {
+            return None;
+        };
+        self.board
+            .fields
+            .iter()
+            .find(|f| &f.gid == field)
+            .map(|f| Named {
+                gid: f.gid.clone(),
+                name: f.name.clone(),
+            })
+    }
+
     /// The name of the field the lanes are by (lanes layout).
     pub fn lane_field_name(&self) -> Option<&str> {
         let Layout::Lanes { field } = &self.layout else {

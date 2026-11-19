@@ -242,6 +242,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::AddToProject), "project"),
             (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::Assign), "assign"),
+            (normal(Cmd::SetField), "field"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
             (normal(Cmd::Help), "help"),
@@ -268,6 +269,7 @@ pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
             (normal(Cmd::ToggleComplete), "done"),
             (normal(Cmd::NewTask), "new task"),
             (normal(Cmd::Assign), "assign"),
+            (normal(Cmd::SetField), "field"),
             (normal(Cmd::CycleLayout), "lanes"),
             (normal(Cmd::EditDescription), "edit"),
             (normal(Cmd::OpenInBrowser), "browser"),
@@ -827,6 +829,8 @@ fn render_picker(frame: &mut Frame, over: Rect, picker: &Picker, theme: &Theme) 
         Stage::TaskBoard => " Open which project's board? ".to_owned(),
         Stage::Mention => " Mention someone ".to_owned(),
         Stage::Assign => " Assign to ".to_owned(),
+        Stage::SetFieldChoice => " Set field ".to_owned(),
+        Stage::SetFieldOption { field } => format!(" Set {} ", field.name),
     };
     let mut lines = Vec::new();
     if picker.has_query() {
@@ -1981,6 +1985,7 @@ mod tests {
         let labels: Vec<&str> = key_hints(&app).into_iter().map(|(_, l)| l).collect();
 
         assert!(labels.contains(&"lanes"), "{labels:?}");
+        assert!(labels.contains(&"field"), "{labels:?}");
     }
 
     #[test]
@@ -2230,15 +2235,15 @@ mod tests {
     }
 
     #[test]
-    fn the_help_overlay_has_room_for_two_more_entries_at_100_by_24() {
+    fn the_help_overlay_has_room_for_one_more_entry_at_100_by_24() {
         let lines = help_lines(&terminal_theme());
         let width = lines.iter().map(Line::width).max().unwrap();
 
         // Two columns must fit 100 cells, and 24 rows hold 22 lines each.
         assert!(2 * width + 6 <= 100, "lines are {width} wide");
         assert!(
-            (lines.len() + 2).div_ceil(2) + 2 <= 24,
-            "{} lines leave no room for two more",
+            (lines.len() + 1).div_ceil(2) + 2 <= 24,
+            "{} lines leave no room for one more",
             lines.len()
         );
     }

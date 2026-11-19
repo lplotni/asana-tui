@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use crate::api::notifications::Notification;
 use crate::api::search::FoundTask;
-use crate::api::tasks::{Membership, Named, TaskStory};
+use crate::api::tasks::{CustomField, Membership, Named, TaskStory};
 use crate::core::mention::{self, Mention, Target};
 use crate::core::{Board, TaskDetail};
 
@@ -68,8 +68,15 @@ pub enum Msg {
     TaskCreated {
         project_gid: String,
         section: Option<Named>,
+        /// The lane's option it was to get (F26).
+        lane: Option<LaneValue>,
         name: String,
-        result: Result<(String, Option<String>), String>,
+        result: Result<Created, String>,
+    },
+    /// Result of setting a single-select field of `task_gid` (F27).
+    FieldSet {
+        task_gid: String,
+        result: Result<crate::core::FieldSet, String>,
     },
     /// A project's board, or why it couldn't be loaded.
     BoardLoaded {
@@ -164,7 +171,15 @@ pub enum Effect {
     CreateTask {
         project_gid: String,
         section: Option<Named>,
+        /// In the lanes layout, the lane's option to set as well (F26).
+        lane: Option<LaneValue>,
         name: String,
+    },
+    /// Set (or, `None`, clear) single-select `field` of `task_gid` (F27).
+    SetField {
+        task_gid: String,
+        field: Named,
+        option: Option<Named>,
     },
     /// Load notifications after `offset`.
     LoadMore {
@@ -406,7 +421,25 @@ pub struct NewTask {
     pub project_gid: String,
     /// The selected column's section; `None` for "(no section)".
     pub section: Option<Named>,
+    /// In the lanes layout, the selected lane's field and option.
+    pub lane: Option<LaneValue>,
     pub name: String,
+}
+
+/// A single-select field and the option a new task in a lane gets (F26).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaneValue {
+    pub field: Named,
+    pub option: Named,
+}
+
+/// A task created on a board: its GID, and why it isn't in its section or
+/// lane, if it isn't. It exists either way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Created {
+    pub gid: String,
+    pub section_error: Option<String>,
+    pub lane_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -672,9 +705,11 @@ impl App {
             Msg::TaskCreated {
                 project_gid,
                 section,
+                lane,
                 name,
                 result,
-            } => self.task_created(&project_gid, section, name, result),
+            } => self.task_created(&project_gid, section, lane, name, result),
+            Msg::FieldSet { task_gid, result } => self.field_set(&task_gid, result),
             Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
                 self.recovering = false;
@@ -1120,6 +1155,7 @@ impl App {
             Cmd::OpenTaskBoard => return self.open_task_board(),
             Cmd::ToggleComplete => return self.toggle_complete(),
             Cmd::Assign => return self.open_assign(),
+            Cmd::SetField => return self.open_field(),
             Cmd::Help => self.help = true,
             Cmd::GoToInbox => {
                 self.set_focus(Focus::List);
@@ -1206,6 +1242,7 @@ impl App {
             Cmd::OpenInBrowser => return self.open_in_browser(),
             Cmd::ToggleComplete => return self.toggle_complete(),
             Cmd::Assign => return self.open_assign(),
+            Cmd::SetField => return self.open_field(),
             Cmd::SwitchProject => return self.open_switcher(),
             Cmd::GoToInbox => {
                 self.screen = Screen::Inbox;
@@ -1605,9 +1642,15 @@ impl App {
             .get(view.column())
             .and_then(|c| c.section.clone());
         let project_gid = view.project().gid.clone();
+        // In lanes, the new task gets the selected lane's option too.
+        let lane = view.lane_field().and_then(|field| {
+            let option = view.lanes().get(view.lane())?.option.clone()?;
+            Some(LaneValue { field, option })
+        });
         self.new_task = Some(NewTask {
             project_gid,
             section,
+            lane,
             name: self.new_task_draft.take().unwrap_or_default(),
         });
     }
@@ -1638,6 +1681,7 @@ impl App {
                     return vec![Effect::CreateTask {
                         project_gid: task.project_gid,
                         section: task.section,
+                        lane: task.lane,
                         name,
                     }];
                 }
@@ -1653,10 +1697,15 @@ impl App {
         &mut self,
         project_gid: &str,
         section: Option<Named>,
+        lane: Option<LaneValue>,
         name: String,
-        result: Result<(String, Option<String>), String>,
+        result: Result<Created, String>,
     ) -> Vec<Effect> {
-        let (gid, section_error) = match result {
+        let Created {
+            gid,
+            section_error,
+            lane_error,
+        } = match result {
             Ok(created) => created,
             Err(message) => {
                 self.toast = Some(Toast::error(format!("Task not created: {message}")));
@@ -1664,12 +1713,16 @@ impl App {
                 return Vec::new();
             }
         };
-        self.toast = Some(match (section_error, section) {
-            (Some(message), Some(section)) => {
+        self.toast = Some(match (section_error, section, lane_error, lane) {
+            (Some(message), Some(section), ..) => {
                 Toast::error(format!("Created, but not in {}: {message}", section.name))
             }
-            (Some(message), None) => Toast::error(format!("Created, but: {message}")),
-            (None, _) => Toast::info(format!("Created \"{name}\"")),
+            (Some(message), None, ..) => Toast::error(format!("Created, but: {message}")),
+            (None, _, Some(message), Some(lane)) => Toast::error(format!(
+                "Created, but not in {}: {message}",
+                lane.option.name
+            )),
+            _ => Toast::info(format!("Created \"{name}\"")),
         });
         if let Some(slot) = self
             .boards
@@ -1681,6 +1734,78 @@ impl App {
         if self.board().is_some_and(|b| b.project.gid == project_gid) {
             return self.reload_board();
         }
+        Vec::new()
+    }
+
+    /// A single-select field was set (or not): says so (F27).
+    fn field_set(
+        &mut self,
+        task_gid: &str,
+        result: Result<crate::core::FieldSet, String>,
+    ) -> Vec<Effect> {
+        match result {
+            Ok(set) => {
+                let option = set.option.as_deref().unwrap_or("none");
+                self.toast = Some(Toast::info(format!("{}: {option}", set.field)));
+                let mut effects = Vec::new();
+                if self.details.contains_key(task_gid) {
+                    effects.push(Effect::LoadDetail {
+                        gid: task_gid.to_owned(),
+                    });
+                }
+                effects.extend(self.reload_board());
+                effects
+            }
+            Err(message) => {
+                self.toast = Some(Toast::error(format!("Field not set: {message}")));
+                Vec::new()
+            }
+        }
+    }
+
+    /// `F`: sets one of the shown task's single-select fields (F27). Opens
+    /// the options of the lane field in lanes, or of the task's only one;
+    /// otherwise asks which field first.
+    fn open_field(&mut self) -> Vec<Effect> {
+        let lane_field = (self.screen == Screen::Board)
+            .then(|| self.board_view()?.lane_field())
+            .flatten();
+        let Some((task_gid, detail)) = self.loaded_shown_task("Only tasks have fields") else {
+            return Vec::new();
+        };
+        let fields: Vec<CustomField> = detail
+            .task
+            .custom_fields
+            .iter()
+            .filter(|f| f.resource_subtype == "enum")
+            .cloned()
+            .collect();
+        let start = lane_field
+            .and_then(|lane| fields.iter().find(|f| f.gid == lane.gid))
+            .or_else(|| (fields.len() == 1).then(|| &fields[0]));
+        self.picker = match (start, fields.is_empty()) {
+            (_, true) => {
+                self.toast = Some(Toast::info("No single-select fields on this task"));
+                None
+            }
+            (Some(field), _) => Some(field_options_picker(task_gid, field)),
+            (None, _) => Some(Picker::fields(
+                task_gid,
+                fields
+                    .iter()
+                    .map(|f| picker::Item {
+                        gid: Some(f.gid.clone()),
+                        name: format!(
+                            "{}: {}",
+                            f.name,
+                            f.enum_value.as_ref().map_or("—", |v| v.name.as_str())
+                        ),
+                        checked: false,
+                        note: None,
+                    })
+                    .collect(),
+            )),
+        };
         Vec::new()
     }
 
@@ -2045,6 +2170,33 @@ impl App {
             return Vec::new();
         };
         match picker.stage.clone() {
+            picker::Stage::SetFieldChoice => {
+                let task_gid = picker.task_gid.clone();
+                let field = match self.details.get(&task_gid) {
+                    Some(Detail::Loaded(detail)) => detail
+                        .task
+                        .custom_fields
+                        .iter()
+                        .find(|f| item.gid.as_deref() == Some(f.gid.as_str()))
+                        .cloned(),
+                    _ => None,
+                };
+                self.picker = field.map(|field| field_options_picker(task_gid, &field));
+                Vec::new()
+            }
+            picker::Stage::SetFieldOption { field } => {
+                let task_gid = picker.task_gid.clone();
+                self.picker = None;
+                let option = item.gid.clone().map(|gid| Named {
+                    gid,
+                    name: item.name,
+                });
+                vec![Effect::SetField {
+                    task_gid,
+                    field,
+                    option,
+                }]
+            }
             picker::Stage::MoveProject => {
                 let task_gid = picker.task_gid.clone();
                 self.open_sections(task_gid, item.into_named())
@@ -2532,3 +2684,25 @@ impl Toast {
 #[cfg(test)]
 #[path = "app_tests.rs"]
 mod tests;
+
+/// The picker of `field`'s enabled options (and "(none)"), the current one
+/// checked, to set it on `task_gid`.
+fn field_options_picker(task_gid: String, field: &CustomField) -> Picker {
+    let current = field.enum_value.as_ref().map(|v| v.gid.as_str());
+    let options = field
+        .enum_options
+        .iter()
+        .filter(|o| o.enabled)
+        .map(|o| picker::Item {
+            gid: Some(o.gid.clone()),
+            name: o.name.clone(),
+            checked: current == Some(o.gid.as_str()),
+            note: None,
+        })
+        .collect();
+    let field = Named {
+        gid: field.gid.clone(),
+        name: field.name.clone(),
+    };
+    Picker::field_options(task_gid, field, options)
+}

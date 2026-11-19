@@ -68,6 +68,12 @@ pub enum Stage {
     /// Choosing whom to assign the task to: "Me" and "Unassigned" while the
     /// query is empty, else people found.
     Assign,
+    /// Choosing which of the task's single-select fields to set (F27).
+    SetFieldChoice,
+    /// Choosing the option of `field` to set, or "(none)" (no gid).
+    SetFieldOption {
+        field: Named,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -228,6 +234,33 @@ impl Picker {
     pub fn move_to_section(task_gid: String, project: Named, current: Option<String>) -> Picker {
         Picker {
             stage: Stage::MoveSection { project, current },
+            ..Picker::new(task_gid, Vec::new())
+        }
+    }
+
+    /// Setting one of `task_gid`'s single-select fields: choose among
+    /// `fields` (each named `Field: current option`).
+    pub fn fields(task_gid: String, fields: Vec<Item>) -> Picker {
+        Picker {
+            stage: Stage::SetFieldChoice,
+            loading: false,
+            items: fields,
+            ..Picker::new(task_gid, Vec::new())
+        }
+    }
+
+    /// Setting `field` of `task_gid`: "(none)" (no gid), then `options`.
+    pub fn field_options(task_gid: String, field: Named, options: Vec<Item>) -> Picker {
+        let none = Item {
+            gid: None,
+            name: "(none)".into(),
+            checked: !options.iter().any(|o| o.checked),
+            note: None,
+        };
+        Picker {
+            stage: Stage::SetFieldOption { field },
+            loading: false,
+            items: std::iter::once(none).chain(options).collect(),
             ..Picker::new(task_gid, Vec::new())
         }
     }

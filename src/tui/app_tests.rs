@@ -3086,8 +3086,13 @@ fn created(name: &str, gid: &str, section_error: Option<&str>) -> Msg {
     Msg::TaskCreated {
         project_gid: "42".into(),
         section: Some(named("s1", "Section 1")),
+        lane: None,
         name: name.into(),
-        result: Ok((gid.into(), section_error.map(Into::into))),
+        result: Ok(crate::tui::app::Created {
+            gid: gid.into(),
+            section_error: section_error.map(Into::into),
+            lane_error: None,
+        }),
     }
 }
 
@@ -3114,6 +3119,7 @@ fn tab_q_names_a_new_task_for_the_selected_column() {
         vec![Effect::CreateTask {
             project_gid: "42".into(),
             section: Some(named("s1", "Section 1")),
+            lane: None,
             name: "Ship it".into(),
         }]
     );
@@ -3244,6 +3250,7 @@ fn a_failed_create_keeps_the_name_for_the_next_try() {
     app.update(Msg::TaskCreated {
         project_gid: "42".into(),
         section: None,
+        lane: None,
         name: "Ship it".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
@@ -3263,6 +3270,7 @@ fn a_failed_create_says_so() {
     app.update(Msg::TaskCreated {
         project_gid: "42".into(),
         section: None,
+        lane: None,
         name: "Ship it".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
@@ -3931,4 +3939,302 @@ fn v_on_a_board_without_single_select_fields_says_so() {
         app.board_view().unwrap().layout(),
         &crate::tui::board::Layout::Columns
     );
+}
+
+// --- Setting a single-select field with F (F27, T39) ---
+
+/// A card's detail with these custom fields: (field gid, name, subtype,
+/// current option gid, options as (gid, name, enabled)).
+/// A custom field for [`detail_with_fields`]: (gid, name, subtype, current
+/// option gid, options as (gid, name, enabled)).
+type FieldSpec<'a> = (
+    &'a str,
+    &'a str,
+    &'a str,
+    Option<&'a str>,
+    &'a [(&'a str, &'a str, bool)],
+);
+
+fn detail_with_fields(fields: &[FieldSpec]) -> TaskDetail {
+    use crate::api::projects::SelectOption;
+    use crate::api::tasks::CustomField;
+    let mut detail = card_detail("42");
+    detail.task.custom_fields = fields
+        .iter()
+        .map(|(gid, name, subtype, current, options)| {
+            let options: Vec<SelectOption> = options
+                .iter()
+                .map(|(gid, name, enabled)| SelectOption {
+                    gid: (*gid).into(),
+                    name: (*name).into(),
+                    enabled: *enabled,
+                })
+                .collect();
+            CustomField {
+                gid: (*gid).into(),
+                name: (*name).into(),
+                display_value: None,
+                resource_subtype: (*subtype).into(),
+                enum_value: current.and_then(|c| {
+                    options
+                        .iter()
+                        .find(|o| o.gid == c)
+                        .map(|o| named(&o.gid, &o.name))
+                }),
+                enum_options: options,
+            }
+        })
+        .collect();
+    detail
+}
+
+const INITIATIVE_OPTIONS: &[(&str, &str, bool)] = &[
+    ("o1", "Checkout", true),
+    ("o2", "Onboarding", true),
+    ("o3", "Legacy", false),
+];
+
+/// On the [2, 2] board with c0-0's detail loaded: Initiative (currently
+/// Onboarding; Legacy disabled) and a text field.
+fn board_with_initiative_detail() -> App {
+    let mut app = on_board(&[2, 2]);
+    load_task(
+        &mut app,
+        "c0-0",
+        detail_with_fields(&[
+            ("f1", "Initiative", "enum", Some("o2"), INITIATIVE_OPTIONS),
+            ("f9", "Notes", "text", None, &[]),
+        ]),
+    );
+    app
+}
+
+fn picker_items(app: &App) -> Vec<(String, bool)> {
+    app.picker
+        .as_ref()
+        .unwrap()
+        .items
+        .iter()
+        .map(|i| (i.name.clone(), i.checked))
+        .collect()
+}
+
+#[test]
+fn f_with_one_single_select_field_offers_none_and_its_enabled_options() {
+    let mut app = board_with_initiative_detail();
+
+    keys(&mut app, "F");
+
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(
+        picker.stage,
+        picker::Stage::SetFieldOption {
+            field: named("f1", "Initiative")
+        }
+    );
+    assert_eq!(
+        picker_items(&app),
+        [
+            ("(none)".to_owned(), false),
+            ("Checkout".to_owned(), false),
+            ("Onboarding".to_owned(), true),
+        ]
+    );
+}
+
+#[test]
+fn f_with_several_single_select_fields_asks_which_first() {
+    let mut app = on_board(&[2, 2]);
+    load_task(
+        &mut app,
+        "c0-0",
+        detail_with_fields(&[
+            ("f1", "Initiative", "enum", Some("o2"), INITIATIVE_OPTIONS),
+            ("f2", "Priority", "enum", None, &[("p1", "High", true)]),
+        ]),
+    );
+
+    keys(&mut app, "F");
+    assert_eq!(
+        app.picker.as_ref().unwrap().stage,
+        picker::Stage::SetFieldChoice
+    );
+    let names: Vec<String> = picker_items(&app).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["Initiative: Onboarding", "Priority: —"]);
+
+    keys(&mut app, "j");
+    enter(&mut app);
+    assert_eq!(
+        app.picker.as_ref().unwrap().stage,
+        picker::Stage::SetFieldOption {
+            field: named("f2", "Priority")
+        }
+    );
+}
+
+#[test]
+fn choosing_an_option_sets_the_field() {
+    let mut app = board_with_initiative_detail();
+    keys(&mut app, "F");
+    keys(&mut app, "j");
+
+    let effects = enter(&mut app);
+
+    assert_eq!(
+        effects,
+        vec![Effect::SetField {
+            task_gid: "c0-0".into(),
+            field: named("f1", "Initiative"),
+            option: Some(named("o1", "Checkout")),
+        }]
+    );
+    assert!(app.picker.is_none());
+}
+
+#[test]
+fn choosing_none_clears_the_field() {
+    let mut app = board_with_initiative_detail();
+    keys(&mut app, "F");
+
+    let effects = enter(&mut app);
+
+    assert_eq!(
+        effects,
+        vec![Effect::SetField {
+            task_gid: "c0-0".into(),
+            field: named("f1", "Initiative"),
+            option: None,
+        }]
+    );
+}
+
+#[test]
+fn f_on_a_task_without_single_select_fields_says_so() {
+    let mut app = on_board(&[2, 2]);
+    load_task(
+        &mut app,
+        "c0-0",
+        detail_with_fields(&[("f9", "Notes", "text", None, &[])]),
+    );
+
+    keys(&mut app, "F");
+
+    assert!(app.picker.is_none());
+    assert_eq!(
+        app.toast.as_ref().unwrap().text,
+        "No single-select fields on this task"
+    );
+}
+
+#[test]
+fn in_lanes_f_starts_with_the_lane_field() {
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_initiative()),
+    });
+    keys(&mut app, "v");
+    load_task(
+        &mut app,
+        "c0-0",
+        detail_with_fields(&[
+            ("f2", "Priority", "enum", None, &[("p1", "High", true)]),
+            ("f1", "Initiative", "enum", Some("o1"), INITIATIVE_OPTIONS),
+        ]),
+    );
+
+    keys(&mut app, "F");
+
+    assert_eq!(
+        app.picker.as_ref().unwrap().stage,
+        picker::Stage::SetFieldOption {
+            field: named("f1", "Initiative")
+        }
+    );
+}
+
+#[test]
+fn a_set_field_says_so_and_reloads_the_board_and_the_task() {
+    let mut app = board_with_initiative_detail();
+
+    let effects = app.update(Msg::FieldSet {
+        task_gid: "c0-0".into(),
+        result: Ok(crate::core::FieldSet {
+            field: "Initiative".into(),
+            option: Some("Checkout".into()),
+        }),
+    });
+
+    let toast = app.toast.as_ref().unwrap();
+    assert_eq!(toast.text, "Initiative: Checkout");
+    assert!(!toast.is_error);
+    assert!(effects.contains(&Effect::LoadBoard {
+        project_gid: "42".into()
+    }));
+    assert!(effects.contains(&Effect::LoadDetail { gid: "c0-0".into() }));
+}
+
+#[test]
+fn a_failed_field_set_says_why() {
+    let mut app = board_with_initiative_detail();
+
+    app.update(Msg::FieldSet {
+        task_gid: "c0-0".into(),
+        result: Err("Forbidden".into()),
+    });
+
+    let toast = app.toast.as_ref().unwrap();
+    assert_eq!(toast.text, "Field not set: Forbidden");
+    assert!(toast.is_error);
+}
+
+#[test]
+fn tab_q_in_a_lane_gives_the_new_task_the_lanes_option() {
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_initiative()),
+    });
+    keys(&mut app, "v");
+
+    tab_q(&mut app);
+    keys(&mut app, "Ship it");
+    let effects = enter(&mut app);
+
+    assert_eq!(
+        effects,
+        vec![Effect::CreateTask {
+            project_gid: "42".into(),
+            section: Some(named("s0", "Section 0")),
+            lane: Some(crate::tui::app::LaneValue {
+                field: named("f1", "Initiative"),
+                option: named("o1", "Checkout"),
+            }),
+            name: "Ship it".into(),
+        }]
+    );
+}
+
+#[test]
+fn a_new_task_that_did_not_get_its_lane_says_so() {
+    let mut app = on_board(&[1]);
+
+    app.update(Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: Some(named("s0", "Section 0")),
+        lane: Some(crate::tui::app::LaneValue {
+            field: named("f1", "Initiative"),
+            option: named("o1", "Checkout"),
+        }),
+        name: "Ship it".into(),
+        result: Ok(crate::tui::app::Created {
+            gid: "900".into(),
+            section_error: None,
+            lane_error: Some("Forbidden".into()),
+        }),
+    });
+
+    let toast = app.toast.as_ref().unwrap();
+    assert_eq!(toast.text, "Created, but not in Checkout: Forbidden");
+    assert!(toast.is_error);
 }

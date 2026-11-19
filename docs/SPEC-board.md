@@ -244,7 +244,7 @@ asn project fields <project-gid|name>          # a project's single-select field
 
 ### F27. Set a single-select field (`F`)
 
-- `F` on a task (an Inbox task, a board card, or its detail) opens a picker titled `Set field` with the task's single-select fields as `<Field>: <current option or —>`. In the lanes view it starts with the lane field; with a single field it starts there too. Choosing a field lists its enabled options (the current one marked) and `(none)`. The picker uses the fzf keys of F5. `Esc` goes back a step, then closes.
+- `F` on a task (an Inbox task, a board card, or its detail) opens a picker titled `Set field` with the task's single-select fields as `<Field>: <current option or —>`. In the lanes view it starts with the lane field; with a single field it starts there too. Choosing a field lists its enabled options (the current one marked) and `(none)`. The picker works like the `m` picker (F10): `j`/`k` or `Ctrl-n`/`Ctrl-p` move, `Enter` chooses, `Esc` closes; there is nothing to type, since the lists are short. The help and the hint line list `F` (`F field`, after `assign`).
 - `Enter` on an option writes it (`PUT /tasks/{gid}` `{custom_fields: {<field>: <option> | null}}`). On success a toast says `<Field>: <Option>`, the detail shows the new value, and a board reloads with the cursor following the card into its new lane. On failure an error toast is shown and nothing changes.
 - A task without single-select fields gets the toast `No single-select fields on this task`.
 
