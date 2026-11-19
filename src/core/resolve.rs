@@ -21,9 +21,17 @@ pub fn is_gid(arg: &str) -> bool {
 
 /// The one candidate `name` means: a case-insensitive exact match wins,
 /// otherwise a single candidate. Several exact matches, several candidates
-/// without an exact match, or none are [`Unresolved`].
+/// without an exact match, or none are [`Unresolved`]. A blank name names
+/// nothing, so it never resolves, not even to a single candidate.
 pub fn pick(kind: &'static str, name: &str, candidates: Vec<Named>) -> Result<Named, Unresolved> {
     let wanted = name.trim().to_lowercase();
+    if wanted.is_empty() {
+        return Err(Unresolved {
+            kind,
+            name: name.to_owned(),
+            candidates: Vec::new(),
+        });
+    }
     let exact: Vec<Named> = candidates
         .iter()
         .filter(|c| c.name.trim().to_lowercase() == wanted)
@@ -93,6 +101,17 @@ mod tests {
         Named {
             gid: gid.into(),
             name: name.into(),
+        }
+    }
+
+    #[test]
+    fn a_blank_name_never_resolves_even_to_the_only_candidate() {
+        for blank in ["", "  "] {
+            let only = || vec![named("11", "Doing")];
+            assert!(pick("section", blank, only()).is_err());
+            assert!(pick_containing("section", blank, only()).is_err());
+            let unresolved = pick_local("option", blank, only()).unwrap_err();
+            assert_eq!(unresolved.candidates, only());
         }
     }
 

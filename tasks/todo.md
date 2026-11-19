@@ -927,6 +927,8 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 - [x] R3: `F` on a board card works without opening the card first (board fields and card values from F24).
 - [x] R4: the first-run interview only runs when the environment doesn't already give a token and a workspace (ADR-010).
 - [x] R5: a test that undoing a completion shows the reload held meanwhile.
+- [x] R6: a blank name never resolves, not even to the only candidate.
+- [ ] R7: section names are matched against all of a project's sections, not the first 100.
 
 ---
 
