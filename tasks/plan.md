@@ -139,7 +139,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### 7c: Ship
 - [x] T40: Skill, README, help, screenshot and spec updates
-- [ ] T41: Release v0.3.0 (ask first)
+- [ ] T41: Release v0.3.0 (ask first) — on hold at the user's request (2026-11-19)
 
 ## Phase 6: asn in Claude Code
 

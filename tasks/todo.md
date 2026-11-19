@@ -922,7 +922,7 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 **Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.3.0`, push `main`, push the annotated tag, pull the formula commit. README: the skill needs `asn` 0.3.0 or later.
 
-**Dependencies:** T40, and the user's go-ahead
+**Dependencies:** T40, and the user's go-ahead. On hold at the user's request (2026-11-19).
 
 **Files likely touched:** `Cargo.toml`, `Cargo.lock`, `README.md`
 
