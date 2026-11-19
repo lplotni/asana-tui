@@ -1,5 +1,6 @@
 //! Operations shared by the CLI and the TUI.
 
+pub mod lanes;
 pub mod mention;
 pub mod resolve;
 

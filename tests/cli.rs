@@ -218,6 +218,25 @@ fn project_new_and_add_take_project_and_section_names() {
 }
 
 #[test]
+fn board_lanes_takes_a_field() {
+    let output = asn(&["board", "--help"], &[]);
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--lanes <FIELD>"), "{help}");
+
+    let output = asn(
+        &[
+            "board",
+            "1200000000000042",
+            "--lanes",
+            "Initiative",
+            "--json",
+        ],
+        &[("ASANA_WORKSPACE", "1234567890123456")],
+    );
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+}
+
+#[test]
 fn asn_projects_takes_words_to_search_for() {
     let output = asn(
         &["projects", "web", "platform"],

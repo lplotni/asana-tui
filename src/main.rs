@@ -119,6 +119,9 @@ enum Command {
         /// Print JSON
         #[arg(long)]
         json: bool,
+        /// Group the tasks into lanes by a single-select field (name or gid)
+        #[arg(long, value_name = "FIELD")]
+        lanes: Option<String>,
     },
     /// Manage a task's projects
     Project {
@@ -398,15 +401,12 @@ async fn main() -> ExitCode {
                 Err(err) => fail(&err, err.exit_code()),
             }
         }
-        Some(Command::Board { project, json }) => match core::board(&client, &project).await {
-            Ok(board) if json => {
-                println!("{}", asn::cli::board::render_json(&board));
-                ExitCode::SUCCESS
-            }
-            Ok(board) => {
-                print!("{}", asn::cli::board::render_text(&board));
-                ExitCode::SUCCESS
-            }
+        Some(Command::Board {
+            project,
+            json,
+            lanes,
+        }) => match core::board(&client, &project).await {
+            Ok(board) => print_board(&board, json, lanes.as_deref()),
             Err(err) => fail(&err, err.exit_code()),
         },
         Some(Command::Project {
@@ -505,6 +505,28 @@ async fn main() -> ExitCode {
             force,
         }) => edit_description(&client, &gid, file, stdin.is_some(), force).await,
     }
+}
+
+/// `asn board` output: columns, or lanes by the field `lanes` names (an
+/// unknown or ambiguous field prints nothing and lists the board's fields).
+fn print_board(board: &core::Board, json: bool, lanes: Option<&str>) -> ExitCode {
+    let lanes = match lanes.map(|arg| core::lanes::lane_field(board, arg)) {
+        None => None,
+        Some(Ok(field)) => Some((field.name.clone(), core::lanes::lanes(board, &field.gid))),
+        Some(Err(unresolved)) => {
+            eprint!("{}", asn::cli::render_unresolved(&unresolved));
+            return ExitCode::from(1);
+        }
+    };
+    match (json, &lanes) {
+        (true, lanes) => println!(
+            "{}",
+            asn::cli::board::render_json(board, lanes.as_ref().map(|(_, l)| l.as_slice()))
+        ),
+        (false, Some((field, lanes))) => print!("{}", asn::cli::board::render_lanes(lanes, field)),
+        (false, None) => print!("{}", asn::cli::board::render_text(board)),
+    }
+    ExitCode::SUCCESS
 }
 
 fn fail(err: &dyn std::fmt::Display, code: i32) -> ExitCode {

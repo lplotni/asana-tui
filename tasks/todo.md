@@ -766,17 +766,17 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T34: `asn board <gid> --lanes <field>`
+### - [x] T34: `asn board <gid> --lanes <field>`
 
 **Description:** Pure `core::lanes(&Board, field_gid)`: one lane per option with cards, in option order, then `(no <Field>)` when non-empty; each lane has every column. `asn board --lanes <field name|gid>` resolves the field among `Board.fields` (`resolve::pick`) and prints, per lane, a lane line, then the existing section and task lines indented once more. `--json` with `--lanes` adds a `lanes` array (option and task GIDs per section).
 
 **Acceptance criteria:**
-- [ ] Lanes follow option order; a task without a value lands in `(no Initiative)`; empty lanes are left out; every lane lists every section.
-- [ ] An unknown or ambiguous field exits 1 with the board's single-select fields as candidates.
-- [ ] Without `--lanes`, output is unchanged (apart from the additive `custom_fields` in `--json`, if agreed in T32).
+- [x] Lanes follow option order; a task without a value lands in `(no Initiative)`; empty lanes are left out; every lane lists every section.
+- [x] An unknown or ambiguous field exits 1 with the board's single-select fields as candidates.
+- [x] Without `--lanes`, output is unchanged (apart from the additive `custom_fields` in `--json`, if agreed in T32).
 
 **Verification:**
-- [ ] Unit tests for `core::lanes` (order, no value, empty lanes, a task in two projects); CLI rendering tests for text and JSON; `tests/cli.rs` for the flag.
+- [x] Unit tests for `core::lanes` (order, no value, empty lanes, a task in two projects); CLI rendering tests for text and JSON; `tests/cli.rs` for the flag.
 
 **Dependencies:** T33
 
