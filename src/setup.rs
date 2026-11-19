@@ -198,21 +198,40 @@ pub fn file_text(answers: &Answers) -> String {
     )
 }
 
-/// Writes `text` to `path` with mode 0600, creating its directory.
+/// Writes `text` to `path` with mode 0600, creating its directory. The text
+/// goes to a file beside it first, which then replaces it, so a failed write
+/// never leaves a replaced file half written. A symlink (a dotfile manager's)
+/// is written through, not replaced.
 pub fn write_file(path: &Path, text: &str) -> io::Result<()> {
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let path = match std::fs::canonicalize(path) {
+        Ok(target) => target,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => path.to_owned(),
+        Err(e) => return Err(e),
+    };
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
-    // `mode` only applies to a new file; a replaced one gets it here.
-    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    file.write_all(text.as_bytes())
+    let mut temp = path.clone().into_os_string();
+    temp.push(".tmp");
+    let temp = std::path::PathBuf::from(temp);
+    let written = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&temp)?;
+        // `mode` only applies to a new file; a leftover one gets it here.
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        std::fs::rename(&temp, &path)
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written
 }
 
 #[cfg(test)]

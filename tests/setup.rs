@@ -199,6 +199,47 @@ async fn the_file_is_written_only_readable_by_you() {
     assert_eq!(mode, 0o600);
 }
 
+#[test]
+fn a_replaced_file_gets_mode_0600_and_leaves_nothing_beside_it() {
+    let path = config_path("setup-replace-mode");
+    let dir = path.parent().unwrap();
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(&path, "old\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    setup::write_file(&path, "new\n").unwrap();
+
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "new\n");
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let names: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["config.toml"]);
+}
+
+#[test]
+fn a_symlinked_file_is_written_through_the_link() {
+    let path = config_path("setup-symlink");
+    let dotfiles = path.parent().unwrap().parent().unwrap().join("dotfiles");
+    std::fs::create_dir_all(&dotfiles).unwrap();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let target = dotfiles.join("asn.toml");
+    std::fs::write(&target, "old\n").unwrap();
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+
+    setup::write_file(&path, "new\n").unwrap();
+
+    assert!(
+        std::fs::symlink_metadata(&path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "new\n");
+}
+
 #[tokio::test]
 async fn an_existing_file_is_kept_unless_you_say_y() {
     let server = asana(one()).await;
