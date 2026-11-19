@@ -1509,6 +1509,12 @@ impl App {
         {
             return self.reopen_completing(task_gid, name);
         }
+        // Completed again before Asana confirmed the first completion: that
+        // completion stands, so drop the reopen queued for it.
+        if self.reopen_when_confirmed.remove(&task_gid) {
+            self.show_completed(&task_gid, true);
+            return Vec::new();
+        }
         let completed = match self.details.get(&task_gid) {
             Some(Detail::Loaded(detail)) => !detail.task.completed,
             _ if self.screen == Screen::Board => true,

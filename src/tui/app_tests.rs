@@ -3662,6 +3662,26 @@ fn d_during_the_animation_reopens_once_asana_confirms_the_completion() {
 }
 
 #[test]
+fn d_again_before_asana_confirms_keeps_the_completion_without_a_second_write() {
+    let mut app = animated_board(&[2]);
+    keys(&mut app, "d");
+    keys(&mut app, "d");
+
+    let effects = keys(&mut app, "d");
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(app.animating());
+
+    let effects = app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    assert!(!reopens(&effects), "{effects:?}");
+    assert!(app.animating());
+    assert!(
+        app.toast
+            .as_ref()
+            .is_some_and(|t| t.text.starts_with("Completed"))
+    );
+}
+
+#[test]
 fn d_during_the_animation_after_asana_confirmed_reopens_at_once() {
     let mut app = animated_board(&[3]);
     keys(&mut app, "d");
