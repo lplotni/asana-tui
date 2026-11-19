@@ -76,6 +76,7 @@ fn demo_board() -> Board {
         name: name.into(),
     };
     let card = |gid: &str, name: &str, assignee: Option<&str>, due: Option<&str>| BoardTask {
+        custom_fields: Vec::new(),
         gid: gid.into(),
         name: name.into(),
         assignee: assignee.map(|a| named("2", a)),
@@ -88,6 +89,7 @@ fn demo_board() -> Board {
         tasks,
     };
     Board {
+        fields: Vec::new(),
         project: named("5000000000000000", "Website relaunch"),
         columns: vec![
             column(

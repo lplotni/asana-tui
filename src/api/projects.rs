@@ -11,8 +11,13 @@ const TYPEAHEAD_COUNT: u32 = 20;
 
 /// Fields of a board card: what it shows, and its memberships to find its
 /// column.
-const BOARD_TASK_FIELDS: &str =
-    "name,assignee.name,due_on,due_at,memberships.project.name,memberships.section.name";
+const BOARD_TASK_FIELDS: &str = "name,assignee.name,due_on,due_at,memberships.project.name,\
+memberships.section.name,custom_fields.gid,custom_fields.enum_value.gid";
+
+/// Fields of a project's custom field settings: enough to keep the
+/// single-select fields and their options (F24).
+const FIELD_SETTING_FIELDS: &str = "custom_field.name,custom_field.resource_subtype,\
+custom_field.enum_options.name,custom_field.enum_options.enabled";
 
 /// An open task of a project, as a card on its board.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,6 +32,85 @@ pub struct BoardTask {
     pub due_at: Option<String>,
     #[serde(default)]
     pub memberships: Vec<Membership>,
+    /// The card's custom field values (field GID and, for a single-select
+    /// field, the chosen option's GID).
+    #[serde(default)]
+    pub custom_fields: Vec<FieldValue>,
+}
+
+/// One custom field value of a card.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldValue {
+    pub gid: String,
+    #[serde(default)]
+    pub enum_value: Option<OptionRef>,
+}
+
+/// A single-select option, by GID only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OptionRef {
+    pub gid: String,
+}
+
+impl BoardTask {
+    /// The GID of the option chosen for the single-select field `field_gid`.
+    pub fn option_of(&self, field_gid: &str) -> Option<&str> {
+        self.custom_fields
+            .iter()
+            .find(|f| f.gid == field_gid)
+            .and_then(|f| f.enum_value.as_ref())
+            .map(|o| o.gid.as_str())
+    }
+}
+
+/// A project's single-select custom field, with its options in Asana's order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SelectField {
+    pub gid: String,
+    pub name: String,
+    pub options: Vec<SelectOption>,
+}
+
+/// An option of a single-select field. A disabled option can still be set on
+/// old tasks, but is never offered.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SelectOption {
+    pub gid: String,
+    pub name: String,
+    #[serde(default = "enabled")]
+    pub enabled: bool,
+}
+
+fn enabled() -> bool {
+    true
+}
+
+/// One custom field setting of a project, as Asana returns it.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FieldSetting {
+    pub custom_field: FieldDefinition,
+}
+
+/// A custom field's definition. Only single-select fields (`enum`) are used.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FieldDefinition {
+    pub gid: String,
+    pub name: String,
+    #[serde(default)]
+    pub resource_subtype: String,
+    #[serde(default)]
+    pub enum_options: Vec<SelectOption>,
+}
+
+impl FieldDefinition {
+    /// This field as a [`SelectField`], if it is a single-select field.
+    pub fn into_select(self) -> Option<SelectField> {
+        (self.resource_subtype == "enum").then_some(SelectField {
+            gid: self.gid,
+            name: self.name,
+            options: self.enum_options,
+        })
+    }
 }
 
 impl Client {
@@ -61,6 +145,26 @@ impl Client {
             .get(&format!("/projects/{project_gid}/sections"), &query)
             .await?;
         Ok(page.data)
+    }
+
+    /// One page of the project's custom field settings.
+    pub async fn field_settings_page(
+        &self,
+        project_gid: &str,
+        offset: Option<&str>,
+    ) -> Result<Page<FieldSetting>, ApiError> {
+        let mut query = vec![
+            ("limit", "100".to_owned()),
+            ("opt_fields", FIELD_SETTING_FIELDS.to_owned()),
+        ];
+        if let Some(offset) = offset {
+            query.push(("offset", offset.to_owned()));
+        }
+        self.get(
+            &format!("/projects/{project_gid}/custom_field_settings"),
+            &query,
+        )
+        .await
     }
 
     /// One page of the project's incomplete tasks, in the project's order.

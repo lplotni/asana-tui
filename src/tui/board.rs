@@ -338,6 +338,7 @@ mod tests {
 
     fn card(gid: &str) -> BoardTask {
         BoardTask {
+            custom_fields: Vec::new(),
             gid: gid.into(),
             name: format!("Task {gid}"),
             assignee: None,
@@ -352,6 +353,7 @@ mod tests {
     fn board(sizes: &[usize]) -> Board {
         Board {
             project: named("p", "Project"),
+            fields: Vec::new(),
             columns: sizes
                 .iter()
                 .enumerate()

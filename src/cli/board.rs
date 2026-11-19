@@ -51,6 +51,7 @@ mod tests {
 
     fn card(gid: &str, name: &str, assignee: Option<&str>, due_on: Option<&str>) -> BoardTask {
         BoardTask {
+            custom_fields: Vec::new(),
             gid: gid.into(),
             name: name.into(),
             assignee: assignee.map(|a| named("u", a)),
@@ -62,6 +63,7 @@ mod tests {
 
     fn board() -> Board {
         Board {
+            fields: Vec::new(),
             project: named("p", "Project"),
             columns: vec![
                 Column {
@@ -95,6 +97,7 @@ mod tests {
     #[test]
     fn the_no_section_column_has_an_empty_gid() {
         let board = Board {
+            fields: Vec::new(),
             project: named("p", "Project"),
             columns: vec![Column {
                 section: None,
@@ -108,6 +111,7 @@ mod tests {
     #[test]
     fn task_names_cannot_break_the_lines() {
         let board = Board {
+            fields: Vec::new(),
             project: named("p", "Project"),
             columns: vec![Column {
                 section: Some(named("s1", "A\nB")),
@@ -122,6 +126,26 @@ mod tests {
             !text
                 .chars()
                 .any(|c| c.is_control() && c != '\t' && c != '\n')
+        );
+    }
+
+    #[test]
+    fn json_tasks_include_their_single_select_values() {
+        let mut board = board();
+        board.columns[0].tasks[0].custom_fields = vec![crate::api::projects::FieldValue {
+            gid: "1200000000000061".into(),
+            enum_value: Some(crate::api::projects::OptionRef {
+                gid: "1200000000000062".into(),
+            }),
+        }];
+
+        let json: serde_json::Value = serde_json::from_str(&render_json(&board)).unwrap();
+
+        assert_eq!(
+            json["tasks"][0]["custom_fields"],
+            serde_json::json!([
+                { "gid": "1200000000000061", "enum_value": { "gid": "1200000000000062" } }
+            ])
         );
     }
 
@@ -149,6 +173,7 @@ mod tests {
     #[test]
     fn json_has_no_section_entry_for_the_no_section_column() {
         let board = Board {
+            fields: Vec::new(),
             project: named("p", "Project"),
             columns: vec![Column {
                 section: None,

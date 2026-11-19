@@ -746,17 +746,17 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T33: Single-select fields on the board
+### - [x] T33: Single-select fields on the board
 
 **Description:** `api`: `GET /projects/{gid}/custom_field_settings` (`opt_fields=custom_field.name,custom_field.resource_subtype,custom_field.enum_options.name,custom_field.enum_options.enabled`, paginated) and `custom_fields.gid,custom_fields.enum_value.gid` on board tasks. `core::board` loads the settings in the same `try_join!` and returns `Board { project, columns, fields }`, where `fields` are the single-select fields with their options in order.
 
 **Acceptance criteria:**
-- [ ] `Board.fields` lists only single-select fields, with options in Asana's order (disabled ones kept, marked).
-- [ ] Each board task carries its value (option GID or none) per field.
-- [ ] One more request per board load; the existing board tests still pass.
+- [x] `Board.fields` lists only single-select fields, with options in Asana's order (disabled ones kept, marked).
+- [x] Each board task carries its value (option GID or none) per field.
+- [x] One more request per board load; the existing board tests still pass.
 
 **Verification:**
-- [ ] Wiremock: settings with a single-select, a multi-select and a text field (only the first is kept); pagination of settings; task values parsed. `cargo test`, clippy, fmt.
+- [x] Wiremock: settings with a single-select, a multi-select and a text field (only the first is kept); pagination of settings; task values parsed. `cargo test`, clippy, fmt.
 
 **Dependencies:** T32
 

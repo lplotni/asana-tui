@@ -67,6 +67,7 @@ mod tests {
 
     fn task(assignee: Option<&str>, due_on: Option<&str>, due_at: Option<&str>) -> BoardTask {
         BoardTask {
+            custom_fields: Vec::new(),
             gid: "1".into(),
             name: "Task".into(),
             assignee: assignee.map(|name| Named {

@@ -2217,6 +2217,7 @@ fn a_blank_comment_from_the_external_editor_is_not_posted() {
 fn project_board(sizes: &[usize]) -> crate::core::Board {
     crate::core::Board {
         project: named("42", "Website"),
+        fields: Vec::new(),
         columns: sizes
             .iter()
             .enumerate()
@@ -2224,6 +2225,7 @@ fn project_board(sizes: &[usize]) -> crate::core::Board {
                 section: Some(named(&format!("s{c}"), &format!("Section {c}"))),
                 tasks: (0..n)
                     .map(|row| crate::api::projects::BoardTask {
+                        custom_fields: Vec::new(),
                         gid: format!("c{c}-{row}"),
                         name: format!("Card {c}-{row}"),
                         assignee: None,

@@ -171,6 +171,8 @@ async fn a_board_loads_open_tasks_from_every_page_grouped_by_section() {
         .mount(&server)
         .await;
 
+    no_fields(&server, project).await;
+
     let board = core::board(&client(&server), project).await.unwrap();
 
     assert_eq!(board.project.name, "Maple willow mike");
@@ -295,4 +297,171 @@ async fn a_task_created_but_refused_by_the_section_is_still_returned() {
             .section_error
             .is_some_and(|e| e.to_string().contains("Forbidden"))
     );
+}
+
+// --- Single-select fields on the board (F24, T33) ---
+
+const BOARD: &str = "1200000000000042";
+const INITIATIVE: &str = "1200000000000061";
+const CHECKOUT: &str = "1200000000000062";
+const ONBOARDING: &str = "1200000000000063";
+const LEGACY: &str = "1200000000000064";
+const PRIORITY: &str = "1200000000000065";
+const HIGH: &str = "1200000000000066";
+
+/// A project with no custom fields.
+async fn no_fields(server: &MockServer, project: &str) {
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{project}/custom_field_settings")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [] })))
+        .mount(server)
+        .await;
+}
+
+/// The board's project, sections and one page of tasks.
+async fn board_basics(server: &MockServer, tasks: Value) {
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{BOARD}")))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "data": { "gid": BOARD, "name": "Web Platform" } })),
+        )
+        .mount(server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{BOARD}/sections")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000051", "name": "Backlog" }
+        ] })))
+        .mount(server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{BOARD}/tasks")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": tasks })))
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn a_board_keeps_the_projects_single_select_fields_with_options_in_order() {
+    let server = MockServer::start().await;
+    board_basics(&server, json!([])).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{BOARD}/custom_field_settings")))
+        .and(query_param("offset", "page2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000071", "custom_field": {
+                "gid": PRIORITY, "name": "Priority", "resource_subtype": "enum",
+                "enum_options": [{ "gid": HIGH, "name": "High", "enabled": true }]
+            } }
+        ], "next_page": null })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{BOARD}/custom_field_settings")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000072", "custom_field": {
+                "gid": INITIATIVE, "name": "Initiative", "resource_subtype": "enum",
+                "enum_options": [
+                    { "gid": CHECKOUT, "name": "Checkout", "enabled": true },
+                    { "gid": ONBOARDING, "name": "Onboarding", "enabled": true },
+                    { "gid": LEGACY, "name": "Legacy", "enabled": false }
+                ]
+            } },
+            { "gid": "1200000000000073", "custom_field": {
+                "gid": "1200000000000067", "name": "Teams", "resource_subtype": "multi_enum",
+                "enum_options": [{ "gid": "1200000000000068", "name": "Web", "enabled": true }]
+            } },
+            { "gid": "1200000000000074", "custom_field": {
+                "gid": "1200000000000069", "name": "Notes", "resource_subtype": "text"
+            } }
+        ], "next_page": { "offset": "page2" } })))
+        .mount(&server)
+        .await;
+
+    let board = core::board(&client(&server), BOARD).await.unwrap();
+
+    let fields: Vec<(&str, Vec<(&str, bool)>)> = board
+        .fields
+        .iter()
+        .map(|f| {
+            (
+                f.name.as_str(),
+                f.options
+                    .iter()
+                    .map(|o| (o.name.as_str(), o.enabled))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        fields,
+        [
+            (
+                "Initiative",
+                vec![("Checkout", true), ("Onboarding", true), ("Legacy", false)]
+            ),
+            ("Priority", vec![("High", true)]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn board_cards_carry_their_single_select_values() {
+    let server = MockServer::start().await;
+    board_basics(
+        &server,
+        json!([
+            { "gid": "1200000000000201", "name": "Fix redirect", "custom_fields": [
+                { "gid": INITIATIVE, "enum_value": { "gid": CHECKOUT } },
+                { "gid": PRIORITY, "enum_value": null }
+            ] },
+            { "gid": "1200000000000202", "name": "Welcome mail" }
+        ]),
+    )
+    .await;
+    no_fields(&server, BOARD).await;
+
+    let board = core::board(&client(&server), BOARD).await.unwrap();
+
+    let tasks = &board
+        .columns
+        .iter()
+        .flat_map(|c| &c.tasks)
+        .collect::<Vec<_>>();
+    assert_eq!(tasks[0].option_of(INITIATIVE), Some(CHECKOUT));
+    assert_eq!(tasks[0].option_of(PRIORITY), None);
+    assert_eq!(tasks[1].option_of(INITIATIVE), None);
+}
+
+#[tokio::test]
+async fn a_board_asks_for_field_settings_and_card_values() {
+    let server = MockServer::start().await;
+    board_basics(&server, json!([])).await;
+    no_fields(&server, BOARD).await;
+
+    core::board(&client(&server), BOARD).await.unwrap();
+
+    let requests = server.received_requests().await.unwrap();
+    let opt_fields = |suffix: &str| -> String {
+        requests
+            .iter()
+            .find(|r| r.url.path().ends_with(suffix))
+            .and_then(|r| r.url.query_pairs().find(|(k, _)| k == "opt_fields"))
+            .map(|(_, v)| v.into_owned())
+            .unwrap_or_default()
+    };
+    let tasks = opt_fields("/tasks");
+    for field in ["custom_fields.gid", "custom_fields.enum_value.gid"] {
+        assert!(tasks.split(',').any(|f| f == field), "{tasks}");
+    }
+    let settings = opt_fields("/custom_field_settings");
+    for field in [
+        "custom_field.name",
+        "custom_field.resource_subtype",
+        "custom_field.enum_options.name",
+        "custom_field.enum_options.enabled",
+    ] {
+        assert!(settings.split(',').any(|f| f == field), "{settings}");
+    }
 }

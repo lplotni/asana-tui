@@ -1440,6 +1440,7 @@ mod tests {
         due_on: Option<&str>,
     ) -> crate::api::projects::BoardTask {
         crate::api::projects::BoardTask {
+            custom_fields: Vec::new(),
             gid: gid.into(),
             name: name.into(),
             assignee: assignee.map(|name| crate::api::tasks::Named {
@@ -1469,6 +1470,7 @@ mod tests {
     /// Five sections; "Review" is empty. NOW is Mon 16 Nov 2026.
     fn sample_board() -> crate::core::Board {
         crate::core::Board {
+            fields: Vec::new(),
             project: crate::api::tasks::Named {
                 gid: "42".into(),
                 name: "Website relaunch".into(),

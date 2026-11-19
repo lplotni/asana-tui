@@ -194,6 +194,8 @@ pub async fn sections(client: &Client, project_gid: &str) -> Result<Vec<Named>, 
 pub struct Board {
     pub project: Named,
     pub columns: Vec<Column>,
+    /// The project's single-select fields (F24), in the project's order.
+    pub fields: Vec<crate::api::projects::SelectField>,
 }
 
 /// One section of a board and its tasks in board order. `section` is `None`
@@ -204,10 +206,11 @@ pub struct Column {
     pub tasks: Vec<BoardTask>,
 }
 
-/// Loads the project, its sections and every page of its open tasks at the
-/// same time, and groups the tasks into columns.
+/// Loads the project, its sections, every page of its open tasks and its
+/// custom field settings at the same time, groups the tasks into columns,
+/// and keeps the project's single-select fields (F24).
 pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError> {
-    let (project, sections, tasks) = tokio::try_join!(
+    let (project, sections, tasks, settings) = tokio::try_join!(
         client.project(project_gid),
         client.sections(project_gid),
         all_pages(|offset| async move {
@@ -215,8 +218,18 @@ pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError
                 .project_tasks_page(project_gid, offset.as_deref())
                 .await
         }),
+        all_pages(|offset| async move {
+            client
+                .field_settings_page(project_gid, offset.as_deref())
+                .await
+        }),
     )?;
-    Ok(group_board(project, sections, tasks))
+    let mut board = group_board(project, sections, tasks);
+    board.fields = settings
+        .into_iter()
+        .filter_map(|s| s.custom_field.into_select())
+        .collect();
+    Ok(board)
 }
 
 /// One column per section, keeping empty ones. Each task goes to its section
@@ -257,7 +270,11 @@ fn group_board(project: Named, sections: Vec<Named>, tasks: Vec<BoardTask>) -> B
             },
         );
     }
-    Board { project, columns }
+    Board {
+        project,
+        columns,
+        fields: Vec::new(),
+    }
 }
 
 /// Adds the task to a project (and optionally a section), keeping the
@@ -610,6 +627,7 @@ mod tests {
     /// A task that is in `memberships`, given as (project, section) GIDs.
     fn task(gid: &str, memberships: &[(&str, Option<&str>)]) -> BoardTask {
         BoardTask {
+            custom_fields: Vec::new(),
             gid: gid.into(),
             name: format!("Task {gid}"),
             assignee: None,
