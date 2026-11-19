@@ -149,6 +149,17 @@ enum TaskCommand {
         #[arg(value_name = "USER_GID|NAME|me|none")]
         assignee: String,
     },
+    /// Set a single-select field (e.g. Initiative), or clear it with `none`
+    Field {
+        #[arg(value_name = "TASK_GID")]
+        gid: String,
+        /// The field, by gid or name
+        #[arg(value_name = "FIELD")]
+        field: String,
+        /// The option, by gid or name, or `none` to clear the field
+        #[arg(value_name = "OPTION|none")]
+        option: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -172,6 +183,12 @@ enum ProjectCommand {
         /// (exact, or the only section containing it)
         #[arg(value_name = "SECTION_GID|NAME")]
         section: String,
+    },
+    /// List a project's single-select fields and their options
+    Fields {
+        /// A project gid, or a project name (exact, or the only match)
+        #[arg(value_name = "PROJECT_GID|NAME")]
+        project: String,
     },
     /// List a project's sections (gid and name)
     Sections {
@@ -298,6 +315,20 @@ async fn main() -> ExitCode {
         None => match asn::tui::run(config, client, cli.project).await {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => fail(&err, 1),
+        },
+        Some(Command::Task {
+            command: Some(TaskCommand::Field { gid, field, option }),
+            ..
+        }) => match core::set_field(&client, &gid, &field, &option).await {
+            Ok(Ok(set)) => {
+                print!("{}", asn::cli::render_field_set(&set));
+                ExitCode::SUCCESS
+            }
+            Ok(Err(unresolved)) => {
+                eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                ExitCode::from(1)
+            }
+            Err(err) => fail(&err, err.exit_code()),
         },
         Some(Command::Task {
             command: Some(TaskCommand::Done { gid, undo }),
@@ -446,6 +477,19 @@ async fn main() -> ExitCode {
                     Some(place) => println!("moved to {}", asn::cli::terminal_safe(&place)),
                     None => println!("moved"),
                 }
+                ExitCode::SUCCESS
+            }
+            Ok(Err(unresolved)) => {
+                eprint!("{}", asn::cli::render_unresolved(&unresolved));
+                ExitCode::from(1)
+            }
+            Err(err) => fail(&err, err.exit_code()),
+        },
+        Some(Command::Project {
+            command: ProjectCommand::Fields { project },
+        }) => match core::project_fields(&client, &config.workspace, &project).await {
+            Ok(Ok(fields)) => {
+                print!("{}", asn::cli::render_fields(&fields));
                 ExitCode::SUCCESS
             }
             Ok(Err(unresolved)) => {

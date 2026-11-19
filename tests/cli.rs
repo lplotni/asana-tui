@@ -237,6 +237,35 @@ fn board_lanes_takes_a_field() {
 }
 
 #[test]
+fn task_field_and_project_fields_are_commands() {
+    let task = String::from_utf8_lossy(&asn(&["task", "--help"], &[]).stdout).into_owned();
+    assert!(task.contains("field"), "{task}");
+    let project = String::from_utf8_lossy(&asn(&["project", "--help"], &[]).stdout).into_owned();
+    assert!(project.contains("fields"), "{project}");
+
+    let env = [("ASANA_WORKSPACE", "1234567890123456")];
+    for args in [
+        &[
+            "task",
+            "field",
+            "1200000000000031",
+            "Initiative",
+            "Checkout",
+        ][..],
+        &["task", "field", "1200000000000031", "Initiative", "none"],
+        &["project", "fields", "Web Platform"],
+    ] {
+        let output = asn(args, &env);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{args:?}: {}",
+            stderr(&output)
+        );
+    }
+}
+
+#[test]
 fn asn_projects_takes_words_to_search_for() {
     let output = asn(
         &["projects", "web", "platform"],

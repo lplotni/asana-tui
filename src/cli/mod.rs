@@ -36,6 +36,25 @@ pub fn render_unresolved(unresolved: &crate::core::resolve::Unresolved) -> Strin
         + &render_named(&unresolved.candidates)
 }
 
+/// `asn project fields`: each single-select field (`gid  name`), then its
+/// enabled options as indented `gid  name` lines.
+pub fn render_fields(fields: &[crate::api::projects::SelectField]) -> String {
+    let mut text = String::new();
+    for field in fields {
+        text += &tsv_line(&[&field.gid, &field.name]);
+        for option in field.options.iter().filter(|o| o.enabled) {
+            text += &tsv_line(&["", &option.gid, &option.name]);
+        }
+    }
+    text
+}
+
+/// `asn task field`: `<Field>: <Option>`, or `<Field>: none` when cleared.
+pub fn render_field_set(set: &crate::core::FieldSet) -> String {
+    let option = set.option.as_deref().unwrap_or("none");
+    format!("{}: {}\n", terminal_safe(&set.field), terminal_safe(option))
+}
+
 /// One line of tab-separated output, every field made [`terminal_safe`]
 /// (so a field can't contain a tab or newline that breaks the columns).
 pub fn tsv_line(fields: &[&str]) -> String {
@@ -104,6 +123,46 @@ mod tests {
             render_unresolved(&unresolved),
             "no person matches \"Grace [2J\"\n"
         );
+    }
+
+    #[test]
+    fn project_fields_list_each_field_then_its_enabled_options() {
+        use crate::api::projects::{SelectField, SelectOption};
+        let option = |gid: &str, name: &str, enabled: bool| SelectOption {
+            gid: gid.into(),
+            name: name.into(),
+            enabled,
+        };
+        let fields = [SelectField {
+            gid: "61".into(),
+            name: "Initiative".into(),
+            options: vec![
+                option("62", "Checkout", true),
+                option("64", "Legacy", false),
+                option("63", "On\u{1b}[2Jboarding", true),
+            ],
+        }];
+
+        assert_eq!(
+            render_fields(&fields),
+            "61\tInitiative\n\t62\tCheckout\n\t63\tOn [2Jboarding\n"
+        );
+    }
+
+    #[test]
+    fn a_set_field_reads_field_colon_option() {
+        use crate::core::FieldSet;
+        let set = FieldSet {
+            field: "Initiative".into(),
+            option: Some("Checkout".into()),
+        };
+        let cleared = FieldSet {
+            field: "Initiative".into(),
+            option: None,
+        };
+
+        assert_eq!(render_field_set(&set), "Initiative: Checkout\n");
+        assert_eq!(render_field_set(&cleared), "Initiative: none\n");
     }
 
     #[test]

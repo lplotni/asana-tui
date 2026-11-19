@@ -7,7 +7,9 @@ use super::{ApiError, Client, Page};
 /// Task fields shown in the detail pane.
 pub const TASK_FIELDS: &str = "name,completed,completed_at,assignee.name,due_on,due_at,start_on,\
 notes,html_notes,permalink_url,modified_at,memberships.project.name,memberships.section.name,\
-tags.name,custom_fields.name,custom_fields.display_value,parent.name,num_subtasks";
+tags.name,custom_fields.name,custom_fields.display_value,custom_fields.resource_subtype,\
+custom_fields.enum_value.name,custom_fields.enum_options.name,custom_fields.enum_options.enabled,\
+parent.name,num_subtasks";
 
 /// Story fields: enough to show comments and count the rest.
 pub const STORY_FIELDS: &str = "type,resource_subtype,text,html_text,created_at,created_by.name,\
@@ -58,6 +60,15 @@ pub struct CustomField {
     pub gid: String,
     pub name: String,
     pub display_value: Option<String>,
+    /// `enum` for a single-select field (F27); other types aren't edited.
+    #[serde(default)]
+    pub resource_subtype: String,
+    /// The chosen option of a single-select field.
+    #[serde(default)]
+    pub enum_value: Option<Named>,
+    /// A single-select field's options, in Asana's order.
+    #[serde(default)]
+    pub enum_options: Vec<crate::api::projects::SelectOption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -191,6 +202,21 @@ impl Client {
         let body = serde_json::json!({ "data": { "assignee": assignee } });
         let updated: Data = self.put(&format!("/tasks/{gid}"), &query, &body).await?;
         Ok(updated.data.assignee)
+    }
+
+    /// Sets the single-select field `field_gid` to `option_gid`, or clears it.
+    pub async fn set_select_field(
+        &self,
+        gid: &str,
+        field_gid: &str,
+        option_gid: Option<&str>,
+    ) -> Result<(), ApiError> {
+        let mut fields = serde_json::Map::new();
+        fields.insert(field_gid.to_owned(), option_gid.into());
+        let body = serde_json::json!({ "data": { "custom_fields": fields } });
+        let query = [("opt_fields", "gid".to_owned())];
+        let _: serde_json::Value = self.put(&format!("/tasks/{gid}"), &query, &body).await?;
+        Ok(())
     }
 
     /// Adds a comment (`text`, or `html_text` for rich text); returns the

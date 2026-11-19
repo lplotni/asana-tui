@@ -120,7 +120,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T32: Spec F24–F27 in SPEC-board.md
 - [x] T33: Single-select fields on the board (project field settings, values on cards)
 - [x] T34: `asn board <gid> --lanes <field>` (pure lane grouping)
-- [ ] T35: `asn task field` and `asn project fields` (set a single-select field by name)
+- [x] T35: `asn task field` and `asn project fields` (set a single-select field by name)
 
 #### Checkpoint L1: data is right
 - [ ] `asn board --lanes Initiative` matches the web board grouped by Initiative on 1–2 real projects

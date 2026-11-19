@@ -78,32 +78,12 @@ pub fn lane_field<'a>(board: &'a Board, arg: &str) -> Result<&'a SelectField, Un
             name: f.name.clone(),
         })
         .collect();
-    let picked = if resolve::is_gid(arg) {
-        all.iter()
-            .find(|f| f.gid == arg)
-            .cloned()
-            .ok_or(Unresolved {
-                kind: "field",
-                name: arg.to_owned(),
-                candidates: Vec::new(),
-            })
-    } else {
-        resolve::pick_containing("field", arg, all.clone())
-    };
-    match picked {
-        Ok(field) => Ok(board
-            .fields
-            .iter()
-            .find(|f| f.gid == field.gid)
-            .expect("picked from the board's fields")),
-        // Nothing matched: list every field, so the caller sees the choice.
-        Err(mut unresolved) => {
-            if unresolved.candidates.is_empty() {
-                unresolved.candidates = all;
-            }
-            Err(unresolved)
-        }
-    }
+    let field = resolve::pick_local("field", arg, all)?;
+    Ok(board
+        .fields
+        .iter()
+        .find(|f| f.gid == field.gid)
+        .expect("picked from the board's fields"))
 }
 
 #[cfg(test)]

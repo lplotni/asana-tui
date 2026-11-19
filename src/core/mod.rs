@@ -219,18 +219,28 @@ pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError
                 .project_tasks_page(project_gid, offset.as_deref())
                 .await
         }),
-        all_pages(|offset| async move {
-            client
-                .field_settings_page(project_gid, offset.as_deref())
-                .await
-        }),
+        select_fields(client, project_gid),
     )?;
     let mut board = group_board(project, sections, tasks);
-    board.fields = settings
+    board.fields = settings;
+    Ok(board)
+}
+
+/// The project's single-select fields (F24), with their options in order.
+pub async fn select_fields(
+    client: &Client,
+    project_gid: &str,
+) -> Result<Vec<crate::api::projects::SelectField>, ApiError> {
+    let settings = all_pages(|offset| async move {
+        client
+            .field_settings_page(project_gid, offset.as_deref())
+            .await
+    })
+    .await?;
+    Ok(settings
         .into_iter()
         .filter_map(|s| s.custom_field.into_select())
-        .collect();
-    Ok(board)
+        .collect())
 }
 
 /// One column per section, keeping empty ones. Each task goes to its section
@@ -466,6 +476,98 @@ pub async fn add_to(
     Ok(Ok(place))
 }
 
+/// A single-select field as set by [`set_field`]: its name and the chosen
+/// option's name (`None` when cleared).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldSet {
+    pub field: String,
+    pub option: Option<String>,
+}
+
+/// Sets the task's single-select field `field` (a GID or a name among the
+/// task's single-select fields) to `option` (a GID or a name among its
+/// enabled options, or `none` to clear), as in F19 (F25, F27). A name that
+/// doesn't resolve is returned as [`resolve::Unresolved`], and nothing is
+/// written.
+pub async fn set_field(
+    client: &Client,
+    task_gid: &str,
+    field: &str,
+    option: &str,
+) -> Result<Result<FieldSet, resolve::Unresolved>, ApiError> {
+    let task = client.task(task_gid).await?;
+    let fields: Vec<_> = task
+        .custom_fields
+        .iter()
+        .filter(|f| f.resource_subtype == "enum")
+        .collect();
+    let named = |gid: &str, name: &str| Named {
+        gid: gid.to_owned(),
+        name: name.to_owned(),
+    };
+    let candidates = fields.iter().map(|f| named(&f.gid, &f.name)).collect();
+    let chosen = match resolve::pick_local("field", field, candidates) {
+        Ok(chosen) => chosen,
+        Err(unresolved) => return Ok(Err(unresolved)),
+    };
+    let definition = fields
+        .iter()
+        .find(|f| f.gid == chosen.gid)
+        .expect("picked from the task's fields");
+    let option = if option == "none" {
+        None
+    } else {
+        let enabled = definition
+            .enum_options
+            .iter()
+            .filter(|o| o.enabled)
+            .map(|o| named(&o.gid, &o.name))
+            .collect();
+        match resolve::pick_local("option", option, enabled) {
+            Ok(option) => Some(option),
+            Err(unresolved) => return Ok(Err(unresolved)),
+        }
+    };
+    client
+        .set_select_field(
+            task_gid,
+            &chosen.gid,
+            option.as_ref().map(|o| o.gid.as_str()),
+        )
+        .await?;
+    Ok(Ok(FieldSet {
+        field: chosen.name,
+        option: option.map(|o| o.name),
+    }))
+}
+
+/// The single-select fields of `project` (a GID or a name, as in F19).
+pub async fn project_fields(
+    client: &Client,
+    workspace: &str,
+    project: &str,
+) -> Result<Result<Vec<crate::api::projects::SelectField>, resolve::Unresolved>, ApiError> {
+    let project_gid = match resolve_project(client, workspace, project).await? {
+        Ok(gid) => gid,
+        Err(unresolved) => return Ok(Err(unresolved)),
+    };
+    select_fields(client, &project_gid).await.map(Ok)
+}
+
+/// The GID of `project`, given as a GID or a name (the project typeahead,
+/// as in F19).
+async fn resolve_project(
+    client: &Client,
+    workspace: &str,
+    project: &str,
+) -> Result<Result<String, resolve::Unresolved>, ApiError> {
+    if resolve::is_gid(project) {
+        return Ok(Ok(project.to_owned()));
+    }
+    let found = search_projects(client, workspace, project).await?;
+    Ok(resolve::pick("project", project, found).map(|picked| picked.gid))
+}
+
 /// The GIDs of `project` and, if given, `section` within it, each given as
 /// a GID or a name: a project by the project typeahead, a section among the
 /// project's sections.
@@ -475,14 +577,9 @@ async fn project_and_section(
     project: &str,
     section: Option<&str>,
 ) -> Result<Result<(String, Option<String>), resolve::Unresolved>, ApiError> {
-    let project_gid = if resolve::is_gid(project) {
-        project.to_owned()
-    } else {
-        let found = search_projects(client, workspace, project).await?;
-        match resolve::pick("project", project, found) {
-            Ok(picked) => picked.gid,
-            Err(unresolved) => return Ok(Err(unresolved)),
-        }
+    let project_gid = match resolve_project(client, workspace, project).await? {
+        Ok(gid) => gid,
+        Err(unresolved) => return Ok(Err(unresolved)),
     };
     let section_gid = match section {
         None => None,

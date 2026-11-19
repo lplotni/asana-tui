@@ -786,17 +786,17 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T35: `asn task field` and `asn project fields`
+### - [x] T35: `asn task field` and `asn project fields`
 
 **Description:** `TASK_FIELDS` gains `custom_fields.resource_subtype,custom_fields.enum_value.name,custom_fields.enum_options.name,custom_fields.enum_options.enabled`. `core::set_field(client, task, field, option)` resolves the field among the task's single-select fields and the option among its enabled options (`resolve::pick`; `none` clears), then `PUT /tasks/{gid}` `{custom_fields: {field: option|null}}`. `asn task field <task> <field> <option|none>` prints `Initiative: Checkout`. `asn project fields <project gid|name>` (the project resolved as in F19) prints each single-select field (`gid  name`) with its options indented.
 
 **Acceptance criteria:**
-- [ ] Setting by names (any case, or the only match) writes the option GID; `none` writes `null`.
-- [ ] An ambiguous or unknown field or option, a disabled option, or a non-single-select field writes nothing and exits 1 with candidates.
-- [ ] `asn task` (detail) still shows custom fields as before.
+- [x] Setting by names (any case, or the only match) writes the option GID; `none` writes `null`.
+- [x] An ambiguous or unknown field or option, a disabled option, or a non-single-select field writes nothing and exits 1 with candidates.
+- [x] `asn task` (detail) still shows custom fields as before.
 
 **Verification:**
-- [ ] Wiremock: set by name, set by GIDs (no extra lookup beyond the task read), clear, ambiguous option (no `PUT`), disabled option (no `PUT`); CLI tests for both commands; `cargo test`, clippy, fmt.
+- [x] Wiremock: set by name, set by GIDs (no extra lookup beyond the task read), clear, ambiguous option (no `PUT`), disabled option (no `PUT`); CLI tests for both commands; `cargo test`, clippy, fmt.
 
 **Dependencies:** T33
 

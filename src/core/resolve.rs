@@ -56,6 +56,35 @@ pub fn pick_containing(
     pick(kind, name, containing)
 }
 
+/// The candidate `arg` means in a list known up front (a task's fields, a
+/// field's options): its GID, or a name as in [`pick_containing`]. When
+/// nothing matches, every candidate is listed, so the caller sees the choice.
+pub fn pick_local(
+    kind: &'static str,
+    arg: &str,
+    candidates: Vec<Named>,
+) -> Result<Named, Unresolved> {
+    let picked = if is_gid(arg) {
+        candidates
+            .iter()
+            .find(|c| c.gid == arg)
+            .cloned()
+            .ok_or_else(|| Unresolved {
+                kind,
+                name: arg.to_owned(),
+                candidates: Vec::new(),
+            })
+    } else {
+        pick_containing(kind, arg, candidates.clone())
+    };
+    picked.map_err(|mut unresolved| {
+        if unresolved.candidates.is_empty() {
+            unresolved.candidates = candidates;
+        }
+        unresolved
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +195,44 @@ mod tests {
         let picked = pick_containing("section", "review", sections);
 
         assert_eq!(picked, Ok(named("1", "Review")));
+    }
+    #[test]
+    fn local_lists_match_a_gid_exactly() {
+        let options = vec![
+            named("1200000000000062", "Checkout"),
+            named("1200000000000063", "Onboarding"),
+        ];
+
+        let picked = pick_local("option", "1200000000000063", options);
+
+        assert_eq!(picked, Ok(named("1200000000000063", "Onboarding")));
+    }
+
+    #[test]
+    fn local_lists_match_a_name_like_sections() {
+        let options = vec![named("1", "Checkout"), named("2", "Onboarding")];
+
+        assert_eq!(
+            pick_local("option", "board", options),
+            Ok(named("2", "Onboarding"))
+        );
+    }
+
+    #[test]
+    fn nothing_matching_in_a_local_list_lists_every_candidate() {
+        let options = vec![named("1", "Checkout"), named("2", "Onboarding")];
+
+        let unresolved = pick_local("option", "Mobile", options.clone()).unwrap_err();
+
+        assert_eq!(unresolved.candidates, options);
+    }
+
+    #[test]
+    fn an_unknown_gid_in_a_local_list_lists_every_candidate() {
+        let options = vec![named("1", "Checkout")];
+
+        let unresolved = pick_local("option", "1200000000000099", options.clone()).unwrap_err();
+
+        assert_eq!(unresolved.candidates, options);
     }
 }

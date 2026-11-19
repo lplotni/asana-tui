@@ -535,3 +535,203 @@ async fn an_unknown_project_adds_nothing() {
     assert_eq!(unresolved.kind, "project");
     assert!(unresolved.candidates.is_empty());
 }
+
+// --- Single-select fields by name: `asn task field`, `asn project fields` (T35) ---
+
+const INITIATIVE: &str = "1200000000000061";
+const CHECKOUT: &str = "1200000000000062";
+const ONBOARDING: &str = "1200000000000063";
+const LEGACY: &str = "1200000000000064";
+const NOTES: &str = "1200000000000069";
+
+/// The task with an Initiative single-select field (currently Onboarding;
+/// Legacy disabled) and a Notes text field.
+async fn task_with_fields(server: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path(format!("/tasks/{TASK}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {
+            "gid": TASK,
+            "name": "Fix checkout redirect loop",
+            "completed": false,
+            "permalink_url": "https://app.asana.com/0/0/1200000000000031",
+            "custom_fields": [
+                { "gid": INITIATIVE, "name": "Initiative", "display_value": "Onboarding",
+                  "resource_subtype": "enum",
+                  "enum_value": { "gid": ONBOARDING, "name": "Onboarding" },
+                  "enum_options": [
+                      { "gid": CHECKOUT, "name": "Checkout", "enabled": true },
+                      { "gid": ONBOARDING, "name": "Onboarding", "enabled": true },
+                      { "gid": LEGACY, "name": "Legacy", "enabled": false }
+                  ] },
+                { "gid": NOTES, "name": "Notes", "display_value": "x",
+                  "resource_subtype": "text" }
+            ],
+        } })))
+        .mount(server)
+        .await;
+}
+
+async fn field_written(server: &MockServer, option: serde_json::Value, times: u64) {
+    Mock::given(method("PUT"))
+        .and(path(format!("/tasks/{TASK}")))
+        .and(body_json(
+            json!({ "data": { "custom_fields": { INITIATIVE: option } } }),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": { "gid": TASK } })))
+        .expect(times)
+        .mount(server)
+        .await;
+}
+
+async fn no_field_writes(server: &MockServer) {
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn a_single_select_field_is_set_by_field_and_option_names() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    field_written(&server, json!(CHECKOUT), 1).await;
+
+    let set = core::set_field(&client(&server), TASK, "initiative", "checkout")
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        set,
+        core::FieldSet {
+            field: "Initiative".into(),
+            option: Some("Checkout".into())
+        }
+    );
+    let requests = server.received_requests().await.unwrap();
+    let opt_fields = requests[0]
+        .url
+        .query_pairs()
+        .find(|(k, _)| k == "opt_fields")
+        .map(|(_, v)| v.into_owned())
+        .unwrap();
+    for field in [
+        "custom_fields.resource_subtype",
+        "custom_fields.enum_options.name",
+        "custom_fields.enum_options.enabled",
+    ] {
+        assert!(opt_fields.split(',').any(|f| f == field), "{opt_fields}");
+    }
+}
+
+#[tokio::test]
+async fn a_single_select_field_is_set_by_gids() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    field_written(&server, json!(CHECKOUT), 1).await;
+
+    let set = core::set_field(&client(&server), TASK, INITIATIVE, CHECKOUT).await;
+
+    assert!(matches!(set, Ok(Ok(_))), "{set:?}");
+}
+
+#[tokio::test]
+async fn none_clears_a_single_select_field() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    field_written(&server, serde_json::Value::Null, 1).await;
+
+    let set = core::set_field(&client(&server), TASK, "Initiative", "none")
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(set.option, None);
+}
+
+#[tokio::test]
+async fn an_ambiguous_option_writes_nothing_and_lists_the_candidates() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    no_field_writes(&server).await;
+
+    let unresolved = core::set_field(&client(&server), TASK, "Initiative", "o")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "option");
+    let names: Vec<_> = unresolved
+        .candidates
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["Checkout", "Onboarding"]);
+}
+
+#[tokio::test]
+async fn a_disabled_option_is_never_set_and_the_enabled_ones_are_listed() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    no_field_writes(&server).await;
+
+    let unresolved = core::set_field(&client(&server), TASK, "Initiative", "Legacy")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    let names: Vec<_> = unresolved
+        .candidates
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["Checkout", "Onboarding"]);
+}
+
+#[tokio::test]
+async fn a_field_that_is_not_single_select_is_never_set() {
+    let server = MockServer::start().await;
+    task_with_fields(&server).await;
+    no_field_writes(&server).await;
+
+    let unresolved = core::set_field(&client(&server), TASK, "Notes", "anything")
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(unresolved.kind, "field");
+    let names: Vec<_> = unresolved
+        .candidates
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["Initiative"]);
+}
+
+#[tokio::test]
+async fn a_projects_single_select_fields_are_listed_by_project_name() {
+    let server = MockServer::start().await;
+    projects(&server, "web", json!([{ "gid": WEB, "name": "Web" }])).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/projects/{WEB}/custom_field_settings")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000072", "custom_field": {
+                "gid": INITIATIVE, "name": "Initiative", "resource_subtype": "enum",
+                "enum_options": [{ "gid": CHECKOUT, "name": "Checkout", "enabled": true }]
+            } },
+            { "gid": "1200000000000074", "custom_field": {
+                "gid": NOTES, "name": "Notes", "resource_subtype": "text"
+            } }
+        ] })))
+        .mount(&server)
+        .await;
+
+    let fields = core::project_fields(&client(&server), WS, "web")
+        .await
+        .unwrap()
+        .unwrap();
+
+    let names: Vec<_> = fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Initiative"]);
+}
