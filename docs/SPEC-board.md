@@ -358,7 +358,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **A5: The detail and action code can be keyed by task GID instead of an Inbox item.** Confirmed in planning: `selected_task_gid()` was already that seam (search used it); T5 made it return the selected card. Test: check the `Detail`/`Effect` paths in `tui/app.rs` during planning. If not, separating them is the first task.
 
 - [x] **L1: The project's custom field settings list the single-select fields its cards use (Initiative).** Confirmed by the user at Checkpoint L1 (2026-11-19). Test: Checkpoint L1, `asn project fields` and `asn board --lanes Initiative` against the web board. If cards use fields that aren't the project's, lanes can't show them; `F` still edits them through the task.
-- [ ] **L2: The grid stays readable at 80 columns with several lanes.** Test: Checkpoint L2. If not, first try hiding the lane separator line, before collapsing lanes.
+- [x] **L2: The grid stays readable at 80 columns with several lanes.** Confirmed by the user at Checkpoint L2 (2026-11-19). Test: Checkpoint L2. If not, first try hiding the lane separator line, before collapsing lanes.
 - [ ] **L3: Option order is how the team reads lanes.** Test: dogfood. If not, consider sorting by card count.
 
 - [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.

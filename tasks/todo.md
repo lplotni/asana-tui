@@ -864,7 +864,7 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 **Verification:**
 - [x] App tests for the cycle and the toast; `TestBackend` snapshots: lanes fitting, lanes paged, a tall grid scrolled to a lower lane, `NO_COLOR`.
-- [ ] Manual: a real board with Initiative.
+- [x] Manual: a real board with Initiative. (the user, 2026-11-19)
 
 **Dependencies:** T36, T37
 
@@ -886,7 +886,7 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 **Verification:**
 - [x] App tests (picker stages, effect, reload, cursor follows, failure); a snapshot of the option picker.
-- [ ] Manual: change a card's Initiative in the lanes view.
+- [x] Manual: change a card's Initiative in the lanes view. (the user, 2026-11-19)
 
 **Dependencies:** T35, T38
 
@@ -896,10 +896,10 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] Checkpoint L2: glance and edit work
+### - [x] Checkpoint L2: glance and edit work
 
-- [ ] The user dogfoods the lanes view at 80, 120 and 200 columns, with `v` and `F`, on real projects.
-- [ ] Human review before shipping.
+- [x] The user dogfoods the lanes view at 80, 120 and 200 columns, with `v` and `F`, on real projects.
+- [x] Human review before shipping. Confirmed by the user (2026-11-19).
 
 ---
 

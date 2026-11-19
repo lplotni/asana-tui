@@ -134,8 +134,8 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T39: `F` sets a single-select field (field, then option), and the card follows
 
 #### Checkpoint L2: glance and edit work
-- [ ] The user dogfoods lanes at 80, 120 and 200 columns, with `v` and `F`
-- [ ] Human review
+- [x] The user dogfoods lanes at 80, 120 and 200 columns, with `v` and `F`
+- [x] Human review
 
 #### 7c: Ship
 - [ ] T40: Skill, README, help, screenshot and spec updates
