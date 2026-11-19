@@ -267,10 +267,12 @@ async fn main() -> ExitCode {
     };
 
     // `asn init`, or the TUI's first run without a config file (spec F22).
-    // CLI subcommands never prompt.
+    // CLI subcommands never prompt, and neither does a setup the
+    // environment already completes (ADR-010).
     let env = |key: &str| std::env::var(key).ok();
     let first_run = cli.command.is_none()
         && is_terminal()
+        && !config::env_is_enough(env)
         && config::file_path(env).is_some_and(|path| !path.exists());
     if matches!(cli.command, Some(Command::Init)) || first_run {
         match init().await {

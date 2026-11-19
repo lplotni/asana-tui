@@ -160,6 +160,14 @@ pub fn file_path(env: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
     Some(base.join("asn").join("config.toml"))
 }
 
+/// Whether the environment alone names a workspace and a token (or a token
+/// command), as setups from before the config file do. Then the TUI's first
+/// run needs no interview (ADR-010). The token command isn't run.
+pub fn env_is_enough(env: impl Fn(&str) -> Option<String>) -> bool {
+    let set = |key| env(key).is_some_and(|v| !v.is_empty());
+    set("ASANA_WORKSPACE") && (set("ASANA_TOKEN") || set("ASANA_TOKEN_CMD"))
+}
+
 impl FileConfig {
     /// Reads the file at `path`. A file that doesn't exist is an empty one.
     pub fn read(path: &Path) -> Result<FileConfig, ConfigError> {
@@ -438,6 +446,25 @@ mod tests {
 
         assert_eq!(err, ConfigError::MissingToken);
         assert!(err.to_string().contains("ASANA_TOKEN_CMD"));
+    }
+
+    #[test]
+    fn the_environment_alone_is_enough_with_a_workspace_and_a_token_or_token_command() {
+        let workspace = ("ASANA_WORKSPACE", "1234567890123456");
+        assert!(env_is_enough(env(&[workspace, ("ASANA_TOKEN", "t")])));
+        // The command isn't run to tell.
+        assert!(env_is_enough(env(&[
+            workspace,
+            ("ASANA_TOKEN_CMD", "exit 1")
+        ])));
+
+        assert!(!env_is_enough(env(&[workspace])));
+        assert!(!env_is_enough(env(&[("ASANA_TOKEN", "t")])));
+        assert!(!env_is_enough(env(&[
+            ("ASANA_WORKSPACE", ""),
+            ("ASANA_TOKEN", "t")
+        ])));
+        assert!(!env_is_enough(env(&[])));
     }
 
     #[test]

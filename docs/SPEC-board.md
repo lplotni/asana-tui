@@ -186,7 +186,7 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
   3. **Workspace:** fetched with `GET /workspaces` using that token. One workspace is chosen and shown. Several are listed with numbers and you pick one; the default is `$ASANA_WORKSPACE` if it's among them. A failed request (e.g. 401) shows the error and goes back to step 2.
   4. The file is written with mode 0600 (directories created as needed), with the chosen `workspace` and `token_cmd`, and the other keys present as commented-out defaults so they can be found. Then: `Saved ~/.config/asn/config.toml`.
   - stdin and stdout must be terminals; otherwise `asn init` exits 1 with `asn init needs a terminal`. Ctrl-D or Ctrl-C at any prompt aborts without writing.
-- **First run of the TUI:** `asn` with no subcommand, no config file, and stdin/stdout on a terminal runs the same interview before the TUI starts, then continues with the new settings. CLI subcommands never prompt; without a file they behave exactly as before.
+- **First run of the TUI:** `asn` with no subcommand, no config file, and stdin/stdout on a terminal runs the same interview before the TUI starts, then continues with the new settings. It doesn't when the environment already sets `ASANA_WORKSPACE` and `ASANA_TOKEN` or `ASANA_TOKEN_CMD`: such setups keep working unchanged (ADR-010), and `asn init` still writes a file on request. CLI subcommands never prompt; without a file they behave exactly as before.
 
 ### F23. Completion animation
 
