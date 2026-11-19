@@ -55,6 +55,31 @@ async fn sections_of_a_project() {
 }
 
 #[tokio::test]
+async fn sections_follow_every_page() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/projects/42/sections"))
+        .and(query_param("offset", "page2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000082", "name": "Done" }
+        ], "next_page": null })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/projects/42/sections"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": [
+            { "gid": "1200000000000081", "name": "Done soon" }
+        ], "next_page": { "offset": "page2" } })))
+        .mount(&server)
+        .await;
+
+    let sections = core::sections(&client(&server), "42").await.unwrap();
+
+    let names: Vec<&str> = sections.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["Done soon", "Done"]);
+}
+
+#[tokio::test]
 async fn adding_to_a_project_uses_add_project_and_never_replaces_projects() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

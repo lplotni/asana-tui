@@ -136,15 +136,21 @@ impl Client {
         Ok(body.data)
     }
 
-    pub async fn sections(&self, project_gid: &str) -> Result<Vec<Named>, ApiError> {
-        let query = [
+    /// One page of the project's sections, in board order.
+    pub async fn sections_page(
+        &self,
+        project_gid: &str,
+        offset: Option<&str>,
+    ) -> Result<Page<Named>, ApiError> {
+        let mut query = vec![
             ("opt_fields", "name".to_owned()),
             ("limit", "100".to_owned()),
         ];
-        let page: Page<Named> = self
-            .get(&format!("/projects/{project_gid}/sections"), &query)
-            .await?;
-        Ok(page.data)
+        if let Some(offset) = offset {
+            query.push(("offset", offset.to_owned()));
+        }
+        self.get(&format!("/projects/{project_gid}/sections"), &query)
+            .await
     }
 
     /// One page of the project's custom field settings.

@@ -185,9 +185,10 @@ fn search_plan_hint(err: ApiError) -> ApiError {
     )
 }
 
-/// The sections of a project, in board order.
+/// Every section of a project, in board order.
 pub async fn sections(client: &Client, project_gid: &str) -> Result<Vec<Named>, ApiError> {
-    client.sections(project_gid).await
+    all_pages(|offset| async move { client.sections_page(project_gid, offset.as_deref()).await })
+        .await
 }
 
 /// A project's open tasks as board columns, in the project's section order.
@@ -213,7 +214,7 @@ pub struct Column {
 pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError> {
     let (project, sections, tasks, settings) = tokio::try_join!(
         client.project(project_gid),
-        client.sections(project_gid),
+        sections(client, project_gid),
         all_pages(|offset| async move {
             client
                 .project_tasks_page(project_gid, offset.as_deref())
