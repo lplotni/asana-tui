@@ -723,3 +723,206 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 **Files likely touched:** `README.md`, `docs/SPEC-skill.md`, `CLAUDE.md` (layout table: `skills/`)
 
 **Estimated scope:** XS
+
+---
+
+## Phase 7: Swimlanes and single-select fields (F24–F27)
+
+Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-7-swimlanes-and-single-select-fields).
+
+### - [ ] T32: Spec F24–F27
+
+**Description:** New F sections in `docs/SPEC-board.md`: F24 single-select fields on the board (data, request budget), F25 `asn board --lanes`, `asn task field`, `asn project fields`, F26 the lane view and `v`, F27 `F` to set a field. Plus the API surface rows, keymap rows, assumptions (L1: the project's field settings list the fields cards use; L2: lanes stay readable at 80 columns) and Not Doing (other field types, multi-select lanes, editing field definitions, reordering lanes).
+
+**Acceptance criteria:**
+- [ ] F24–F27 describe the behaviour this plan builds, including empty lanes, the `(no <Field>)` lane, the `v` cycle and the picker.
+- [ ] The two Phase 7 open questions are answered and recorded.
+
+**Dependencies:** None
+
+**Files likely touched:** `docs/SPEC-board.md`, `tasks/`
+
+**Estimated scope:** XS
+
+---
+
+### - [ ] T33: Single-select fields on the board
+
+**Description:** `api`: `GET /projects/{gid}/custom_field_settings` (`opt_fields=custom_field.name,custom_field.resource_subtype,custom_field.enum_options.name,custom_field.enum_options.enabled`, paginated) and `custom_fields.gid,custom_fields.enum_value.gid` on board tasks. `core::board` loads the settings in the same `try_join!` and returns `Board { project, columns, fields }`, where `fields` are the single-select fields with their options in order.
+
+**Acceptance criteria:**
+- [ ] `Board.fields` lists only single-select fields, with options in Asana's order (disabled ones kept, marked).
+- [ ] Each board task carries its value (option GID or none) per field.
+- [ ] One more request per board load; the existing board tests still pass.
+
+**Verification:**
+- [ ] Wiremock: settings with a single-select, a multi-select and a text field (only the first is kept); pagination of settings; task values parsed. `cargo test`, clippy, fmt.
+
+**Dependencies:** T32
+
+**Files likely touched:** `src/api/projects.rs`, `src/api/tasks.rs`, `src/core/mod.rs`, `tests/api_project.rs`, `tests/fixtures/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T34: `asn board <gid> --lanes <field>`
+
+**Description:** Pure `core::lanes(&Board, field_gid)`: one lane per option with cards, in option order, then `(no <Field>)` when non-empty; each lane has every column. `asn board --lanes <field name|gid>` resolves the field among `Board.fields` (`resolve::pick`) and prints, per lane, a lane line, then the existing section and task lines indented once more. `--json` with `--lanes` adds a `lanes` array (option and task GIDs per section).
+
+**Acceptance criteria:**
+- [ ] Lanes follow option order; a task without a value lands in `(no Initiative)`; empty lanes are left out; every lane lists every section.
+- [ ] An unknown or ambiguous field exits 1 with the board's single-select fields as candidates.
+- [ ] Without `--lanes`, output is unchanged (apart from the additive `custom_fields` in `--json`, if agreed in T32).
+
+**Verification:**
+- [ ] Unit tests for `core::lanes` (order, no value, empty lanes, a task in two projects); CLI rendering tests for text and JSON; `tests/cli.rs` for the flag.
+
+**Dependencies:** T33
+
+**Files likely touched:** `src/core/mod.rs`, `src/cli/board.rs`, `src/main.rs`, `tests/cli.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T35: `asn task field` and `asn project fields`
+
+**Description:** `TASK_FIELDS` gains `custom_fields.resource_subtype,custom_fields.enum_value.name,custom_fields.enum_options.name,custom_fields.enum_options.enabled`. `core::set_field(client, task, field, option)` resolves the field among the task's single-select fields and the option among its enabled options (`resolve::pick`; `none` clears), then `PUT /tasks/{gid}` `{custom_fields: {field: option|null}}`. `asn task field <task> <field> <option|none>` prints `Initiative: Checkout`. `asn project fields <project>` prints each single-select field (`gid  name`) with its options indented.
+
+**Acceptance criteria:**
+- [ ] Setting by names (any case, or the only match) writes the option GID; `none` writes `null`.
+- [ ] An ambiguous or unknown field or option, a disabled option, or a non-single-select field writes nothing and exits 1 with candidates.
+- [ ] `asn task` (detail) still shows custom fields as before.
+
+**Verification:**
+- [ ] Wiremock: set by name, set by GIDs (no extra lookup beyond the task read), clear, ambiguous option (no `PUT`), disabled option (no `PUT`); CLI tests for both commands; `cargo test`, clippy, fmt.
+
+**Dependencies:** T33
+
+**Files likely touched:** `src/api/tasks.rs`, `src/core/mod.rs`, `src/main.rs`, `src/cli/mod.rs`, `tests/api_resolve.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] Checkpoint L1: data is right
+
+- [ ] `asn board <gid> --lanes Initiative` on 1–2 real projects matches the web board grouped by Initiative.
+- [ ] `asn task field <task> Initiative <option>` and `… none` show up in the web app.
+- [ ] Human review before the TUI.
+
+---
+
+### - [ ] T36: Help overlay makes room for new keys
+
+**Description:** The help overlay uses all 24 rows at 100×24, so the first new key would fail `the_help_overlay_shows_every_binding_on_a_100_by_24_terminal`. Change its layout (e.g. three columns at ≥ 100 cells, or shorter group headers) so at least four more bindings fit, without changing any binding.
+
+**Acceptance criteria:**
+- [ ] At 100×24 the overlay shows every binding with room for four more (checked by a test that adds four dummy-length entries, or by the row count).
+- [ ] No binding, description or hint changes.
+
+**Verification:**
+- [ ] The existing help test; updated help snapshots reviewed (`.snap.new` diffed, then accepted).
+
+**Dependencies:** None
+
+**Files likely touched:** `src/tui/ui.rs`, `src/tui/snapshots/`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T37: Pure lane state in `tui/board.rs`
+
+**Description:** `BoardView` gets `Layout { Columns, Lanes { field } }` and a grid cursor (lane, column, row), built from `core::lanes`. `h`/`l` move between columns (paging as today, shared by all lanes), `j`/`k` move within a cell and continue into the same column of the next/previous lane, `gg`/`G` go to the first/last card. Switching layout, reloading and `select(gid)` keep the cursor on the same task GID.
+
+**Acceptance criteria:**
+- [ ] Grid navigation across uneven lanes and empty cells is defined and tested (skips empty cells into the next lane's card in that column, or stays).
+- [ ] Toggling Columns ↔ Lanes keeps the selected task; a reload that moves the task to another lane keeps it selected.
+- [ ] Columns behaviour and all existing board tests are unchanged.
+
+**Verification:**
+- [ ] Unit tests in `tui/board.rs`; `cargo test`, clippy, fmt.
+
+**Dependencies:** T34
+
+**Files likely touched:** `src/tui/board.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T38: `v` toggles columns ↔ lanes, and the grid is drawn
+
+**Description:** `v` on the board cycles Columns → Lanes by each single-select field (Initiative first if present, then the project's order) → Columns; with no single-select field a toast says so. The header shows `lanes: <Field>`. The grid draws each lane as a header line (`<Option> (n)`, `title` role) over the section columns, with lanes scrolling vertically to keep the selected card visible. The layout is remembered per board for the session.
+
+**Acceptance criteria:**
+- [ ] `v` cycles as described and the toast appears on a board without single-select fields.
+- [ ] At 80, 120 and 200 columns the grid is readable; hidden-column markers work as in columns view.
+- [ ] `NO_COLOR` and the bidi pass apply (drawn inside `ui::render`).
+
+**Verification:**
+- [ ] App tests for the cycle and the toast; `TestBackend` snapshots: lanes fitting, lanes paged, a tall grid scrolled to a lower lane, `NO_COLOR`.
+- [ ] Manual: a real board with Initiative.
+
+**Dependencies:** T36, T37
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/keys.rs`, `src/tui/ui.rs`, `src/tui/snapshots/`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T39: `F` sets a single-select field
+
+**Description:** `F` on a task (board card, its detail, an Inbox task) opens a picker of the task's single-select fields (skipped when there's one, or in the lanes view, where it starts with the lane field), then its enabled options plus `(none)`, using the fzf keys of the existing pickers. `Enter` runs `core::set_field` by GIDs. On success a toast says `Initiative: Checkout`, the detail shows the new value, and a board reloads with the cursor following the card into its new lane. A failure shows an error toast and changes nothing.
+
+**Acceptance criteria:**
+- [ ] The picker lists only single-select fields and enabled options; `(none)` clears.
+- [ ] In the lanes view the card ends up selected in its new lane after the reload.
+- [ ] `F` is in `BINDINGS` (help and hints pick it up); the hint line shows `field` on the board.
+
+**Verification:**
+- [ ] App tests (picker stages, effect, reload, cursor follows, failure); a snapshot of the option picker.
+- [ ] Manual: change a card's Initiative in the lanes view.
+
+**Dependencies:** T35, T38
+
+**Files likely touched:** `src/tui/app.rs`, `src/tui/picker.rs`, `src/tui/keys.rs`, `src/tui/mod.rs`, `src/tui/ui.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] Checkpoint L2: glance and edit work
+
+- [ ] The user dogfoods the lanes view at 80, 120 and 200 columns, with `v` and `F`, on real projects.
+- [ ] Human review before shipping.
+
+---
+
+### - [ ] T40: Skill, README, help and screenshot
+
+**Description:** The skill learns `asn board --lanes`, `asn task field` and `asn project fields` (a write, so rule 2 applies); the drift test covers them. README: the lanes view, `v`, `F`, the new commands, the additive `custom_fields` in `asn board --json`. A lanes screenshot from the screenshot example (made-up data). Spec ticks and findings.
+
+**Acceptance criteria:**
+- [ ] README, `asn --help`, the help overlay, the skill and F24–F27 agree.
+
+**Dependencies:** T39
+
+**Files likely touched:** `skills/asn/SKILL.md`, `README.md`, `examples/screenshot.rs`, `docs/`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T41: Release v0.3.0 (ask first)
+
+**Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.3.0`, push `main`, push the annotated tag, pull the formula commit. README: the skill needs `asn` 0.3.0 or later.
+
+**Dependencies:** T40, and the user's go-ahead
+
+**Files likely touched:** `Cargo.toml`, `Cargo.lock`, `README.md`
+
+**Estimated scope:** XS

@@ -114,6 +114,33 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 #### 6c: Ship
 - [x] T30: Docs (F21)
 
+### Phase 7: Swimlanes and single-select fields (F24–F27, see below; before v0.3.0)
+
+#### 7a: Data and CLI first (ADR-001)
+- [ ] T32: Spec F24–F27 in SPEC-board.md
+- [ ] T33: Single-select fields on the board (project field settings, values on cards)
+- [ ] T34: `asn board <gid> --lanes <field>` (pure lane grouping)
+- [ ] T35: `asn task field` and `asn project fields` (set a single-select field by name)
+
+#### Checkpoint L1: data is right
+- [ ] `asn board --lanes Initiative` matches the web board grouped by Initiative on 1–2 real projects
+- [ ] `asn task field <task> Initiative <option>` shows up in the web app; clearing it too
+- [ ] Human review before the TUI
+
+#### 7b: TUI
+- [ ] T36: Help overlay makes room for new keys
+- [ ] T37: Pure lane state in `tui/board.rs` (grid cursor, paging, cursor by GID across layouts)
+- [ ] T38: `v` toggles columns ↔ lanes and draws the grid
+- [ ] T39: `F` sets a single-select field (field, then option), and the card follows
+
+#### Checkpoint L2: glance and edit work
+- [ ] The user dogfoods lanes at 80, 120 and 200 columns, with `v` and `F`
+- [ ] Human review
+
+#### 7c: Ship
+- [ ] T40: Skill, README, help, screenshot and spec updates
+- [ ] T41: Release v0.3.0 (ask first)
+
 ## Phase 6: asn in Claude Code
 
 ### Architecture Decisions
@@ -174,3 +201,55 @@ T1 and T2 can run in parallel. T3 onward is sequential: each task edits `app.rs`
 ## Open Questions
 
 - `asn --project` takes a GID only in v0.2 (spec open question 1). Name lookup can follow.
+
+## Phase 7: Swimlanes and single-select fields
+
+Requested 2026-11-19, before releasing v0.3.0. Decisions from the user: a **grid** (one horizontal lane per option, each with the section columns), lanes by **any single-select field** on the board (`v` cycles columns → each field, Initiative first → columns), and editing **single-select fields only** for now. Initiative is a single-select field in the user's workspace.
+
+### Overview
+
+On a board, `v` switches to swimlanes: one lane per option of a single-select field (in the field's option order), plus a `(no <Field>)` lane, each lane showing the section columns with its cards. `v` again goes to the next single-select field, and back to columns after the last. `F` on a task sets one of its single-select fields from a picker (field, then option or none); on a board the card then moves to its new lane. Both are commands first: `asn board <gid> --lanes <field>` and `asn task field <task> <field> <option|none>`, plus `asn project fields <project>` to list fields and options.
+
+### Architecture Decisions
+
+- **Field definitions come from the project, values from the tasks.** `GET /projects/{gid}/custom_field_settings` (one more request per board load, loaded in the same `try_join!`) gives the board's single-select fields and their options in order, including options no card uses yet. Board tasks add `custom_fields.gid,custom_fields.enum_value.gid` to their `opt_fields`, so the payload grows by a GID per field. Other field types are ignored for lanes.
+- **Lanes are pure grouping in `core`, like columns.** `core::lanes(&Board, field_gid) -> Vec<Lane { option: Option<Named>, columns: Vec<Column> }>`: one lane per option that has cards (in option order), then `(no <Field>)` when non-empty; every lane has all the board's columns, so columns line up across lanes. The CLI and the TUI both use it.
+- **The lane view is a layout of `BoardView`, not a new screen.** `tui/board.rs` gets `Layout { Columns, Lanes { field } }` and a grid cursor (lane, column, row). The selected task stays keyed by GID, so toggling layouts, reloading and editing a field keep the cursor on the same card. `app.rs` only dispatches `v`/`F` and runs the effects (ADR-002).
+- **Editing goes through the task, so it works anywhere.** `F` uses the selected-task-GID seam (board card, its detail, an Inbox task). The task's own `custom_fields` (with `resource_subtype`, `enum_value` and `enum_options` added to `TASK_FIELDS`) list its single-select fields and options, so no project context is needed. Writing is `PUT /tasks/{gid}` `{custom_fields: {<field gid>: <option gid> | null}}`.
+- **Names via F19.** `asn task field` resolves the field among the task's single-select fields and the option among that field's enabled options with `resolve::pick`; ambiguity writes nothing and lists candidates, as for sections.
+- **Keys:** `v` (view; the v0.2 spec already reserved it for an alternative layout) and `F` (field) are free on the board and in the Inbox. The help overlay is full (it fails its 100×24 test with one more line), so its layout changes first (T36, per CLAUDE.md).
+- **No new theme roles.** Lane headers use `title` (like column headers) and the lane separator uses `border`.
+
+### Dependency Graph
+
+```
+api: custom_field_settings + enum values on board tasks ......... T33
+  ├── core::lanes + `asn board --lanes` ......................... T34
+  │     └── tui/board.rs grid state (pure) ...................... T37
+  │           └── `v` toggle + grid render ...................... T38
+  └── task single-select fields + PUT + `asn task field`,
+      `asn project fields` ...................................... T35
+            └── `F` picker, reload, card follows ................ T39 (after T38)
+help overlay layout ................................................ T36 → T38, T39
+                                                    T40 docs/skill → T41 release
+```
+
+T34 and T35 are independent after T33, and T36 can be done any time before T38. T37–T39 touch `board.rs`/`app.rs`/`ui.rs` and run in order.
+
+### Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| The help overlay is full | High (the help test fails on the first new key) | T36 changes its layout before any key is added. |
+| A tall grid in a short terminal: many lanes × 2-line cards | Med | Lanes scroll vertically as one list and keep the selected card visible; empty lanes are hidden; lane height is its tallest column. Checked at Checkpoint L2. |
+| `app.rs` (≈2500 lines) grows further | Med | Grid navigation and cursor logic live in `tui/board.rs`; `app.rs` only adds the `v`/`F` dispatch and two effects. |
+| Fields on tasks that aren't the project's fields (added from other projects) | Low | Lanes use only the project's single-select fields; `F` uses the task's own fields, so it can still edit those. |
+| Two fields or options with the same name | Low | `pick` makes it ambiguous: the CLI lists candidates, the TUI picker shows both. |
+| `asn board --json` tasks now include `custom_fields` | Low (additive) | Agreed by the user; Asana's `data` objects stay unchanged otherwise; called out in the README. |
+| Real GIDs or names in fixtures | Med (public repo) | New fixtures use `12000000000000xx` and invented field/option names ("Initiative", "Checkout"). |
+
+### Open Questions (Phase 7)
+
+- ~~`asn board --json` gains each task's `custom_fields`~~: agreed by the user (2026-11-19), additive.
+- ~~Remember the layout per board for the session~~: yes, like the cursor (the user, 2026-11-19).
+
