@@ -413,7 +413,7 @@ pub struct NewTask {
 pub enum BoardState {
     Loading,
     Failed(String),
-    Loaded(BoardView),
+    Loaded(Box<BoardView>),
 }
 
 /// Why a description wasn't saved, and where the user's text was kept.
@@ -1418,7 +1418,7 @@ impl App {
             (_, Ok(board)) => {
                 let mut view = BoardView::new(board);
                 view.resize(sizes.board_width, sizes.board_card_rows);
-                slot.state = BoardState::Loaded(view);
+                slot.state = BoardState::Loaded(Box::new(view));
             }
             (BoardState::Loaded(_), Err(message)) => {
                 self.toast = Some(Toast::error(format!("Refresh failed: {message}")));

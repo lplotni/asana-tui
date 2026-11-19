@@ -1,9 +1,14 @@
-//! A project board: columns of cards, the selected card, vertical scroll per
-//! column and horizontal paging when not every column fits. Pure state; the
+//! A project board: columns of cards, or the same columns split into lanes
+//! by a single-select field (F26); the selected card, scrolling and
+//! horizontal paging when not every column fits. Pure state; the
 //! [`App`](super::app::App) feeds it keys and sizes, and the UI draws it.
+//!
+//! Both layouts are a grid of lanes × columns: the columns layout is one
+//! lane holding the board's columns, so navigation is written once.
 
 use crate::api::projects::BoardTask;
 use crate::api::tasks::Named;
+use crate::core::lanes::Lane;
 use crate::core::{Board, Column};
 
 /// The narrowest a column is drawn, in cells.
@@ -15,16 +20,35 @@ pub const MIN_COLUMN_WIDTH: usize = 28;
 pub const STRIKE_FRAMES: u8 = 6;
 pub const COMPLETE_FRAMES: u8 = 10;
 
+/// Lines of a lane's header in the lanes grid.
+pub const LANE_HEADER_LINES: usize = 1;
+/// Lines of a card.
+pub const CARD_LINES: usize = 2;
+
+/// How the board is laid out: its columns, or lanes by a single-select field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Layout {
+    Columns,
+    Lanes { field: String },
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoardView {
-    project: Named,
-    columns: Vec<Column>,
+    board: Board,
+    layout: Layout,
+    /// The lanes on screen; one lane (the board's columns) in the columns
+    /// layout.
+    grid: Vec<Lane>,
+    /// The selected lane.
+    lane: usize,
     /// The selected column.
     column: usize,
-    /// The selected row, clamped to the selected column's cards.
+    /// The selected row, clamped to the selected cell's cards.
     row: usize,
-    /// First visible card of each column.
+    /// First visible card of each column (columns layout).
     scrolls: Vec<usize>,
+    /// First visible line of the grid (lanes layout).
+    grid_scroll: usize,
     /// First visible column.
     first: usize,
     /// Width available to the columns, in cells.
@@ -39,10 +63,13 @@ pub struct BoardView {
 
 impl BoardView {
     pub fn new(board: Board) -> BoardView {
-        BoardView {
-            project: board.project,
+        let mut view = BoardView {
             scrolls: vec![0; board.columns.len()],
-            columns: board.columns,
+            grid_scroll: 0,
+            board,
+            layout: Layout::Columns,
+            grid: Vec::new(),
+            lane: 0,
             column: 0,
             row: 0,
             first: 0,
@@ -50,7 +77,77 @@ impl BoardView {
             card_rows: 1,
             completing: None,
             held: None,
+        };
+        view.rebuild();
+        view
+    }
+
+    /// Goes to the next layout: columns, then lanes by each single-select
+    /// field (one named Initiative first, then the project's order), then
+    /// columns again. The selected task stays selected. `false` (and no
+    /// change) when the board has no single-select field.
+    pub fn cycle_layout(&mut self) -> bool {
+        let mut fields: Vec<&str> = self.board.fields.iter().map(|f| f.gid.as_str()).collect();
+        if fields.is_empty() {
+            return false;
         }
+        fields.sort_by_key(|gid| {
+            let name = self
+                .board
+                .fields
+                .iter()
+                .find(|f| f.gid == *gid)
+                .map(|f| f.name.trim());
+            !name.is_some_and(|n| n.eq_ignore_ascii_case("initiative"))
+        });
+        let next = match &self.layout {
+            Layout::Columns => Some(fields[0]),
+            Layout::Lanes { field } => fields
+                .iter()
+                .position(|f| f == field)
+                .and_then(|i| fields.get(i + 1))
+                .copied(),
+        };
+        let layout = next.map_or(Layout::Columns, |field| Layout::Lanes {
+            field: field.to_owned(),
+        });
+        self.set_layout(layout);
+        true
+    }
+
+    /// Shows `layout`, keeping the selected task selected; without one, the
+    /// first lane with a card in the selected column.
+    fn set_layout(&mut self, layout: Layout) {
+        let task = self.selected_task().map(|t| t.gid.clone());
+        self.layout = layout;
+        self.grid_scroll = 0;
+        self.rebuild();
+        if task.as_deref().is_some_and(|gid| self.select(gid)) {
+            return;
+        }
+        self.lane = self.lane_with_cards(0..self.grid.len(), false).unwrap_or(0);
+        self.set_row(0);
+    }
+
+    /// First visible line of the lanes grid (lanes layout).
+    pub fn grid_scroll(&self) -> usize {
+        self.grid_scroll
+    }
+
+    /// How many cards tall lane `lane` is: its fullest cell, at least one.
+    pub fn lane_cards(&self, lane: usize) -> usize {
+        self.grid
+            .get(lane)
+            .and_then(|l| l.columns.iter().map(|c| c.tasks.len()).max())
+            .unwrap_or(0)
+            .max(1)
+    }
+
+    /// The first line of lane `lane` in the grid.
+    pub fn lane_top(&self, lane: usize) -> usize {
+        (0..lane)
+            .map(|l| LANE_HEADER_LINES + self.lane_cards(l) * CARD_LINES)
+            .sum()
     }
 
     /// The card playing its completion animation, and its frame.
@@ -63,6 +160,7 @@ impl BoardView {
     /// Starts card `gid`'s completion animation. `false` if it isn't here.
     pub fn start_completing(&mut self, gid: &str) -> bool {
         let here = self
+            .board
             .columns
             .iter()
             .any(|c| c.tasks.iter().any(|t| t.gid == gid));
@@ -109,11 +207,25 @@ impl BoardView {
     }
 
     pub fn project(&self) -> &Named {
-        &self.project
+        &self.board.project
     }
 
+    /// The board's columns, as in the columns layout.
     pub fn columns(&self) -> &[Column] {
-        &self.columns
+        &self.board.columns
+    }
+
+    pub fn layout(&self) -> &Layout {
+        &self.layout
+    }
+
+    /// The lanes on screen (one lane in the columns layout).
+    pub fn lanes(&self) -> &[Lane] {
+        &self.grid
+    }
+
+    pub fn lane(&self) -> usize {
+        self.lane
     }
 
     pub fn column(&self) -> usize {
@@ -124,13 +236,13 @@ impl BoardView {
         self.row
     }
 
-    /// First visible card of column `index`.
+    /// First visible card of column `index` (columns layout).
     pub fn scroll(&self, index: usize) -> usize {
         self.scrolls.get(index).copied().unwrap_or(0)
     }
 
     pub fn selected_task(&self) -> Option<&BoardTask> {
-        self.columns.get(self.column)?.tasks.get(self.row)
+        self.cell(self.lane, self.column).get(self.row)
     }
 
     /// Sets the space the columns get: `width` cells across, `card_rows`
@@ -144,34 +256,66 @@ impl BoardView {
     /// The columns on screen: as many [`MIN_COLUMN_WIDTH`]-wide columns as
     /// fit (at least one), always including the selected one.
     pub fn visible_columns(&self) -> std::ops::Range<usize> {
-        let count = self.fitting_columns().min(self.columns.len());
+        let count = self.fitting_columns().min(self.column_count());
         self.first..self.first + count
     }
 
     /// How many columns are hidden to the left and to the right.
     pub fn hidden(&self) -> (usize, usize) {
         let visible = self.visible_columns();
-        (visible.start, self.columns.len() - visible.end)
+        (visible.start, self.column_count() - visible.end)
     }
 
+    /// Down `n` cards: within the cell, then on into the same column of the
+    /// next lane that has a card there.
     pub fn down(&mut self, n: usize) {
-        self.set_row(self.row.saturating_add(n));
+        for _ in 0..n {
+            if self.row + 1 < self.cell(self.lane, self.column).len() {
+                self.row += 1;
+            } else if let Some(lane) = self.lane_with_cards(self.lane + 1..self.grid.len(), false) {
+                self.lane = lane;
+                self.row = 0;
+            } else {
+                break;
+            }
+        }
+        self.set_row(self.row);
     }
 
+    /// Up `n` cards: within the cell, then on into the last card of the same
+    /// column of the previous lane that has one.
     pub fn up(&mut self, n: usize) {
-        self.set_row(self.row.saturating_sub(n));
+        for _ in 0..n {
+            if self.row > 0 {
+                self.row -= 1;
+            } else if let Some(lane) = self.lane_with_cards(0..self.lane, true) {
+                self.lane = lane;
+                self.row = self.cell(lane, self.column).len().saturating_sub(1);
+            } else {
+                break;
+            }
+        }
+        self.set_row(self.row);
     }
 
+    /// The first card of the column, in the first lane that has one.
     pub fn top(&mut self) {
+        if let Some(lane) = self.lane_with_cards(0..self.grid.len(), false) {
+            self.lane = lane;
+        }
         self.set_row(0);
     }
 
+    /// The last card of the column, in the last lane that has one.
     pub fn bottom(&mut self) {
+        if let Some(lane) = self.lane_with_cards(0..self.grid.len(), true) {
+            self.lane = lane;
+        }
         self.set_row(usize::MAX);
     }
 
     pub fn right(&mut self, n: usize) {
-        let last = self.columns.len().saturating_sub(1);
+        let last = self.column_count().saturating_sub(1);
         self.column = self.column.saturating_add(n).min(last);
         self.set_row(self.row);
     }
@@ -184,16 +328,13 @@ impl BoardView {
     /// Selects task `gid` and scrolls it into view. Returns whether it's on
     /// the board; if not, the selection stays.
     pub fn select(&mut self, gid: &str) -> bool {
-        let found = self.columns.iter().enumerate().find_map(|(c, column)| {
-            let row = column.tasks.iter().position(|t| t.gid == gid)?;
-            Some((c, row))
-        });
+        let found = self.position_of(gid);
         self.select_position(found)
     }
 
-    /// Selects the first card in board order (column by column, top to
-    /// bottom) whose name contains `query`, ignoring case. Returns whether
-    /// one did; if not, the selection stays.
+    /// Selects the first card in grid order (lane by lane, column by column,
+    /// top to bottom) whose name contains `query`, ignoring case. Returns
+    /// whether one did; if not, the selection stays.
     pub fn first_match(&mut self, query: &str) -> bool {
         let first = self.matches(query).into_iter().next();
         self.select_position(first)
@@ -203,7 +344,7 @@ impl BoardView {
     /// the selected one, wrapping around the board.
     pub fn next_match(&mut self, query: &str, forward: bool) -> bool {
         let matches = self.matches(query);
-        let here = (self.column, self.row);
+        let here = (self.lane, self.column, self.row);
         let next = if forward {
             matches.iter().find(|&&m| m > here).or(matches.first())
         } else {
@@ -212,42 +353,55 @@ impl BoardView {
         self.select_position(next.copied())
     }
 
-    /// (column, row) of every card whose name contains `query`, in board
-    /// order.
-    fn matches(&self, query: &str) -> Vec<(usize, usize)> {
+    /// (lane, column, row) of every card whose name contains `query`, in
+    /// grid order.
+    fn matches(&self, query: &str) -> Vec<(usize, usize, usize)> {
         let query = query.to_lowercase();
-        self.columns
-            .iter()
-            .enumerate()
-            .flat_map(|(c, column)| {
-                column
-                    .tasks
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, task)| task.name.to_lowercase().contains(&query))
-                    .map(move |(row, _)| (c, row))
+        self.positions()
+            .filter(|&(l, c, r)| {
+                self.grid[l].columns[c].tasks[r]
+                    .name
+                    .to_lowercase()
+                    .contains(&query)
             })
             .collect()
     }
 
-    fn select_position(&mut self, position: Option<(usize, usize)>) -> bool {
-        let Some((column, row)) = position else {
+    /// Every card's (lane, column, row), in grid order.
+    fn positions(&self) -> impl Iterator<Item = (usize, usize, usize)> + '_ {
+        self.grid.iter().enumerate().flat_map(|(l, lane)| {
+            lane.columns
+                .iter()
+                .enumerate()
+                .flat_map(move |(c, column)| (0..column.tasks.len()).map(move |r| (l, c, r)))
+        })
+    }
+
+    fn position_of(&self, gid: &str) -> Option<(usize, usize, usize)> {
+        self.positions()
+            .find(|&(l, c, r)| self.grid[l].columns[c].tasks[r].gid == gid)
+    }
+
+    fn select_position(&mut self, position: Option<(usize, usize, usize)>) -> bool {
+        let Some((lane, column, row)) = position else {
             return false;
         };
+        self.lane = lane;
         self.column = column;
         self.set_row(row);
         true
     }
 
     /// Takes card `gid` off the board (e.g. once completed). The selection
-    /// keeps its row, clamped. Returns whether the card was there.
+    /// keeps its place, clamped. Returns whether the card was there.
     pub fn remove(&mut self, gid: &str) -> bool {
         let mut removed = false;
-        for column in &mut self.columns {
+        for column in &mut self.board.columns {
             let before = column.tasks.len();
             column.tasks.retain(|t| t.gid != gid);
             removed |= column.tasks.len() != before;
         }
+        self.rebuild();
         self.set_row(self.row);
         removed
     }
@@ -262,54 +416,126 @@ impl BoardView {
         }
         let task = self.selected_task().map(|t| t.gid.clone());
         let section = self
+            .board
             .columns
             .get(self.column)
             .and_then(|c| c.section.as_ref())
             .map(|s| s.gid.clone());
-        let found = task.and_then(|gid| {
-            board.columns.iter().enumerate().find_map(|(c, column)| {
-                let row = column.tasks.iter().position(|t| t.gid == gid)?;
-                Some((c, row))
-            })
-        });
-        let (column, row) = found.unwrap_or_else(|| {
-            let column = section
-                .and_then(|gid| {
-                    board
-                        .columns
-                        .iter()
-                        .position(|c| c.section.as_ref().is_some_and(|s| s.gid == gid))
-                })
-                .unwrap_or(self.column);
-            (column, self.row)
-        });
+        let option = self
+            .grid
+            .get(self.lane)
+            .and_then(|l| l.option.as_ref())
+            .map(|o| o.gid.clone());
+        let (lane, column, row) = (self.lane, self.column, self.row);
         self.scrolls = vec![0; board.columns.len()];
-        self.project = board.project;
-        self.columns = board.columns;
-        self.column = column.min(self.columns.len().saturating_sub(1));
+        self.board = board;
+        self.rebuild();
+        if task.as_deref().is_some_and(|gid| self.select(gid)) {
+            return;
+        }
+        self.lane = option
+            .and_then(|gid| {
+                self.grid
+                    .iter()
+                    .position(|l| l.option.as_ref().is_some_and(|o| o.gid == gid))
+            })
+            .unwrap_or(lane)
+            .min(self.grid.len().saturating_sub(1));
+        self.column = section
+            .and_then(|gid| {
+                self.board
+                    .columns
+                    .iter()
+                    .position(|c| c.section.as_ref().is_some_and(|s| s.gid == gid))
+            })
+            .unwrap_or(column)
+            .min(self.column_count().saturating_sub(1));
         self.set_row(row);
+    }
+
+    /// Recomputes the lanes from the board and the layout. A lane field the
+    /// board no longer has means the columns layout again.
+    fn rebuild(&mut self) {
+        if let Layout::Lanes { field } = &self.layout
+            && !self.board.fields.iter().any(|f| &f.gid == field)
+        {
+            self.layout = Layout::Columns;
+        }
+        self.grid = match &self.layout {
+            Layout::Columns => Vec::new(),
+            Layout::Lanes { field } => crate::core::lanes::lanes(&self.board, field),
+        };
+        if self.grid.is_empty() {
+            // The columns layout, or lanes of a board without cards.
+            self.grid = vec![Lane {
+                option: None,
+                columns: self.board.columns.clone(),
+            }];
+        }
+        self.lane = self.lane.min(self.grid.len() - 1);
+    }
+
+    /// The cards of `column` in `lane`.
+    fn cell(&self, lane: usize, column: usize) -> &[BoardTask] {
+        self.grid
+            .get(lane)
+            .and_then(|l| l.columns.get(column))
+            .map_or(&[], |c| c.tasks.as_slice())
+    }
+
+    /// The first (or, `last`, the last) lane in `lanes` with a card in the
+    /// selected column.
+    fn lane_with_cards(&self, lanes: std::ops::Range<usize>, last: bool) -> Option<usize> {
+        let mut with = lanes.filter(|&l| !self.cell(l, self.column).is_empty());
+        if last { with.next_back() } else { with.next() }
+    }
+
+    fn column_count(&self) -> usize {
+        self.board.columns.len()
     }
 
     fn fitting_columns(&self) -> usize {
         (self.width / MIN_COLUMN_WIDTH).max(1)
     }
 
-    /// Selects `row` of the current column, clamped, and scrolls to it.
+    /// Selects `row` of the current cell, clamped, and scrolls to it.
     fn set_row(&mut self, row: usize) {
-        let cards = self.columns.get(self.column).map_or(0, |c| c.tasks.len());
+        let cards = self.cell(self.lane, self.column).len();
         self.row = row.min(cards.saturating_sub(1));
         self.follow();
     }
 
-    /// Scrolls the selected column to its selected card, and pages the
-    /// columns to the selected column.
+    /// Scrolls to the selected card, and pages the columns to the selected
+    /// column.
     fn follow(&mut self) {
-        if let Some(scroll) = self.scrolls.get_mut(self.column) {
-            *scroll = keep_visible(*scroll, self.row, self.card_rows);
+        match self.layout {
+            Layout::Columns => {
+                if let Some(scroll) = self.scrolls.get_mut(self.column) {
+                    *scroll = keep_visible(*scroll, self.row, self.card_rows);
+                }
+            }
+            Layout::Lanes { .. } => {
+                // The selected card's lines, with its lane's header when it's
+                // the lane's first card.
+                let card = self.lane_top(self.lane) + LANE_HEADER_LINES + self.row * CARD_LINES;
+                let start = if self.row == 0 {
+                    card - LANE_HEADER_LINES
+                } else {
+                    card
+                };
+                let end = card + CARD_LINES;
+                let window = self.card_rows * CARD_LINES;
+                if end > self.grid_scroll + window {
+                    self.grid_scroll = end.saturating_sub(window);
+                }
+                if start < self.grid_scroll {
+                    self.grid_scroll = start;
+                }
+            }
         }
-        let count = self.fitting_columns().min(self.columns.len()).max(1);
+        let count = self.fitting_columns().min(self.column_count()).max(1);
         self.first = keep_visible(self.first, self.column, count)
-            .min(self.columns.len().saturating_sub(count));
+            .min(self.column_count().saturating_sub(count));
     }
 }
 
@@ -730,5 +956,238 @@ mod tests {
 
         assert_eq!(v.completing(), Some(("c0-1", 0)));
         assert!(v.columns()[0].tasks.iter().all(|t| t.gid != "c0-0"));
+    }
+
+    // --- Lanes (F26) ---
+
+    use crate::api::projects::{FieldValue, OptionRef, SelectField, SelectOption};
+
+    /// A card with Initiative (`f1`) set to `option`, if any.
+    fn lane_card(gid: &str, option: Option<&str>) -> BoardTask {
+        BoardTask {
+            custom_fields: vec![FieldValue {
+                gid: "f1".into(),
+                enum_value: option.map(|o| OptionRef { gid: o.into() }),
+            }],
+            ..card(gid)
+        }
+    }
+
+    fn select_field(gid: &str, name: &str, options: &[(&str, &str)]) -> SelectField {
+        SelectField {
+            gid: gid.into(),
+            name: name.into(),
+            options: options
+                .iter()
+                .map(|(gid, name)| SelectOption {
+                    gid: (*gid).into(),
+                    name: (*name).into(),
+                    enabled: true,
+                })
+                .collect(),
+        }
+    }
+
+    /// Priority (f2, no values) listed before Initiative (f1: o1 Checkout,
+    /// o2 Onboarding). By Initiative: Checkout has c | d, Onboarding a | —,
+    /// none b | e.
+    fn lane_board() -> Board {
+        Board {
+            project: named("p", "Project"),
+            fields: vec![
+                select_field("f2", "Priority", &[("p1", "High")]),
+                select_field(
+                    "f1",
+                    "Initiative",
+                    &[("o1", "Checkout"), ("o2", "Onboarding")],
+                ),
+            ],
+            columns: vec![
+                Column {
+                    section: Some(named("s0", "Backlog")),
+                    tasks: vec![
+                        lane_card("a", Some("o2")),
+                        lane_card("b", None),
+                        lane_card("c", Some("o1")),
+                    ],
+                },
+                Column {
+                    section: Some(named("s1", "Done")),
+                    tasks: vec![lane_card("d", Some("o1")), lane_card("e", None)],
+                },
+            ],
+        }
+    }
+
+    /// The lane board in lanes by Initiative.
+    fn lanes_view() -> BoardView {
+        let mut v = BoardView::new(lane_board());
+        assert!(v.cycle_layout());
+        v
+    }
+
+    #[test]
+    fn v_cycles_columns_then_initiative_first_then_the_other_fields() {
+        let mut v = BoardView::new(lane_board());
+
+        let mut seen = vec![v.layout().clone()];
+        for _ in 0..3 {
+            assert!(v.cycle_layout());
+            seen.push(v.layout().clone());
+        }
+
+        let lanes = |field: &str| Layout::Lanes {
+            field: field.into(),
+        };
+        assert_eq!(
+            seen,
+            [Layout::Columns, lanes("f1"), lanes("f2"), Layout::Columns]
+        );
+    }
+
+    #[test]
+    fn a_board_without_single_select_fields_stays_in_columns() {
+        let mut v = view(&[2]);
+
+        assert!(!v.cycle_layout());
+        assert_eq!(v.layout(), &Layout::Columns);
+    }
+
+    #[test]
+    fn lanes_follow_the_option_order_then_cards_without_a_value() {
+        let v = lanes_view();
+
+        let options: Vec<_> = v
+            .lanes()
+            .iter()
+            .map(|l| l.option.as_ref().map(|o| o.name.as_str()))
+            .collect();
+        assert_eq!(options, [Some("Checkout"), Some("Onboarding"), None]);
+    }
+
+    #[test]
+    fn switching_layouts_keeps_the_selected_task() {
+        let mut v = BoardView::new(lane_board());
+        v.select("a");
+
+        v.cycle_layout();
+        assert_eq!((selected(&v), v.lane()), (Some("a"), 1));
+        v.select("e");
+        v.cycle_layout();
+        v.cycle_layout();
+        assert_eq!(v.layout(), &Layout::Columns);
+        assert_eq!(selected(&v), Some("e"));
+    }
+
+    #[test]
+    fn down_goes_on_into_the_same_column_of_the_next_lane_with_a_card() {
+        let mut v = lanes_view();
+        v.select("c");
+
+        v.down(1);
+        assert_eq!(selected(&v), Some("a"));
+        v.down(1);
+        assert_eq!(selected(&v), Some("b"));
+        v.down(1);
+        assert_eq!(selected(&v), Some("b"));
+
+        v.select("d");
+        v.down(1);
+        assert_eq!(selected(&v), Some("e"), "Onboarding has no card in Done");
+    }
+
+    #[test]
+    fn up_goes_back_to_the_last_card_of_the_previous_lane_with_one() {
+        let mut v = lanes_view();
+        v.select("e");
+
+        v.up(1);
+        assert_eq!(selected(&v), Some("d"));
+        v.up(1);
+        assert_eq!(selected(&v), Some("d"));
+    }
+
+    #[test]
+    fn left_and_right_stay_in_the_lane_even_on_an_empty_cell() {
+        let mut v = lanes_view();
+        v.select("a");
+
+        v.right(1);
+        assert_eq!((selected(&v), v.lane(), v.column()), (None, 1, 1));
+        v.down(1);
+        assert_eq!(selected(&v), Some("e"));
+    }
+
+    #[test]
+    fn top_and_bottom_go_to_the_ends_of_the_column_across_lanes() {
+        let mut v = lanes_view();
+        v.select("a");
+
+        v.bottom();
+        assert_eq!(selected(&v), Some("b"));
+        v.top();
+        assert_eq!(selected(&v), Some("c"));
+    }
+
+    #[test]
+    fn a_reload_that_moves_the_card_to_another_lane_keeps_it_selected() {
+        let mut v = lanes_view();
+        v.select("a");
+        let mut board = lane_board();
+        board.columns[0].tasks[0] = lane_card("a", Some("o1"));
+
+        v.replace(board);
+
+        assert_eq!((selected(&v), v.lane()), (Some("a"), 0));
+    }
+
+    #[test]
+    fn a_reload_without_the_lane_field_goes_back_to_columns() {
+        let mut v = lanes_view();
+        v.select("e");
+        let mut board = lane_board();
+        board.fields.retain(|f| f.gid != "f1");
+
+        v.replace(board);
+
+        assert_eq!(v.layout(), &Layout::Columns);
+        assert_eq!(selected(&v), Some("e"));
+    }
+
+    #[test]
+    fn removing_the_only_card_of_a_lane_drops_the_lane() {
+        let mut v = lanes_view();
+        v.select("a");
+
+        v.remove("a");
+
+        assert_eq!(v.lanes().len(), 2);
+        assert!(selected(&v).is_some());
+    }
+
+    #[test]
+    fn search_goes_lane_by_lane_in_grid_order_and_wraps() {
+        let mut v = lanes_view();
+        v.select("c");
+
+        let mut order = Vec::new();
+        for _ in 0..5 {
+            v.next_match("task", true);
+            order.push(selected(&v).unwrap().to_owned());
+        }
+
+        assert_eq!(order, ["d", "a", "b", "e", "c"]);
+    }
+
+    #[test]
+    fn the_grid_scrolls_to_keep_the_selected_card_and_its_lane_header_visible() {
+        // Each lane: a header line and one card of two lines.
+        let mut v = lanes_view();
+        v.resize(100, 2);
+
+        v.select("b");
+        assert_eq!(v.grid_scroll(), 5, "lines 6–8 in a 4-line window");
+        v.top();
+        assert_eq!(v.grid_scroll(), 0);
     }
 }

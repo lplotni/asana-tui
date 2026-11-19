@@ -129,7 +129,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### 7b: TUI
 - [x] T36: Help overlay makes room for new keys (room for three; Phase 7 needs two)
-- [ ] T37: Pure lane state in `tui/board.rs` (grid cursor, paging, cursor by GID across layouts)
+- [x] T37: Pure lane state in `tui/board.rs` (grid cursor, paging, cursor by GID across layouts)
 - [ ] T38: `v` toggles columns ↔ lanes and draws the grid
 - [ ] T39: `F` sets a single-select field (field, then option), and the card follows
 

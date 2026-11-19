@@ -833,17 +833,17 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
-### - [ ] T37: Pure lane state in `tui/board.rs`
+### - [x] T37: Pure lane state in `tui/board.rs`
 
 **Description:** `BoardView` gets `Layout { Columns, Lanes { field } }` and a grid cursor (lane, column, row), built from `core::lanes`. `h`/`l` move between columns (paging as today, shared by all lanes), `j`/`k` move within a cell and continue into the same column of the next/previous lane, `gg`/`G` go to the first/last card. Switching layout, reloading and `select(gid)` keep the cursor on the same task GID.
 
 **Acceptance criteria:**
-- [ ] Grid navigation across uneven lanes and empty cells is defined and tested (skips empty cells into the next lane's card in that column, or stays).
-- [ ] Toggling Columns ↔ Lanes keeps the selected task; a reload that moves the task to another lane keeps it selected.
-- [ ] Columns behaviour and all existing board tests are unchanged.
+- [x] Grid navigation across uneven lanes and empty cells is defined and tested (skips empty cells into the next lane's card in that column, or stays).
+- [x] Toggling Columns ↔ Lanes keeps the selected task; a reload that moves the task to another lane keeps it selected.
+- [x] Columns behaviour and all existing board tests are unchanged.
 
 **Verification:**
-- [ ] Unit tests in `tui/board.rs`; `cargo test`, clippy, fmt.
+- [x] Unit tests in `tui/board.rs`; `cargo test`, clippy, fmt.
 
 **Dependencies:** T34
 
