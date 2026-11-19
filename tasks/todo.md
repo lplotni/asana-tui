@@ -918,6 +918,18 @@ Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32
 
 ---
 
+### - [ ] Review fixes before v0.3.0
+
+From the review of the unpushed range (2026-11-19). One commit each, test-first.
+
+- [x] R1: a card leaving the board (completion done) keeps the selection on the card the cursor is on, not on the row.
+- [ ] R2: `d d d` before Asana confirms ends completed, with one reopen cancelled rather than a second write.
+- [ ] R3: `F` on a board card works without opening the card first (board fields and card values from F24).
+- [ ] R4: the first-run interview only runs when the environment doesn't already give a token and a workspace (ADR-010).
+- [ ] R5: a test that undoing a completion shows the reload held meanwhile.
+
+---
+
 ### - [ ] T41: Release v0.3.0 (ask first)
 
 **Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.3.0`, push `main`, push the annotated tag, pull the formula commit. README: the skill needs `asn` 0.3.0 or later.

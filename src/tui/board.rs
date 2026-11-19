@@ -419,9 +419,14 @@ impl BoardView {
         true
     }
 
-    /// Takes card `gid` off the board (e.g. once completed). The selection
+    /// Takes card `gid` off the board (e.g. once completed). Another selected
+    /// card stays selected; if `gid` was the selected one, the selection
     /// keeps its place, clamped. Returns whether the card was there.
     pub fn remove(&mut self, gid: &str) -> bool {
+        let kept = self
+            .selected_task()
+            .map(|t| t.gid.clone())
+            .filter(|selected| selected != gid);
         let mut removed = false;
         for column in &mut self.board.columns {
             let before = column.tasks.len();
@@ -429,7 +434,9 @@ impl BoardView {
             removed |= column.tasks.len() != before;
         }
         self.rebuild();
-        self.set_row(self.row);
+        if !kept.is_some_and(|selected| self.select(&selected)) {
+            self.set_row(self.row);
+        }
         removed
     }
 
@@ -792,6 +799,27 @@ mod tests {
         assert!(v.remove("c0-1"));
 
         assert_eq!(selected(&v), Some("c0-0"));
+    }
+
+    #[test]
+    fn removing_a_card_above_the_selected_one_keeps_the_selection_on_its_card() {
+        let mut v = view(&[3]);
+        v.down(1);
+
+        assert!(v.remove("c0-0"));
+
+        assert_eq!(selected(&v), Some("c0-1"));
+    }
+
+    #[test]
+    fn a_completed_card_leaving_keeps_the_selection_on_the_card_moved_to() {
+        let mut v = view(&[3]);
+        assert!(v.start_completing("c0-0"));
+        v.down(1);
+
+        while v.advance() {}
+
+        assert_eq!(selected(&v), Some("c0-1"));
     }
 
     #[test]
