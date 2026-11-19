@@ -141,7 +141,32 @@ async fn a_failing_command_or_a_refused_token_asks_again() {
         shown.contains("The token command failed (exit 3). Try again."),
         "{shown}"
     );
-    assert!(shown.contains("Asana didn't accept that token"), "{shown}");
+    assert!(
+        shown.contains("Asana didn't accept that token. Try another.\n"),
+        "{shown}"
+    );
+    // Mid-interview, the environment variables aren't the thing to check.
+    assert!(!shown.contains("check ASANA_TOKEN"), "{shown}");
+}
+
+#[tokio::test]
+async fn asanas_error_text_is_shown_terminal_safe() {
+    let server = asana(one()).await;
+    Mock::given(method("GET"))
+        .and(path("/workspaces"))
+        .and(header("authorization", "Bearer odd-token"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(
+            json!({ "errors": [{ "message": "Not \u{1b}[2Jallowed \u{202e}here" }] }),
+        ))
+        .with_priority(1)
+        .mount(&server)
+        .await;
+
+    let (_, shown) = interview(&server, "printf odd-token\nprintf good-token\n", env(&[])).await;
+
+    assert!(shown.contains("allowed"), "{shown}");
+    assert!(!shown.contains('\u{1b}'), "{shown:?}");
+    assert!(!shown.contains('\u{202e}'), "{shown:?}");
 }
 
 #[tokio::test]

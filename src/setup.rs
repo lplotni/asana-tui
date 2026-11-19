@@ -5,8 +5,8 @@
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
-use crate::api::Client;
 use crate::api::tasks::Named;
+use crate::api::{ApiError, Client};
 use crate::cli::terminal_safe;
 use crate::config::{self, Token};
 
@@ -116,7 +116,10 @@ pub async fn interview(
                 writeln!(out, "That token sees no workspaces. Try another.")?;
             }
             Ok(workspaces) => break (cmd, workspaces),
-            Err(err) => writeln!(out, "Asana didn't accept that token: {err}. Try again.")?,
+            Err(ApiError::Unauthorized) => {
+                writeln!(out, "Asana didn't accept that token. Try another.")?;
+            }
+            Err(err) => writeln!(out, "{}. Try again.", terminal_safe(&err.to_string()))?,
         }
     };
     let workspace = choose_workspace(input, out, &workspaces, env("ASANA_WORKSPACE"))?;
@@ -133,7 +136,7 @@ fn choose_workspace(
     workspaces: &[Named],
     current: Option<String>,
 ) -> Result<String, SetupError> {
-    let label = |w: &Named| format!("{} ({})", terminal_safe(&w.name), w.gid);
+    let label = |w: &Named| format!("{} ({})", terminal_safe(&w.name), terminal_safe(&w.gid));
     if let [only] = workspaces {
         writeln!(out, "Workspace: {}", label(only))?;
         return Ok(only.gid.clone());
