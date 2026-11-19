@@ -1027,11 +1027,14 @@ mod tests {
         let mut v = view(&[2]);
         v.start_completing("c0-0");
         v.advance();
-        v.replace(board(&[2]));
+        // The reload brings a third card, so showing it is visible.
+        v.replace(board(&[3]));
+        assert_eq!(v.columns()[0].tasks.len(), 2);
 
         v.cancel_completing("c0-0");
 
         assert_eq!(v.completing(), None);
+        assert_eq!(v.columns()[0].tasks.len(), 3);
         assert_eq!(selected(&v), Some("c0-0"));
         assert!(!v.advance());
     }
