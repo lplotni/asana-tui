@@ -3,6 +3,7 @@
 use super::tsv_line;
 use crate::core::lanes::Lane;
 use crate::core::{Board, Column};
+use crate::present::card;
 
 /// Each section (`gid  name`) followed by its tasks, one indented
 /// tab-separated line each: `gid  name  assignee  due_on`. The column of
@@ -16,11 +17,12 @@ pub fn render_text(board: &Board) -> String {
 fn columns_text(columns: &[Column], indent: &str) -> String {
     let mut text = String::new();
     for column in columns {
+        let section = column.section.as_ref();
         text += indent;
-        text += &match &column.section {
-            Some(section) => tsv_line(&[&section.gid, &section.name]),
-            None => tsv_line(&["", "(no section)"]),
-        };
+        text += &tsv_line(&[
+            section.map_or("", |s| s.gid.as_str()),
+            card::section_name(section),
+        ]);
         for task in &column.tasks {
             let assignee = task.assignee.as_ref().map_or("", |a| a.name.as_str());
             let due = task.due_on.as_deref().unwrap_or("");
@@ -37,10 +39,11 @@ fn columns_text(columns: &[Column], indent: &str) -> String {
 pub fn render_lanes(lanes: &[Lane], field: &str) -> String {
     let mut text = String::new();
     for lane in lanes {
-        text += &match &lane.option {
-            Some(option) => tsv_line(&[&option.gid, &option.name]),
-            None => tsv_line(&["", &format!("(no {field})")]),
-        };
+        let option = lane.option.as_ref();
+        text += &tsv_line(&[
+            option.map_or("", |o| o.gid.as_str()),
+            &card::lane_name(option, field),
+        ]);
         text += &columns_text(&lane.columns, "\t");
     }
     text

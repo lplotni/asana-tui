@@ -8,9 +8,7 @@ use std::path::Path;
 use crate::api::tasks::Named;
 use crate::api::{ApiError, Client};
 use crate::cli::terminal_safe;
-use crate::config::{self, Token};
-
-const PAT_URL: &str = "https://app.asana.com/0/my-apps";
+use crate::config::{self, PAT_URL, Token};
 
 /// What the interview found out.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +68,7 @@ pub async fn interview(
     env: impl Fn(&str) -> Option<String>,
     api_url: &str,
 ) -> Result<Answers, SetupError> {
-    let env = |key: &str| env(key).filter(|v| !v.is_empty());
+    let env = config::non_empty(env);
     writeln!(
         out,
         "Your Asana token is never stored. asn runs a command that prints it, e.g.\n  \

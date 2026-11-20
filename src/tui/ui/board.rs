@@ -5,9 +5,10 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Padding, Paragraph};
+use ratatui::widgets::{Block, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph};
 
 use super::pane;
+use crate::api::projects::BoardTask;
 use crate::present::card;
 use crate::tui::app::{App, BoardState};
 use crate::tui::board::{BoardView, CARD_LINES, STRIKE_FRAMES};
@@ -19,8 +20,12 @@ pub(super) fn render_board_header(frame: &mut Frame, area: Rect, app: &App, them
     let title = match view {
         Some(view) => {
             let open: usize = view.columns().iter().map(|c| c.tasks.len()).sum();
-            match view.lane_field_name() {
-                Some(field) => format!(" {} · {open} open · lanes: {field}", view.project().name),
+            match view.lane_field() {
+                Some(field) => format!(
+                    " {} · {open} open · lanes: {}",
+                    view.project().name,
+                    field.name
+                ),
                 None => format!(" {} · {open} open", view.project().name),
             }
         }
@@ -59,8 +64,8 @@ pub(super) fn render_board_header(frame: &mut Frame, area: Rect, app: &App, them
 pub(super) fn render_board(frame: &mut Frame, area: Rect, app: &App, theme: &Theme, now: i64) {
     let message = match app.board().map(|b| &b.state) {
         Some(BoardState::Loaded(view)) => {
-            match view.lane_field_name() {
-                Some(field) => render_lanes(frame, area, view, field, theme, now),
+            match view.lane_field() {
+                Some(field) => render_lanes(frame, area, view, &field.name, theme, now),
                 None => render_columns(frame, area, view, theme, now),
             }
             return;
@@ -82,36 +87,38 @@ pub(super) fn render_board(frame: &mut Frame, area: Rect, app: &App, theme: &The
     frame.render_widget(Paragraph::new(message).block(block), area);
 }
 
-fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme, now: i64) {
+/// The visible columns side by side, each with its area and its pane: the
+/// section's name and card count, focused when it's the selected column.
+fn column_panes(area: Rect, view: &BoardView, theme: &Theme) -> Vec<(usize, Rect, Block<'static>)> {
     let visible = view.visible_columns();
     let count = visible.len() as u32;
     let areas = Layout::horizontal((0..count).map(|_| Constraint::Ratio(1, count))).split(area);
-    for (index, column_area) in visible.zip(areas.iter()) {
+    visible
+        .zip(areas.iter().copied())
+        .map(|(index, area)| {
+            let column = &view.columns()[index];
+            let name = card::section_name(column.section.as_ref());
+            let title = format!("{name} ({})", column.tasks.len());
+            (index, area, pane(&title, index == view.column(), theme))
+        })
+        .collect()
+}
+
+fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme, now: i64) {
+    for (index, column_area, block) in column_panes(area, view, theme) {
         let column = &view.columns()[index];
-        let name = column
-            .section
-            .as_ref()
-            .map_or("(no section)", |s| s.name.as_str());
-        let focused = index == view.column();
-        let block = pane(&format!("{name} ({})", column.tasks.len()), focused, theme);
         if column.tasks.is_empty() {
             let block = block.padding(Padding::horizontal(1));
             let text = Paragraph::new(Span::styled("no tasks", theme.style(Role::TextMuted)));
-            frame.render_widget(text.block(block), *column_area);
+            frame.render_widget(text.block(block), column_area);
             continue;
         }
         // Inside the borders, after the one-cell selection marker.
         let text_width = usize::from(column_area.width.saturating_sub(3));
-        let completing = view.completing();
         let items: Vec<ListItem> = column
             .tasks
             .iter()
-            .map(|task| match completing {
-                Some((gid, frame)) if gid == task.gid => {
-                    ListItem::new(completing_card_lines(task, text_width, theme, frame))
-                }
-                _ => ListItem::new(card_lines(task, text_width, theme, now)),
-            })
+            .map(|task| ListItem::new(card_or_frame(view, task, text_width, theme, now)))
             .collect();
         let list = List::new(items)
             .block(block)
@@ -120,8 +127,8 @@ fn render_columns(frame: &mut Frame, area: Rect, view: &BoardView, theme: &Theme
             .highlight_spacing(HighlightSpacing::Always);
         let mut state = ListState::default()
             .with_offset(view.scroll(index))
-            .with_selected(focused.then_some(view.row()));
-        frame.render_stateful_widget(list, *column_area, &mut state);
+            .with_selected((index == view.column()).then_some(view.row()));
+        frame.render_stateful_widget(list, column_area, &mut state);
     }
 }
 
@@ -138,31 +145,18 @@ fn render_lanes(
     theme: &Theme,
     now: i64,
 ) {
-    let visible = view.visible_columns();
-    let first = visible.start;
-    let count = visible.len() as u32;
-    let areas = Layout::horizontal((0..count).map(|_| Constraint::Ratio(1, count))).split(area);
-    let completing = view.completing();
-    for (index, column_area) in visible.zip(areas.iter()) {
-        let column = &view.columns()[index];
-        let name = column
-            .section
-            .as_ref()
-            .map_or("(no section)", |s| s.name.as_str());
+    let first = view.visible_columns().start;
+    for (index, column_area, block) in column_panes(area, view, theme) {
+        let inner = block.inner(column_area);
+        frame.render_widget(block, column_area);
         let focused = index == view.column();
-        let block = pane(&format!("{name} ({})", column.tasks.len()), focused, theme);
-        let inner = block.inner(*column_area);
-        frame.render_widget(block, *column_area);
         let width = usize::from(inner.width);
         // After the one-cell selection marker.
         let text_width = width.saturating_sub(1);
         let mut lines: Vec<Line> = Vec::new();
         for (l, lane) in view.lanes().iter().enumerate() {
             if index == first {
-                let label = lane
-                    .option
-                    .as_ref()
-                    .map_or_else(|| format!("(no {field})"), |o| o.name.clone());
+                let label = card::lane_name(lane.option.as_ref(), field);
                 let cards: usize = lane.columns.iter().map(|c| c.tasks.len()).sum();
                 lines.push(Line::styled(
                     card::truncate(&format!("{label} ({cards})"), width),
@@ -175,15 +169,10 @@ fn render_lanes(
             let cell = &lane.columns[index].tasks;
             let mut cell_lines: Vec<Line> = Vec::new();
             for (row, task) in cell.iter().enumerate() {
-                let card = match completing {
-                    Some((gid, frame)) if gid == task.gid => {
-                        completing_card_lines(task, text_width, theme, frame)
-                    }
-                    _ => card_lines(task, text_width, theme, now),
-                };
                 let selected = here && row == view.row();
                 cell_lines.extend(
-                    card.into_iter()
+                    card_or_frame(view, task, text_width, theme, now)
+                        .into_iter()
                         .map(|line| marked(line, selected, width, theme)),
                 );
             }
@@ -203,6 +192,21 @@ fn render_lanes(
     }
 }
 
+/// Card `task`: its completion animation's frame while that plays, else the
+/// card.
+fn card_or_frame<'a>(
+    view: &BoardView,
+    task: &BoardTask,
+    width: usize,
+    theme: &Theme,
+    now: i64,
+) -> Vec<Line<'a>> {
+    match view.completing() {
+        Some((gid, frame)) if gid == task.gid => completing_card_lines(task, width, theme, frame),
+        _ => card_lines(task, width, theme, now),
+    }
+}
+
 /// A card line behind the one-cell selection marker (`▌` when `selected`),
 /// filled to `width` and in the selection style when selected.
 fn marked<'a>(line: Line<'a>, selected: bool, width: usize, theme: &Theme) -> Line<'a> {
@@ -219,12 +223,7 @@ fn marked<'a>(line: Line<'a>, selected: bool, width: usize, theme: &Theme) -> Li
 }
 
 /// A card: the task name, then the assignee's initials and the due date.
-fn card_lines<'a>(
-    task: &crate::api::projects::BoardTask,
-    width: usize,
-    theme: &Theme,
-    now: i64,
-) -> Vec<Line<'a>> {
+fn card_lines<'a>(task: &BoardTask, width: usize, theme: &Theme, now: i64) -> Vec<Line<'a>> {
     let name = Line::styled(card::truncate(&task.name, width), theme.style(Role::Text));
     let mut meta = vec![Span::styled(
         card::initials(task),
@@ -245,45 +244,31 @@ fn card_lines<'a>(
 /// A completed card's animation frame (F23): the name struck through from
 /// the left with `✓ done` below it, then the name line alone.
 fn completing_card_lines<'a>(
-    task: &crate::api::projects::BoardTask,
+    task: &BoardTask,
     width: usize,
     theme: &Theme,
     frame: u8,
 ) -> Vec<Line<'a>> {
     let name = card::truncate(&task.name, width);
-    let characters = characters(&name);
-    let total = characters.len();
-    let struck = if frame < STRIKE_FRAMES {
-        (total * usize::from(frame + 1)).div_ceil(usize::from(STRIKE_FRAMES))
-    } else {
-        total
-    };
-    let split: usize = characters[..struck].iter().map(|c| c.len()).sum();
     let crossed = |role| theme.style(role).add_modifier(Modifier::CROSSED_OUT);
-    let mut spans: Vec<Span> = if frame < STRIKE_FRAMES {
-        // A band of colours that moves along with the strike.
-        characters[..struck]
-            .iter()
-            .enumerate()
-            .map(|(i, c)| Span::styled((*c).to_owned(), crossed(celebrate(i + usize::from(frame)))))
-            .collect()
-    } else {
-        vec![Span::styled(
-            name[..split].to_owned(),
-            crossed(Role::TextMuted),
-        )]
-    };
+    if frame >= STRIKE_FRAMES {
+        return vec![Line::from(Span::styled(name, crossed(Role::TextMuted)))];
+    }
+    let characters = characters(&name);
+    let struck = (characters.len() * usize::from(frame + 1)).div_ceil(usize::from(STRIKE_FRAMES));
+    let split: usize = characters[..struck].iter().map(|c| c.len()).sum();
+    // A band of colours that moves along with the strike.
+    let mut spans: Vec<Span> = characters[..struck]
+        .iter()
+        .enumerate()
+        .map(|(i, c)| Span::styled((*c).to_owned(), crossed(celebrate(i + usize::from(frame)))))
+        .collect();
     spans.push(Span::styled(
         name[split..].to_owned(),
         theme.style(Role::Text),
     ));
-    let name_line = Line::from(spans);
-    if frame < STRIKE_FRAMES {
-        let done = Line::styled("✓ done", theme.style(celebrate(usize::from(frame))));
-        vec![name_line, done]
-    } else {
-        vec![name_line]
-    }
+    let done = Line::styled("✓ done", theme.style(celebrate(usize::from(frame))));
+    vec![Line::from(spans), done]
 }
 
 /// `text` split into the characters a reader sees: a zero-width code point

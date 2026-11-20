@@ -1,9 +1,10 @@
 use std::process::ExitCode;
 
-use asn::api::{ASANA_API_URL, Client};
+use asn::api::{ASANA_API_URL, ApiError, Client};
 use asn::cli::inbox;
 use asn::config::{self, Config, ConfigError, FileConfig};
 use asn::core;
+use asn::core::resolve::Unresolved;
 use asn::setup;
 use clap::{Parser, Subcommand};
 
@@ -321,16 +322,12 @@ async fn main() -> ExitCode {
         Some(Command::Task {
             command: Some(TaskCommand::Field { gid, field, option }),
             ..
-        }) => match core::set_field(&client, &gid, &field, &option).await {
-            Ok(Ok(set)) => {
+        }) => match resolved(core::set_field(&client, &gid, &field, &option).await) {
+            Ok(set) => {
                 print!("{}", asn::cli::render_field_set(&set));
                 ExitCode::SUCCESS
             }
-            Ok(Err(unresolved)) => {
-                eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                ExitCode::from(1)
-            }
-            Err(err) => fail(&err, err.exit_code()),
+            Err(code) => code,
         },
         Some(Command::Task {
             command: Some(TaskCommand::Done { gid, undo }),
@@ -342,17 +339,13 @@ async fn main() -> ExitCode {
         Some(Command::Task {
             command: Some(TaskCommand::Assign { gid, assignee }),
             ..
-        }) => match core::assign_to(&client, &config.workspace, &gid, &assignee).await {
-            Ok(Ok(now)) => {
+        }) => match resolved(core::assign_to(&client, &config.workspace, &gid, &assignee).await) {
+            Ok(now) => {
                 let name = now.map_or("unassigned".to_owned(), |a| a.name);
                 println!("{}", asn::cli::terminal_safe(&name));
                 ExitCode::SUCCESS
             }
-            Ok(Err(unresolved)) => {
-                eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                ExitCode::from(1)
-            }
-            Err(err) => fail(&err, err.exit_code()),
+            Err(code) => code,
         },
         Some(Command::Task {
             gid: Some(gid),
@@ -449,56 +442,33 @@ async fn main() -> ExitCode {
                     project,
                     section,
                 },
-        }) => match core::add_to(
-            &client,
-            &config.workspace,
-            &task,
-            &project,
-            section.as_deref(),
-        )
-        .await
-        {
-            Ok(Ok(place)) => {
-                match place {
-                    Some(place) => println!("added to {}", asn::cli::terminal_safe(&place)),
-                    None => println!("added"),
-                }
-                ExitCode::SUCCESS
+        }) => {
+            let added = core::add_to(
+                &client,
+                &config.workspace,
+                &task,
+                &project,
+                section.as_deref(),
+            );
+            match resolved(added.await) {
+                Ok(place) => print_place("added", place),
+                Err(code) => code,
             }
-            Ok(Err(unresolved)) => {
-                eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                ExitCode::from(1)
-            }
-            Err(err) => fail(&err, err.exit_code()),
-        },
+        }
         Some(Command::Project {
             command: ProjectCommand::Move { task, section },
-        }) => match core::move_to(&client, &task, &section).await {
-            Ok(Ok(place)) => {
-                match place {
-                    Some(place) => println!("moved to {}", asn::cli::terminal_safe(&place)),
-                    None => println!("moved"),
-                }
-                ExitCode::SUCCESS
-            }
-            Ok(Err(unresolved)) => {
-                eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                ExitCode::from(1)
-            }
-            Err(err) => fail(&err, err.exit_code()),
+        }) => match resolved(core::move_to(&client, &task, &section).await) {
+            Ok(place) => print_place("moved", place),
+            Err(code) => code,
         },
         Some(Command::Project {
             command: ProjectCommand::Fields { project },
-        }) => match core::project_fields(&client, &config.workspace, &project).await {
-            Ok(Ok(fields)) => {
+        }) => match resolved(core::project_fields(&client, &config.workspace, &project).await) {
+            Ok(fields) => {
                 print!("{}", asn::cli::render_fields(&fields));
                 ExitCode::SUCCESS
             }
-            Ok(Err(unresolved)) => {
-                eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                ExitCode::from(1)
-            }
-            Err(err) => fail(&err, err.exit_code()),
+            Err(code) => code,
         },
         Some(Command::Project {
             command: ProjectCommand::Sections { project },
@@ -518,20 +488,15 @@ async fn main() -> ExitCode {
                 },
         }) => {
             let name = name.join(" ");
-            match core::create_in(
+            let created = core::create_in(
                 &client,
                 &config.workspace,
                 &project,
                 section.as_deref(),
                 &name,
-            )
-            .await
-            {
-                Ok(Err(unresolved)) => {
-                    eprint!("{}", asn::cli::render_unresolved(&unresolved));
-                    ExitCode::from(1)
-                }
-                Ok(Ok(created)) => {
+            );
+            match resolved(created.await) {
+                Ok(created) => {
                     println!("{}", created.task.gid);
                     match created.section_error {
                         None => ExitCode::SUCCESS,
@@ -541,7 +506,7 @@ async fn main() -> ExitCode {
                         ),
                     }
                 }
-                Err(err) => fail(&err, err.exit_code()),
+                Err(code) => code,
             }
         }
         Some(Command::Desc {
@@ -559,10 +524,7 @@ fn print_board(board: &core::Board, json: bool, lanes: Option<&str>) -> ExitCode
     let lanes = match lanes.map(|arg| core::lanes::lane_field(board, arg)) {
         None => None,
         Some(Ok(field)) => Some((field.name.clone(), core::lanes::lanes(board, &field.gid))),
-        Some(Err(unresolved)) => {
-            eprint!("{}", asn::cli::render_unresolved(&unresolved));
-            return ExitCode::from(1);
-        }
+        Some(Err(unresolved)) => return unresolved_name(&unresolved),
     };
     match (json, &lanes) {
         (true, lanes) => println!(
@@ -578,6 +540,31 @@ fn print_board(board: &core::Board, json: bool, lanes: Option<&str>) -> ExitCode
 fn fail(err: &dyn std::fmt::Display, code: i32) -> ExitCode {
     eprintln!("{err}");
     ExitCode::from(code as u8)
+}
+
+/// The value of a command that takes names (F19), or its exit code once
+/// the name that didn't resolve, or the error, is printed.
+fn resolved<T>(result: Result<Result<T, Unresolved>, ApiError>) -> Result<T, ExitCode> {
+    match result {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(unresolved)) => Err(unresolved_name(&unresolved)),
+        Err(err) => Err(fail(&err, err.exit_code())),
+    }
+}
+
+/// Prints a name that didn't resolve to one thing, with its candidates.
+fn unresolved_name(unresolved: &Unresolved) -> ExitCode {
+    eprint!("{}", asn::cli::render_unresolved(unresolved));
+    ExitCode::from(1)
+}
+
+/// `added to Project › Section` (`verb` alone when Asana didn't say where).
+fn print_place(verb: &str, place: Option<String>) -> ExitCode {
+    match place {
+        Some(place) => println!("{verb} to {}", asn::cli::terminal_safe(&place)),
+        None => println!("{verb}"),
+    }
+    ExitCode::SUCCESS
 }
 
 fn unix_now() -> i64 {

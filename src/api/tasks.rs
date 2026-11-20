@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::projects::{SelectField, SelectOption};
 use super::{ApiError, Client, Page};
 
 /// Task fields shown in the detail pane.
@@ -60,7 +61,8 @@ pub struct CustomField {
     pub gid: String,
     pub name: String,
     pub display_value: Option<String>,
-    /// `enum` for a single-select field (F27); other types aren't edited.
+    /// [`SINGLE_SELECT`] for a single-select field (F27); other types
+    /// aren't edited.
     #[serde(default)]
     pub resource_subtype: String,
     /// The chosen option of a single-select field.
@@ -68,7 +70,50 @@ pub struct CustomField {
     pub enum_value: Option<Named>,
     /// A single-select field's options, in Asana's order.
     #[serde(default)]
-    pub enum_options: Vec<crate::api::projects::SelectOption>,
+    pub enum_options: Vec<SelectOption>,
+}
+
+/// Asana's `resource_subtype` of a single-select field.
+const SINGLE_SELECT: &str = "enum";
+
+impl CustomField {
+    /// Single-select `field` as a task has it, set to the option whose GID
+    /// is `value`.
+    pub fn single_select(field: &SelectField, value: Option<&str>) -> CustomField {
+        CustomField {
+            gid: field.gid.clone(),
+            name: field.name.clone(),
+            display_value: None,
+            resource_subtype: SINGLE_SELECT.to_owned(),
+            enum_value: field
+                .options
+                .iter()
+                .find(|o| value == Some(o.gid.as_str()))
+                .map(SelectOption::named),
+            enum_options: field.options.clone(),
+        }
+    }
+
+    /// Whether this is a single-select field, the only kind asn sets.
+    pub fn is_single_select(&self) -> bool {
+        self.resource_subtype == SINGLE_SELECT
+    }
+
+    /// This field as a [`SelectField`], if it is a single-select field.
+    pub fn into_select(self) -> Option<SelectField> {
+        self.is_single_select().then_some(SelectField {
+            gid: self.gid,
+            name: self.name,
+            options: self.enum_options,
+        })
+    }
+
+    pub fn named(&self) -> Named {
+        Named {
+            gid: self.gid.clone(),
+            name: self.name.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

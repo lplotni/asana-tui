@@ -6,9 +6,9 @@ pub mod resolve;
 
 use crate::api::attachments::Attachment;
 use crate::api::notifications::{MARK_BATCH, Notification};
-use crate::api::projects::BoardTask;
+use crate::api::projects::{BoardTask, SelectField, SelectOption};
 use crate::api::search::FoundTask;
-use crate::api::tasks::{Named, Task, TaskStory, Text};
+use crate::api::tasks::{CustomField, Membership, Named, Task, TaskStory, Text};
 use crate::api::{ApiError, Client, Page};
 use crate::config::SearchMode;
 use mention::Mention;
@@ -197,7 +197,14 @@ pub struct Board {
     pub project: Named,
     pub columns: Vec<Column>,
     /// The project's single-select fields (F24), in the project's order.
-    pub fields: Vec<crate::api::projects::SelectField>,
+    pub fields: Vec<SelectField>,
+}
+
+impl Board {
+    /// The board's single-select field `gid`.
+    pub fn field(&self, gid: &str) -> Option<&SelectField> {
+        self.fields.iter().find(|f| f.gid == gid)
+    }
 }
 
 /// One section of a board and its tasks in board order. `section` is `None`
@@ -231,7 +238,7 @@ pub async fn board(client: &Client, project_gid: &str) -> Result<Board, ApiError
 pub async fn select_fields(
     client: &Client,
     project_gid: &str,
-) -> Result<Vec<crate::api::projects::SelectField>, ApiError> {
+) -> Result<Vec<SelectField>, ApiError> {
     let settings = all_pages(|offset| async move {
         client
             .field_settings_page(project_gid, offset.as_deref())
@@ -421,15 +428,26 @@ pub async fn move_to(
         }
     };
     move_to_section(client, task_gid, &section_gid).await?;
-    // The move is done; where the task is now is only reported, so a failed
-    // read must not turn it into an error (and a retry).
-    let place = client.task(task_gid).await.ok().and_then(|task| {
-        task.memberships
-            .iter()
-            .find(|m| m.section.as_ref().is_some_and(|s| s.gid == section_gid))
-            .map(crate::api::tasks::Membership::place)
-    });
+    let place = place_after(client, task_gid, |m| {
+        m.section.as_ref().is_some_and(|s| s.gid == section_gid)
+    })
+    .await;
     Ok(Ok(place))
+}
+
+/// Where the task is now (`Project › Section`), by its membership that
+/// `which` picks, after a write that's done. It's only reported, so a failed
+/// read is `None`, never an error (and a retry).
+async fn place_after(
+    client: &Client,
+    task_gid: &str,
+    which: impl Fn(&Membership) -> bool,
+) -> Option<String> {
+    let task = client.task(task_gid).await.ok()?;
+    task.memberships
+        .iter()
+        .find(|m| which(m))
+        .map(Membership::place)
 }
 
 /// Creates a task like [`create_task`], with the project and section given
@@ -469,13 +487,7 @@ pub async fn add_to(
             Err(unresolved) => return Ok(Err(unresolved)),
         };
     add_to_project(client, task_gid, &project_gid, section_gid.as_deref()).await?;
-    // Added; where it landed is only reported, so a failed read isn't an error.
-    let place = client.task(task_gid).await.ok().and_then(|task| {
-        task.memberships
-            .iter()
-            .find(|m| m.project.gid == project_gid)
-            .map(crate::api::tasks::Membership::place)
-    });
+    let place = place_after(client, task_gid, |m| m.project.gid == project_gid).await;
     Ok(Ok(place))
 }
 
@@ -499,49 +511,45 @@ pub async fn set_field(
     option: &str,
 ) -> Result<Result<FieldSet, resolve::Unresolved>, ApiError> {
     let task = client.task(task_gid).await?;
-    let fields: Vec<_> = task
+    let fields: Vec<&CustomField> = task
         .custom_fields
         .iter()
-        .filter(|f| f.resource_subtype == "enum")
+        .filter(|f| f.is_single_select())
         .collect();
-    let named = |gid: &str, name: &str| Named {
-        gid: gid.to_owned(),
-        name: name.to_owned(),
-    };
-    let candidates = fields.iter().map(|f| named(&f.gid, &f.name)).collect();
-    let chosen = match resolve::pick_local("field", field, candidates) {
+    let chosen = match resolve::pick_local_by("field", field, &fields, |f| f.named()) {
         Ok(chosen) => chosen,
         Err(unresolved) => return Ok(Err(unresolved)),
     };
-    let definition = fields
-        .iter()
-        .find(|f| f.gid == chosen.gid)
-        .expect("picked from the task's fields");
     let option = if option == "none" {
         None
     } else {
-        let enabled = definition
-            .enum_options
-            .iter()
-            .filter(|o| o.enabled)
-            .map(|o| named(&o.gid, &o.name))
-            .collect();
-        match resolve::pick_local("option", option, enabled) {
-            Ok(option) => Some(option),
+        let enabled: Vec<&SelectOption> =
+            chosen.enum_options.iter().filter(|o| o.enabled).collect();
+        match resolve::pick_local_by("option", option, &enabled, |o| o.named()) {
+            Ok(option) => Some(option.named()),
             Err(unresolved) => return Ok(Err(unresolved)),
         }
     };
+    set_select_field(client, task_gid, &chosen.named(), option.as_ref())
+        .await
+        .map(Ok)
+}
+
+/// Sets the task's single-select `field` to `option` (or clears it), by
+/// their GIDs; their names are what's reported as set.
+pub async fn set_select_field(
+    client: &Client,
+    task_gid: &str,
+    field: &Named,
+    option: Option<&Named>,
+) -> Result<FieldSet, ApiError> {
     client
-        .set_select_field(
-            task_gid,
-            &chosen.gid,
-            option.as_ref().map(|o| o.gid.as_str()),
-        )
+        .set_select_field(task_gid, &field.gid, option.map(|o| o.gid.as_str()))
         .await?;
-    Ok(Ok(FieldSet {
-        field: chosen.name,
-        option: option.map(|o| o.name),
-    }))
+    Ok(FieldSet {
+        field: field.name.clone(),
+        option: option.map(|o| o.name.clone()),
+    })
 }
 
 /// The single-select fields of `project` (a GID or a name, as in F19).
@@ -549,7 +557,7 @@ pub async fn project_fields(
     client: &Client,
     workspace: &str,
     project: &str,
-) -> Result<Result<Vec<crate::api::projects::SelectField>, resolve::Unresolved>, ApiError> {
+) -> Result<Result<Vec<SelectField>, resolve::Unresolved>, ApiError> {
     let project_gid = match resolve_project(client, workspace, project).await? {
         Ok(gid) => gid,
         Err(unresolved) => return Ok(Err(unresolved)),

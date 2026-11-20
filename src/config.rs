@@ -9,7 +9,8 @@ use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
-const PAT_URL: &str = "https://app.asana.com/0/my-apps";
+/// Where a Personal Access Token is created.
+pub(crate) const PAT_URL: &str = "https://app.asana.com/0/my-apps";
 
 /// An Asana Personal Access Token. `Debug` never reveals it.
 pub struct Token(String);
@@ -152,10 +153,10 @@ impl ConfigError {
 /// The config file's path: `$XDG_CONFIG_HOME/asn/config.toml`, or
 /// `$HOME/.config/asn/config.toml`. `None` when neither is set.
 pub fn file_path(env: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
-    let set = |key| env(key).filter(|v: &String| !v.is_empty());
-    let base = match set("XDG_CONFIG_HOME").map(PathBuf::from) {
+    let env = non_empty(env);
+    let base = match env("XDG_CONFIG_HOME").map(PathBuf::from) {
         Some(xdg) if xdg.is_absolute() => xdg,
-        _ => PathBuf::from(set("HOME")?).join(".config"),
+        _ => PathBuf::from(env("HOME")?).join(".config"),
     };
     Some(base.join("asn").join("config.toml"))
 }
@@ -164,8 +165,14 @@ pub fn file_path(env: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
 /// command), as setups from before the config file do. Then the TUI's first
 /// run needs no interview (ADR-010). The token command isn't run.
 pub fn env_is_enough(env: impl Fn(&str) -> Option<String>) -> bool {
-    let set = |key| env(key).is_some_and(|v| !v.is_empty());
+    let env = non_empty(env);
+    let set = |key| env(key).is_some();
     set("ASANA_WORKSPACE") && (set("ASANA_TOKEN") || set("ASANA_TOKEN_CMD"))
+}
+
+/// `env` with an empty variable read as unset, as everywhere in asn.
+pub(crate) fn non_empty(env: impl Fn(&str) -> Option<String>) -> impl Fn(&str) -> Option<String> {
+    move |key| env(key).filter(|v| !v.is_empty())
 }
 
 impl FileConfig {
@@ -208,7 +215,7 @@ impl Config {
         env: impl Fn(&str) -> Option<String>,
         file: &FileConfig,
     ) -> Result<Self, ConfigError> {
-        let env = |key: &str| env(key).filter(|v| !v.is_empty());
+        let env = non_empty(env);
         let workspace = workspace(&env, file)?;
         let search = search(&env, file)?;
         let theme = env("ASN_THEME").or_else(|| file.theme.clone());
@@ -332,7 +339,6 @@ mod tests {
     use std::collections::HashMap;
 
     /// The config from the environment alone (no config file).
-    #[allow(clippy::wrong_self_convention)]
     fn from_env(env: impl Fn(&str) -> Option<String>) -> Result<Config, ConfigError> {
         Config::resolve(env, &FileConfig::default())
     }

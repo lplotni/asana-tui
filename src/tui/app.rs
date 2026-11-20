@@ -449,6 +449,23 @@ pub enum BoardState {
     Loaded(Box<BoardView>),
 }
 
+impl BoardState {
+    /// The board, once loaded.
+    pub fn view(&self) -> Option<&BoardView> {
+        match self {
+            BoardState::Loaded(view) => Some(view),
+            _ => None,
+        }
+    }
+
+    fn view_mut(&mut self) -> Option<&mut BoardView> {
+        match self {
+            BoardState::Loaded(view) => Some(view),
+            _ => None,
+        }
+    }
+}
+
 /// Why a description wasn't saved, and where the user's text was kept.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveFailure {
@@ -687,7 +704,7 @@ impl App {
             }
             Msg::Frame => {
                 for slot in &mut self.boards {
-                    if let BoardState::Loaded(view) = &mut slot.state {
+                    if let Some(view) = slot.state.view_mut() {
                         view.advance();
                     }
                 }
@@ -1421,17 +1438,11 @@ impl App {
 
     /// The loaded board on screen, if any.
     pub fn board_view(&self) -> Option<&BoardView> {
-        match &self.boards.first()?.state {
-            BoardState::Loaded(view) => Some(view),
-            _ => None,
-        }
+        self.boards.first()?.state.view()
     }
 
     fn board_view_mut(&mut self) -> Option<&mut BoardView> {
-        match &mut self.boards.first_mut()?.state {
-            BoardState::Loaded(view) => Some(view),
-            _ => None,
-        }
+        self.boards.first_mut()?.state.view_mut()
     }
 
     /// Shows a loaded board, keeping the selection of the one shown before.
@@ -1454,7 +1465,7 @@ impl App {
         let queued = std::mem::take(&mut slot.reload_queued);
         // A card animating its completion holds this result back until it
         // ends (F23), so the card to select waits for the next load.
-        let held = matches!(&slot.state, BoardState::Loaded(view) if view.completing().is_some());
+        let held = slot.state.view().is_some_and(|v| v.completing().is_some());
         let select = (result.is_ok() && !queued && !held)
             .then(|| slot.select_task.take())
             .flatten();
@@ -1547,9 +1558,10 @@ impl App {
 
     /// Whether an animation is playing, so the event loop sends frames.
     pub fn animating(&self) -> bool {
-        self.boards.iter().any(
-            |slot| matches!(&slot.state, BoardState::Loaded(view) if view.completing().is_some()),
-        )
+        self.boards
+            .iter()
+            .filter_map(|slot| slot.state.view())
+            .any(|view| view.completing().is_some())
     }
 
     /// `d` right after completing: reopens that task.
@@ -1589,7 +1601,7 @@ impl App {
     /// Stops card `gid`'s completion animation on every board; it stays.
     fn stop_completing(&mut self, gid: &str) {
         for slot in &mut self.boards {
-            if let BoardState::Loaded(view) = &mut slot.state {
+            if let Some(view) = slot.state.view_mut() {
                 view.cancel_completing(gid);
             }
         }
@@ -1650,8 +1662,11 @@ impl App {
         let project_gid = view.project().gid.clone();
         // In lanes, the new task gets the selected lane's option too.
         let lane = view.lane_field().and_then(|field| {
-            let option = view.lanes().get(view.lane())?.option.clone()?;
-            Some(LaneValue { field, option })
+            let option = view.selected_lane()?.option.clone()?;
+            Some(LaneValue {
+                field: field.named(),
+                option,
+            })
         });
         self.new_task = Some(NewTask {
             project_gid,
@@ -1774,7 +1789,7 @@ impl App {
     /// otherwise asks which field first.
     fn open_field(&mut self) -> Vec<Effect> {
         let lane_field = (self.screen == Screen::Board)
-            .then(|| self.board_view()?.lane_field())
+            .then(|| Some(self.board_view()?.lane_field()?.gid.clone()))
             .flatten();
         let Some(task_gid) = self.selected_task_gid().map(str::to_owned) else {
             self.toast = Some(Toast::info("Only tasks have fields"));
@@ -1785,7 +1800,7 @@ impl App {
             return Vec::new();
         };
         let start = lane_field
-            .and_then(|lane| fields.iter().find(|f| f.gid == lane.gid))
+            .and_then(|lane| fields.iter().find(|f| f.gid == lane))
             .or_else(|| (fields.len() == 1).then(|| &fields[0]));
         self.picker = match (start, fields.is_empty()) {
             (_, true) => {
@@ -1823,7 +1838,7 @@ impl App {
                     .task
                     .custom_fields
                     .iter()
-                    .filter(|f| f.resource_subtype == "enum")
+                    .filter(|f| f.is_single_select())
                     .cloned()
                     .collect(),
             );
@@ -2722,9 +2737,5 @@ fn field_options_picker(task_gid: String, field: &CustomField) -> Picker {
             note: None,
         })
         .collect();
-    let field = Named {
-        gid: field.gid.clone(),
-        name: field.name.clone(),
-    };
-    Picker::field_options(task_gid, field, options)
+    Picker::field_options(task_gid, field.named(), options)
 }

@@ -270,14 +270,15 @@ fn run_effects(
                             Ok(created) => {
                                 // In a lane, the new task gets the lane's option too.
                                 let lane_error = match &lane {
-                                    Some(lane) => set_field(
+                                    Some(lane) => core::set_select_field(
                                         &client,
                                         &created.task.gid,
                                         &lane.field,
                                         Some(&lane.option),
                                     )
                                     .await
-                                    .err(),
+                                    .err()
+                                    .map(|e| e.to_string()),
                                     None => None,
                                 };
                                 Ok(app::Created {
@@ -301,7 +302,10 @@ fn run_effects(
                     field,
                     option,
                 } => {
-                    let result = set_field(&client, &task_gid, &field, option.as_ref()).await;
+                    let result =
+                        core::set_select_field(&client, &task_gid, &field, option.as_ref())
+                            .await
+                            .map_err(|e| e.to_string());
                     Msg::FieldSet { task_gid, result }
                 }
                 Effect::LoadMore { offset } => Msg::MoreLoaded(
@@ -551,26 +555,6 @@ async fn finish_writes(writes: &mut JoinSet<()>, timeout: std::time::Duration) -
     let all_done = async { while writes.join_next().await.is_some() {} };
     let _ = tokio::time::timeout(timeout, all_done).await;
     writes.len()
-}
-
-/// Sets single-select `field` of `task_gid` to `option` (or clears it), by
-/// GIDs. A name that doesn't resolve can't happen with GIDs, but is reported
-/// as an error all the same.
-async fn set_field(
-    client: &Client,
-    task_gid: &str,
-    field: &crate::api::tasks::Named,
-    option: Option<&crate::api::tasks::Named>,
-) -> Result<core::FieldSet, String> {
-    let option = option.map_or("none", |o| o.gid.as_str());
-    match core::set_field(client, task_gid, &field.gid, option).await {
-        Ok(Ok(set)) => Ok(set),
-        Ok(Err(unresolved)) => Err(format!(
-            "no such {} as {}",
-            unresolved.kind, unresolved.name
-        )),
-        Err(e) => Err(e.to_string()),
-    }
 }
 
 #[cfg(test)]

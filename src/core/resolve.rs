@@ -93,6 +93,21 @@ pub fn pick_local(
     })
 }
 
+/// [`pick_local`] among `items`, each known by the [`Named`] `named` makes
+/// of it: the item `arg` means.
+pub fn pick_local_by<'a, T>(
+    kind: &'static str,
+    arg: &str,
+    items: &'a [T],
+    named: impl Fn(&T) -> Named,
+) -> Result<&'a T, Unresolved> {
+    let picked = pick_local(kind, arg, items.iter().map(&named).collect())?;
+    Ok(items
+        .iter()
+        .find(|item| named(item).gid == picked.gid)
+        .expect("picked from the items"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

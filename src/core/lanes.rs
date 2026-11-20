@@ -3,7 +3,7 @@
 
 use super::resolve::{self, Unresolved};
 use super::{Board, Column};
-use crate::api::projects::SelectField;
+use crate::api::projects::{SelectField, SelectOption};
 use crate::api::tasks::Named;
 
 /// The cards of one option of the lane field, in the board's columns.
@@ -20,18 +20,8 @@ pub struct Lane {
 /// up; cards keep their board order within a column.
 pub fn lanes(board: &Board, field_gid: &str) -> Vec<Lane> {
     let options: Vec<Named> = board
-        .fields
-        .iter()
-        .find(|f| f.gid == field_gid)
-        .map(|f| {
-            f.options
-                .iter()
-                .map(|o| Named {
-                    gid: o.gid.clone(),
-                    name: o.name.clone(),
-                })
-                .collect()
-        })
+        .field(field_gid)
+        .map(|f| f.options.iter().map(SelectOption::named).collect())
         .unwrap_or_default();
     // The lane a card belongs to: its option's lane, or the last one (none).
     let lane_of = |value: Option<&str>| {
@@ -70,20 +60,7 @@ pub fn lanes(board: &Board, field_gid: &str) -> Vec<Lane> {
 /// The board's single-select field `arg` names: its GID, or its name (exact
 /// ignoring case, else the only field containing it, as in F19).
 pub fn lane_field<'a>(board: &'a Board, arg: &str) -> Result<&'a SelectField, Unresolved> {
-    let all: Vec<Named> = board
-        .fields
-        .iter()
-        .map(|f| Named {
-            gid: f.gid.clone(),
-            name: f.name.clone(),
-        })
-        .collect();
-    let field = resolve::pick_local("field", arg, all)?;
-    Ok(board
-        .fields
-        .iter()
-        .find(|f| f.gid == field.gid)
-        .expect("picked from the board's fields"))
+    resolve::pick_local_by("field", arg, &board.fields, SelectField::named)
 }
 
 #[cfg(test)]

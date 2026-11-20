@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::tasks::{Membership, Named};
+use super::tasks::{CustomField, Membership, Named};
 use super::{ApiError, Client, Page};
 
 /// How many projects the typeahead returns.
@@ -71,6 +71,15 @@ pub struct SelectField {
     pub options: Vec<SelectOption>,
 }
 
+impl SelectField {
+    pub fn named(&self) -> Named {
+        Named {
+            gid: self.gid.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
 /// An option of a single-select field. A disabled option can still be set on
 /// old tasks, but is never offered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -81,36 +90,24 @@ pub struct SelectOption {
     pub enabled: bool,
 }
 
+impl SelectOption {
+    pub fn named(&self) -> Named {
+        Named {
+            gid: self.gid.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
 fn enabled() -> bool {
     true
 }
 
-/// One custom field setting of a project, as Asana returns it.
+/// One custom field setting of a project, as Asana returns it: the field's
+/// definition, without a value. Only single-select fields are used.
 #[derive(Debug, Clone, Deserialize)]
 pub struct FieldSetting {
-    pub custom_field: FieldDefinition,
-}
-
-/// A custom field's definition. Only single-select fields (`enum`) are used.
-#[derive(Debug, Clone, Deserialize)]
-pub struct FieldDefinition {
-    pub gid: String,
-    pub name: String,
-    #[serde(default)]
-    pub resource_subtype: String,
-    #[serde(default)]
-    pub enum_options: Vec<SelectOption>,
-}
-
-impl FieldDefinition {
-    /// This field as a [`SelectField`], if it is a single-select field.
-    pub fn into_select(self) -> Option<SelectField> {
-        (self.resource_subtype == "enum").then_some(SelectField {
-            gid: self.gid,
-            name: self.name,
-            options: self.enum_options,
-        })
-    }
+    pub custom_field: CustomField,
 }
 
 impl Client {

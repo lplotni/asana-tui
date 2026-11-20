@@ -6,7 +6,7 @@
 //! Both layouts are a grid of lanes × columns: the columns layout is one
 //! lane holding the board's columns, so navigation is written once.
 
-use crate::api::projects::BoardTask;
+use crate::api::projects::{BoardTask, SelectField};
 use crate::api::tasks::{CustomField, Named};
 use crate::core::lanes::Lane;
 use crate::core::{Board, Column};
@@ -58,7 +58,7 @@ pub struct BoardView {
     /// A completed card playing its animation: its GID and frame.
     completing: Option<(String, u8)>,
     /// A reload that arrived during the animation, shown when it ends.
-    held: Option<Box<Board>>,
+    held: Option<Board>,
 }
 
 impl BoardView {
@@ -87,29 +87,17 @@ impl BoardView {
     /// columns again. The selected task stays selected. `false` (and no
     /// change) when the board has no single-select field.
     pub fn cycle_layout(&mut self) -> bool {
-        let mut fields: Vec<&str> = self.board.fields.iter().map(|f| f.gid.as_str()).collect();
+        let mut fields: Vec<&SelectField> = self.board.fields.iter().collect();
         if fields.is_empty() {
             return false;
         }
-        fields.sort_by_key(|gid| {
-            let name = self
-                .board
-                .fields
-                .iter()
-                .find(|f| f.gid == *gid)
-                .map(|f| f.name.trim());
-            !name.is_some_and(|n| n.eq_ignore_ascii_case("initiative"))
-        });
+        fields.sort_by_key(|f| !f.name.trim().eq_ignore_ascii_case("initiative"));
         let next = match &self.layout {
-            Layout::Columns => Some(fields[0]),
-            Layout::Lanes { field } => fields
-                .iter()
-                .position(|f| f == field)
-                .and_then(|i| fields.get(i + 1))
-                .copied(),
+            Layout::Columns => fields.first(),
+            Layout::Lanes { field } => fields.iter().skip_while(|f| &f.gid != field).nth(1),
         };
         let layout = next.map_or(Layout::Columns, |field| Layout::Lanes {
-            field: field.to_owned(),
+            field: field.gid.clone(),
         });
         self.set_layout(layout);
         true
@@ -129,31 +117,12 @@ impl BoardView {
         self.set_row(0);
     }
 
-    /// The field the lanes are by (lanes layout), as GID and name.
-    pub fn lane_field(&self) -> Option<Named> {
+    /// The field the lanes are by (lanes layout).
+    pub fn lane_field(&self) -> Option<&SelectField> {
         let Layout::Lanes { field } = &self.layout else {
             return None;
         };
-        self.board
-            .fields
-            .iter()
-            .find(|f| &f.gid == field)
-            .map(|f| Named {
-                gid: f.gid.clone(),
-                name: f.name.clone(),
-            })
-    }
-
-    /// The name of the field the lanes are by (lanes layout).
-    pub fn lane_field_name(&self) -> Option<&str> {
-        let Layout::Lanes { field } = &self.layout else {
-            return None;
-        };
-        self.board
-            .fields
-            .iter()
-            .find(|f| &f.gid == field)
-            .map(|f| f.name.as_str())
+        self.board.field(field)
     }
 
     /// First visible line of the lanes grid (lanes layout).
@@ -186,11 +155,7 @@ impl BoardView {
 
     /// Starts card `gid`'s completion animation. `false` if it isn't here.
     pub fn start_completing(&mut self, gid: &str) -> bool {
-        let here = self
-            .board
-            .columns
-            .iter()
-            .any(|c| c.tasks.iter().any(|t| t.gid == gid));
+        let here = self.position_of(gid).is_some();
         if here {
             self.finish_completing();
             self.completing = Some((gid.to_owned(), 0));
@@ -217,9 +182,7 @@ impl BoardView {
     pub fn cancel_completing(&mut self, gid: &str) {
         if self.completing().is_some_and(|(g, _)| g == gid) {
             self.completing = None;
-            if let Some(board) = self.held.take() {
-                self.replace(*board);
-            }
+            self.show_held();
         }
     }
 
@@ -227,9 +190,14 @@ impl BoardView {
     fn finish_completing(&mut self) {
         if let Some((gid, _)) = self.completing.take() {
             self.remove(&gid);
-            if let Some(board) = self.held.take() {
-                self.replace(*board);
-            }
+            self.show_held();
+        }
+    }
+
+    /// Shows the reload held back during the animation, if one came.
+    fn show_held(&mut self) {
+        if let Some(board) = self.held.take() {
+            self.replace(board);
         }
     }
 
@@ -251,6 +219,15 @@ impl BoardView {
         &self.grid
     }
 
+    pub fn selected_lane(&self) -> Option<&Lane> {
+        self.grid.get(self.lane)
+    }
+
+    /// The cards of the selected column in the selected lane.
+    pub fn selected_cell(&self) -> &[BoardTask] {
+        self.cell(self.lane, self.column)
+    }
+
     pub fn lane(&self) -> usize {
         self.lane
     }
@@ -269,7 +246,7 @@ impl BoardView {
     }
 
     pub fn selected_task(&self) -> Option<&BoardTask> {
-        self.cell(self.lane, self.column).get(self.row)
+        self.selected_cell().get(self.row)
     }
 
     /// The selected card's single-select fields, as the board knows them
@@ -281,24 +258,7 @@ impl BoardView {
             self.board
                 .fields
                 .iter()
-                .map(|field| {
-                    let current = task.option_of(&field.gid);
-                    CustomField {
-                        gid: field.gid.clone(),
-                        name: field.name.clone(),
-                        display_value: None,
-                        resource_subtype: "enum".into(),
-                        enum_value: field
-                            .options
-                            .iter()
-                            .find(|o| current == Some(o.gid.as_str()))
-                            .map(|o| Named {
-                                gid: o.gid.clone(),
-                                name: o.name.clone(),
-                            }),
-                        enum_options: field.options.clone(),
-                    }
-                })
+                .map(|field| CustomField::single_select(field, task.option_of(&field.gid)))
                 .collect(),
         )
     }
@@ -328,7 +288,7 @@ impl BoardView {
     /// next lane that has a card there.
     pub fn down(&mut self, n: usize) {
         for _ in 0..n {
-            if self.row + 1 < self.cell(self.lane, self.column).len() {
+            if self.row + 1 < self.selected_cell().len() {
                 self.row += 1;
             } else if let Some(lane) = self.lane_with_cards(self.lane + 1..self.grid.len(), false) {
                 self.lane = lane;
@@ -476,7 +436,7 @@ impl BoardView {
     /// (or column), clamped.
     pub fn replace(&mut self, board: Board) {
         if self.completing.is_some() {
-            self.held = Some(Box::new(board));
+            self.held = Some(board);
             return;
         }
         let task = self.selected_task().map(|t| t.gid.clone());
@@ -487,8 +447,7 @@ impl BoardView {
             .and_then(|c| c.section.as_ref())
             .map(|s| s.gid.clone());
         let option = self
-            .grid
-            .get(self.lane)
+            .selected_lane()
             .and_then(|l| l.option.as_ref())
             .map(|o| o.gid.clone());
         let (lane, column, row) = (self.lane, self.column, self.row);
@@ -522,7 +481,7 @@ impl BoardView {
     /// board no longer has means the columns layout again.
     fn rebuild(&mut self) {
         if let Layout::Lanes { field } = &self.layout
-            && !self.board.fields.iter().any(|f| &f.gid == field)
+            && self.board.field(field).is_none()
         {
             self.layout = Layout::Columns;
         }
@@ -565,7 +524,7 @@ impl BoardView {
 
     /// Selects `row` of the current cell, clamped, and scrolls to it.
     fn set_row(&mut self, row: usize) {
-        let cards = self.cell(self.lane, self.column).len();
+        let cards = self.selected_cell().len();
         self.row = row.min(cards.saturating_sub(1));
         self.follow();
     }

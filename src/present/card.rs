@@ -1,9 +1,23 @@
-//! A board card's short texts: who it's assigned to and when it's due.
+//! A board's short texts: who a card is assigned to and when it's due, and
+//! the names of its columns and lanes.
 
 use super::format::{is_before_today, short_date};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::api::projects::BoardTask;
+use crate::api::tasks::Named;
+
+/// A column's name: its section's, or "(no section)" for the cards whose
+/// section isn't known.
+pub fn section_name(section: Option<&Named>) -> &str {
+    section.map_or("(no section)", |s| s.name.as_str())
+}
+
+/// A lane's name: its option's, or "(no <field>)" for the cards without a
+/// value.
+pub fn lane_name(option: Option<&Named>, field: &str) -> String {
+    option.map_or_else(|| format!("(no {field})"), |o| o.name.clone())
+}
 
 /// The assignee's initials: the first letters of their first and last
 /// name, or "—" when unassigned.

@@ -195,8 +195,6 @@ fn attachment_line(attachment: &Attachment) -> String {
     }
 }
 
-/// "☐ Incomplete · Ada · Due Wed 4 Nov (overdue)", breaking between the
-/// `·`-separated parts when it doesn't fit in `width`.
 /// The task's due date in the short format ("Wed 4 Nov"), with the time
 /// when it has one (`due_at`, a UTC timestamp). `None` when it has no due date.
 pub fn due_text(task: &Task, now: i64) -> Option<String> {
@@ -208,6 +206,8 @@ pub fn due_text(task: &Task, now: i64) -> Option<String> {
     })
 }
 
+/// "☐ Incomplete · Ada · Due Wed 4 Nov (overdue)", breaking between the
+/// `·`-separated parts when it doesn't fit in `width`.
 fn status_lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
     let task = &detail.task;
     let mut parts: Vec<Vec<Segment>> = vec![vec![if task.completed {

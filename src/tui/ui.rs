@@ -20,8 +20,6 @@ mod board;
 
 /// Lines per Inbox item.
 const ITEM_HEIGHT: u16 = 2;
-/// Lines per board card.
-const CARD_HEIGHT: u16 = CARD_LINES as u16;
 
 /// Commands that share one help line (`j / k  down / up`), to keep the
 /// overlay within 24 rows. Pairs must not make the widest line wider.
@@ -385,7 +383,7 @@ pub fn sizes(size: Rect) -> Sizes {
         detail_width: usize::from(detail.width.saturating_sub(4)),
         detail_rows: usize::from(detail.height.saturating_sub(2)),
         board_width: usize::from(body.width),
-        board_card_rows: usize::from((body.height.saturating_sub(2) / CARD_HEIGHT).max(1)),
+        board_card_rows: (usize::from(body.height.saturating_sub(2)) / CARD_LINES).max(1),
     }
 }
 
@@ -847,10 +845,7 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     };
     let input = match (&app.command, search) {
         _ if app.new_task.is_some() => app.new_task.as_ref().map(|task| {
-            let section = task
-                .section
-                .as_ref()
-                .map_or("(no section)", |s| s.name.as_str());
+            let section = crate::present::card::section_name(task.section.as_ref());
             (" NEW TASK ", format!("Name in {section}: {}", task.name))
         }),
         (Some(command), _) => Some((" COMMAND ", format!(":{command}"))),
@@ -882,13 +877,7 @@ fn render_status(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     // cell (its column, in the columns layout).
     let position = if on_board {
         app.board_view().and_then(|view| {
-            let cards = view
-                .lanes()
-                .get(view.lane())?
-                .columns
-                .get(view.column())?
-                .tasks
-                .len();
+            let cards = view.selected_cell().len();
             (cards > 0).then(|| (view.row() + 1, cards))
         })
     } else {
