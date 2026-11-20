@@ -163,6 +163,7 @@ fn styled(lines: Vec<detail::TextLine>, theme: &Theme) -> Vec<Line<'static>> {
 }
 
 /// The keys that work right now, as (keys, what they do), most useful first.
+#[expect(clippy::too_many_lines, reason = "one hint list per screen and focus")]
 pub fn key_hints(app: &App) -> Vec<(String, &'static str)> {
     let key = |context: Context, cmd: Cmd| -> String {
         BINDINGS

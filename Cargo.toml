@@ -22,6 +22,21 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "
 toml = "1.2.1"
 unicode-width = "0.2"
 
+[lints.clippy]
+# The pedantic lints with a size or count threshold (set in clippy.toml, the
+# defaults otherwise). CI's `-D warnings` makes them errors.
+fn_params_excessive_bools = "warn"
+index_refutable_slice = "warn"
+large_futures = "warn"
+large_stack_arrays = "warn"
+large_types_passed_by_value = "warn"
+many_single_char_names = "warn"
+struct_excessive_bools = "warn"
+struct_field_names = "warn"
+too_many_lines = "warn"
+trivially_copy_pass_by_ref = "warn"
+unnecessary_box_returns = "warn"
+
 [dev-dependencies]
 insta = "1.49.0"
 wiremock = "0.6.5"

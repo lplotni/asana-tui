@@ -273,6 +273,7 @@ type DemoItem = (
 );
 
 /// Fictional people and tasks; nothing here comes from a real Inbox.
+#[expect(clippy::too_many_lines, reason = "demo data")]
 fn demo_inbox() -> Vec<Notification> {
     let items: [DemoItem; 9] = [
         (

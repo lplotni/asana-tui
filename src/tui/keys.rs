@@ -449,7 +449,7 @@ impl Key {
     }
 
     /// How the key is written in the status bar and help overlay.
-    pub fn label(&self) -> String {
+    pub fn label(self) -> String {
         match self {
             Key::Char(c) => c.to_string(),
             Key::Ctrl(c) => format!("Ctrl-{c} "),

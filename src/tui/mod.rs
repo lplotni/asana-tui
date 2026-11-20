@@ -224,6 +224,7 @@ fn spawn_input_reader(tx: UnboundedSender<Msg>, gate: Arc<InputGate>) {
     });
 }
 
+#[expect(clippy::too_many_lines, reason = "one arm per Effect")]
 fn run_effects(
     effects: Vec<Effect>,
     client: &Arc<Client>,

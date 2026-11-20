@@ -497,6 +497,10 @@ pub struct Toast {
 }
 
 #[derive(Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags of the screen state, not one state in disguise"
+)]
 pub struct App {
     pub screen: Screen,
     /// Boards opened this session, most recently opened first. The first is
@@ -627,6 +631,7 @@ impl App {
         effects
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per Msg")]
     fn handle(&mut self, msg: Msg) -> Vec<Effect> {
         match msg {
             Msg::Key(_) if self.help => {
@@ -2203,6 +2208,7 @@ impl App {
         }
     }
 
+    #[expect(clippy::too_many_lines, reason = "one arm per picker stage")]
     fn picker_submit(&mut self) -> Vec<Effect> {
         let Some(picker) = &mut self.picker else {
             return Vec::new();

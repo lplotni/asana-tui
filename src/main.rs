@@ -252,6 +252,7 @@ fn load_config() -> Result<Config, ConfigError> {
     Config::resolve(env, &file)
 }
 
+#[expect(clippy::too_many_lines, reason = "one arm per subcommand")]
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = match Cli::try_parse() {

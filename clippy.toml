@@ -1,5 +1,5 @@
-# Settings for clippy's lints. Which lints run is set by the CI command
-# (`cargo clippy --all-targets -- -D warnings`), not here.
+# Settings for clippy's lints. Which lints run is set in Cargo.toml's
+# `[lints.clippy]` and by the CI command (`-D warnings`), not here.
 
 # The library exists only for the `asn` binary, its tests and examples, so
 # clippy may suggest changing public signatures too.

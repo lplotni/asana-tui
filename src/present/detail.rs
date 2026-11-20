@@ -43,6 +43,10 @@ pub fn lines(detail: &TaskDetail, width: usize, now: i64) -> Vec<TextLine> {
 
 /// Like [`lines`], plus `image_rows` blank lines under every image that can
 /// be downloaded, and where those lines are (none when `image_rows` is 0).
+#[expect(
+    clippy::too_many_lines,
+    reason = "the detail pane's sections in reading order"
+)]
 pub fn lines_with_images(
     detail: &TaskDetail,
     width: usize,
