@@ -150,11 +150,11 @@ struct InputGate {
 
 impl InputGate {
     /// Stops the reader and waits until it confirms (at most 1 s).
-    fn pause(&self) {
+    async fn pause(&self) {
         self.paused.store(true, Ordering::SeqCst);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
         while !self.idle.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
     }
 
@@ -172,7 +172,7 @@ async fn edit_in_terminal(
     editor: &str,
     initial: String,
 ) -> Option<String> {
-    input.pause();
+    input.pause().await;
     ratatui::restore();
     let editor = editor.to_owned();
     let text = tokio::task::spawn_blocking(move || editor::edit(&editor, &initial))
@@ -197,6 +197,10 @@ fn spawn_input_reader(tx: UnboundedSender<Msg>, gate: Arc<InputGate>) {
         loop {
             if gate.paused.load(Ordering::SeqCst) {
                 gate.idle.store(true, Ordering::SeqCst);
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "the reader has a thread of its own"
+                )]
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 continue;
             }
