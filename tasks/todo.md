@@ -945,3 +945,285 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 **Files likely touched:** `Cargo.toml`, `Cargo.lock`, `README.md`
 
 **Estimated scope:** XS
+
+---
+
+## Phase 8: Fresh boards (F28–F30)
+
+Spec: F28–F30 in [`docs/SPEC-board.md`](../docs/SPEC-board.md). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-8-fresh-boards). The throwaway board's GID is given on the command line and is never committed.
+
+### - [x] T42: Spec F28–F30 and this plan
+
+**Description:** A new section in `docs/SPEC-board.md`:
+- F28: the latency probe and the decision table
+- F29: own writes show at once
+- F30: `refresh`, with a 5 s default and a cost table for the free plan (150 a minute) and paid plans (1,500, Enterprise included)
+
+Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
+
+**Acceptance criteria:**
+- [x] F28–F30 describe what this plan builds.
+- [x] The user's answers are recorded: the 5 s default, the plan limits, the committed harness, probe tasks completed rather than deleted.
+- [x] No real GID or project name is in the spec or the plan.
+
+**Dependencies:** None
+
+**Files likely touched:** `docs/SPEC-board.md`, `tasks/plan.md`, `tasks/todo.md`
+
+**Estimated scope:** XS
+
+---
+
+### - [ ] T43: API latency probe
+
+**Description:** `examples/latency.rs`, run as `cargo run --release --example latency -- <project-gid> [--runs 3] [--every 2]`.
+- **Config:** `load_config` moves from `main.rs` into `config::load`, so the example and `asn` share it.
+- **Writes**, one at a time, through the TUI's own functions:
+  1. `core::create_task` into the first section
+  2. `core::move_to_section` to the second section
+  3. `set_assignee` to `me`
+  4. `set_select_field` with the first single-select field's first enabled option that differs from the current one (skipped when there's no such field)
+  5. `set_completed(true)`
+- **Reads:** after each write is confirmed (`confirm-ms`), it reads three sources, staggered, every `--every` seconds, until each shows the write or 5 minutes pass:
+  - every page of `project_tasks_page` (the board's query)
+  - `Client::task`
+  - `GET /projects/{gid}/events`, as a plain `reqwest` request. A 412 gives the first sync token, and any event whose resource is the task counts.
+- **Output:** a row per write, `write  confirm-ms  list-s  task-s  events-s`, with the median and maximum over the runs, `>300` for a timeout and `n/a` for a skipped write.
+- **Cleanup:** it completes every task it created at the end, also after an error or Ctrl-C (best effort).
+
+**Acceptance criteria:**
+- [ ] One run on the throwaway board prints a row for each write, with every column filled.
+- [ ] At the default `--every 2`, it sends no more than about 90 requests a minute, plus the writes.
+- [ ] Afterwards no probe task is left open, even when a write failed (forced by passing a section-less project, or killing it mid-run).
+
+**Verification:**
+- [ ] The "does this read show the write" checks are pure functions with unit tests on fixture JSON: a list with and without the task, in each section, with each assignee and field value, without a completed task; a task read; events about the task and about another task. `[[example]] name = "latency"` with `test = true`, so `cargo test` runs them.
+- [ ] `asn` still loads its config the same way (the existing config and CLI tests).
+- [ ] `cargo test`, clippy and fmt are clean. Manual: `cargo run --release --example latency -- <board-gid> --runs 1`.
+
+**Dependencies:** T42
+
+**Files likely touched:** `examples/latency.rs`, `src/config.rs`, `src/main.rs`, `Cargo.toml`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T44: Rex end-to-end harness
+
+**Description:** `scripts/tui-latency.sh <project-gid>`, next to `scripts/formula.sh`.
+- It needs Rex (`REX_SESSION`), the config, and a `target/release/asn`. It prints the binary's version and build time first, to rule out a stale build.
+- It starts `asn --project <gid>` in a new, unfocused Rex block and waits for the board header.
+- It runs F28's seven TUI writes in order: create, move, assign (`Tab a`, `Enter` on "Me"), field (skipped when `asn project fields <gid>` lists none), description, comment, complete.
+- For each one, it sends the keys (`rex send`, `rex send-key`) and captures the pane (`rex capture --trim`) every 200 ms until the check passes or 5 minutes pass. It then watches for 2 minutes for the change flicking back.
+- Names are `p<n>-<hhmmss>`, short enough for a 28-cell card. A column check uses that column header's horizontal range on the captured screen.
+- It prints `write  visible-ms  reverted` per write, then closes the block. The last write (`d`) completes the card it made.
+
+**Acceptance criteria:**
+- [ ] One run on the throwaway board prints all seven rows (six when there's no single-select field).
+- [ ] A check that can never pass (a name that never appears) ends as `>300` and moves on instead of hanging.
+- [ ] No GID, token or name is written into the script.
+
+**Verification:**
+- [ ] A manual run on the throwaway board.
+- [ ] `shellcheck scripts/tui-latency.sh`, if it's installed.
+
+**Dependencies:** T42
+
+**Files likely touched:** `scripts/tui-latency.sh`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] Checkpoint F1: baseline and decision
+
+- [ ] Both tools run on the throwaway board against today's code (v0.3.0 behaviour). The baseline table goes into Findings from Use.
+- [ ] P1, P2, P3 and P5 are ticked or failed in the spec, with the numbers.
+- [ ] F28's decision table is applied:
+  - **P1 fails** (the list read is fresh): T45–T47 are replaced by a bug-hunt task that reproduces the delay in a failing app test first.
+  - **P2 fails** (the task read is fresh): T47 is dropped.
+- [ ] Human review before building.
+
+---
+
+### - [ ] T45: Pending changes: a new or moved card stays where it should
+
+**Description:** A pure `tui/pending.rs` (ADR-002) holds pending changes, keyed by task GID and the thing written. Each keeps the value before and after the write, and an age in ticks.
+- `apply(&mut Board)` puts pending values over a loaded board, and drops the entries a load confirms or supersedes.
+- `tick()` ages entries and expires them after ⌈600 s / interval⌉ ticks (60 s ticks until T48).
+- `app.rs`:
+  - On `TaskCreated` Ok, the card (its name, no assignee or due date, this project and section, and the lane's option as its field value) goes in at the top of its section and is selected at once.
+  - On `MovedToSection` Ok, the card goes to the top of its new column.
+  - Both go through `apply` and `BoardView::replace`, and so does every `BoardLoaded`.
+  - The reload after the write stays.
+
+**Acceptance criteria:**
+- [ ] After `Tab q`, the card is on the board and selected on `TaskCreated`, before any reload. A later load without it doesn't remove it, and a load with it ends the pending change. The same holds in the lanes view.
+- [ ] After `m`, the card is in the new column on `MovedToSection`. A stale load keeps it there; a load showing a third section wins (superseded).
+- [ ] A failed create or move leaves nothing pending, and today's toasts and restores are unchanged. An entry expires after 10 minutes' worth of ticks.
+
+**Verification:**
+- [ ] `pending.rs` unit tests: apply, confirm, supersede, expire, a later write replacing an earlier one, a task in two projects.
+- [ ] App tests for each acceptance criterion; the existing F14, F10 and F26 tests stay green.
+- [ ] `cargo test`, clippy and fmt are clean.
+
+**Dependencies:** Checkpoint F1
+
+**Files likely touched:** `src/tui/pending.rs`, `src/tui/mod.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T46: Pending changes: assign, field and complete on the board
+
+**Description:** The same mechanism for `Assigned` (the card's initials), `FieldSet` (the card's value, so it changes lane) and `CompletedSet` (a completed card stays gone; a reopened one is back). The before-value is taken from the card when the write is sent.
+
+**Acceptance criteria:**
+- [ ] Each change shows on its confirming `Msg` and survives a stale `BoardLoaded`. A load with someone else's later value wins.
+- [ ] A completed card never comes back from a stale load. Undo during and after the completion animation still works, and so does the reload held during it (F23).
+
+**Verification:**
+- [ ] App tests for each write, stale and confirming; the existing F16, F17, F23 and F27 tests stay green.
+- [ ] `cargo test`, clippy and fmt are clean.
+
+**Dependencies:** T45
+
+**Files likely touched:** `src/tui/pending.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T47: Pending changes in the detail (only if P2 lags)
+
+**Description:** `apply_detail(&mut TaskDetail)` on `DetailLoaded`. It covers:
+- the field option, section, assignee and completed flag
+- the description text: `previous_notes` already holds the before-value
+- posted comments, kept until the stories contain them
+
+It's dropped if Checkpoint F1 shows the single-task read is fresh.
+
+**Acceptance criteria:**
+- [ ] After `F`, `m`, `Tab a`, `d`, a saved description and a posted comment, a stale `DetailLoaded` doesn't undo the shown change, and a confirming one ends it.
+- [ ] The description's `modified_at` guard against concurrent edits still works.
+
+**Verification:**
+- [ ] App tests for each write; the existing description, comment and field tests stay green.
+- [ ] `cargo test`, clippy and fmt are clean.
+
+**Dependencies:** T46
+
+**Files likely touched:** `src/tui/pending.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] Checkpoint F2: own writes are instant
+
+- [ ] Both tools run again on the throwaway board; the second table goes into Findings from Use.
+- [ ] Done when 2: every write is on screen within its `confirm-ms` + 200 ms (median of 3 runs).
+- [ ] Done when 3: no change flicks back during its 2-minute watch.
+- [ ] Human review.
+
+---
+
+### - [ ] T48: The `refresh` setting drives the poll
+
+**Description:**
+- `refresh` in `config.toml` or `ASN_REFRESH`: whole seconds, 5–60, default 5 (F30). It becomes `Config.refresh`.
+- Errors name the key and where it came from, like the other keys.
+- `asn init` writes it as a commented-out default, with a one-line cost note pointing to the README.
+- `spawn_refresh_timer` ticks at that interval, and `App` gets the interval for the expiry in ticks.
+
+**Acceptance criteria:**
+- [ ] The Inbox, the board on screen and the shown detail reload every `refresh` seconds: 5 by default, or 7 with `ASN_REFRESH=7`.
+- [ ] `4`, `61`, `abc` and `5.5` are rejected with the key named, from both the environment and the file.
+- [ ] A pending change still expires after 10 minutes at any interval. A slow board load never overlaps a second load of the same board (the queued reload).
+
+**Verification:**
+- [ ] `config.rs` tests: the environment over the file over the default, and the bad values.
+- [ ] Interview test: the written file has the commented-out key.
+- [ ] App tests: expiry ticks at 5 s and 60 s; ticks during a load queue at most one reload.
+- [ ] Manual: `asn task assign` in another pane shows in the TUI within about 5 s plus Asana's lag.
+
+**Dependencies:** Checkpoint F2
+
+**Files likely touched:** `src/config.rs`, `src/setup.rs`, `src/tui/mod.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
+
+---
+
+### - [ ] T49: Back off while the terminal isn't in front
+
+**Description:**
+- `EnableFocusChange` at start; `DisableFocusChange` wherever raw mode is restored, including on panic.
+- The input reader turns `FocusGained` and `FocusLost` into `Msg::Focus(bool)`.
+- In the background, a tick polls only every ⌈60 s / interval⌉-th time.
+- Coming back to the front polls at once if a poll was skipped meanwhile.
+- With no focus report yet, the terminal counts as in front.
+
+**Acceptance criteria:**
+- [ ] In the background, the board loads at most once a minute.
+- [ ] Coming back after a skipped poll loads at once; coming back with no poll skipped doesn't add a load.
+- [ ] After quitting, or after a panic, the shell doesn't echo `^[[I` or `^[[O` on focus changes.
+
+**Verification:**
+- [ ] App tests for the tick patterns, in front and in the background, with a 5 s and a 60 s interval.
+- [ ] Manual in Rex, and in tmux with `focus-events on` (P4).
+- [ ] `cargo test`, clippy and fmt are clean.
+
+**Dependencies:** T48
+
+**Files likely touched:** `src/tui/mod.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] Checkpoint F3: near-live
+
+- [ ] Both tools run a third time; the third table goes into Findings from Use.
+- [ ] Done when 4: a change made with `asn` in another pane shows in the focused TUI within the interval plus the list lag F28 measured.
+- [ ] Done when 5: the background back-off holds (T49's tests), and P4 is settled for Rex and tmux.
+- [ ] Human review.
+
+---
+
+### - [ ] T50: README, ADR-011 and spec updates
+
+**Description:**
+- **README:** the `refresh` setting in the config table, and F30's cost table with the limits (free plan 150 a minute; paid plans, Enterprise included, 1,500). It also says what happens over the limit, and how to run the probe and the harness.
+- **ADR-011:** extends ADR-005 with the configurable, focus-aware interval and pending own writes, and says why Events aren't used. ADR-005's status points to it, and the decisions index lists it.
+- **`docs/SPEC-board.md`:** the F9 refresh line, the request budget line, F22's config table (`refresh`), and the old "Events API sync" Not Doing line now match F28–F30.
+- **`docs/SPEC.md`:** the 60 s Inbox line now matches F30.
+
+**Acceptance criteria:**
+- [ ] The README's cost table and limits match F30.
+- [ ] No doc still says the board or the Inbox polls every 60 s, except for the background back-off.
+- [ ] ADR-011 is listed in `docs/decisions/README.md`.
+
+**Verification:**
+- [ ] `grep -rn "60 s" README.md docs/` shows only background references.
+- [ ] `cargo test` passes (the skill test is unaffected).
+
+**Dependencies:** Checkpoint F3
+
+**Files likely touched:** `README.md`, `docs/decisions/ADR-011-*.md`, `docs/decisions/ADR-005-polling-and-in-memory-cache.md`, `docs/decisions/README.md`, `docs/SPEC-board.md`, `docs/SPEC.md`
+
+**Estimated scope:** S
+
+---
+
+### - [ ] T51: Release v0.4.0 (ask first)
+
+**Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.4.0`, push `main`, push the annotated tag, and pull the formula commit.
+
+**Dependencies:** T50, and the user's go-ahead (the version number is confirmed then).
+
+**Files likely touched:** `Cargo.toml`, `Cargo.lock`
+
+**Estimated scope:** XS

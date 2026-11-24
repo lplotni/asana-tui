@@ -141,6 +141,39 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T40: Skill, README, help, screenshot and spec updates
 - [x] T41: Release v0.3.0 (ask first)
 
+### Phase 8: Fresh boards (F28–F30, see below)
+
+#### 8a: Measure first (F28)
+- [x] T42: Spec F28–F30 and this plan
+- [ ] T43: API latency probe (`examples/latency.rs`)
+- [ ] T44: Rex end-to-end harness (`scripts/tui-latency.sh`)
+
+#### Checkpoint F1: baseline and decision
+- [ ] Both tools run on the throwaway board against today's code, and the baseline table is in the spec's Findings from Use
+- [ ] P1, P2, P3 and P5 are settled with numbers, and F28's decision table is applied (it may replace T45–T47 or drop T47)
+- [ ] Human review before building
+
+#### 8b: Own writes show at once (F29)
+- [ ] T45: Pending changes: a new or moved card stays where it should
+- [ ] T46: Pending changes: assign, field and complete on the board
+- [ ] T47: Pending changes in the detail (only if P2 lags)
+
+#### Checkpoint F2: own writes are instant
+- [ ] Second run of both tools; each write is on screen within its `confirm-ms` + 200 ms, and nothing flicks back
+- [ ] Human review
+
+#### 8c: Refresh while you're looking (F30)
+- [ ] T48: The `refresh` setting drives the poll (default 5 s)
+- [ ] T49: Back off while the terminal isn't in front
+
+#### Checkpoint F3: near-live
+- [ ] Third run of both tools; a change made with the CLI in another pane shows within the interval plus Asana's lag; P4 is checked in Rex and tmux
+- [ ] Human review
+
+#### 8d: Ship
+- [ ] T50: README, ADR-011 and spec updates
+- [ ] T51: Release v0.4.0 (ask first)
+
 ## Phase 6: asn in Claude Code
 
 ### Architecture Decisions
@@ -252,4 +285,78 @@ T34 and T35 are independent after T33, and T36 can be done any time before T38. 
 
 - ~~`asn board --json` gains each task's `custom_fields`~~: agreed by the user (2026-11-19), additive.
 - ~~Remember the layout per board for the session~~: yes, like the cursor (the user, 2026-11-19).
+
+## Phase 8: Fresh boards
+
+Requested 2026-11-24. A task created or changed in the TUI can take minutes to show on the board and in the detail, even though every write already starts a reload as soon as Asana confirms it. Decisions from the user:
+- everything should be near-live
+- the refresh interval is a setting, with a 5 s default, and the docs state its request cost against the free plan's limit (150 a minute) and paid plans' (1,500, Enterprise included)
+- the Rex harness is committed
+- the probe completes its tasks rather than deleting them
+
+Spec: F28–F30 in [`docs/SPEC-board.md`](../docs/SPEC-board.md).
+
+### Overview
+
+Measure first: an API probe and a Rex harness on a throwaway board. They show how long Asana takes to reflect a write in the board's list read, the single-task read and the events feed, and how long the TUI takes to show it. What that shows decides the next step (F28's decision table). The expected path:
+- **F29:** the TUI shows its own writes at once and keeps them through stale reloads, until a load confirms them.
+- **F30:** while the terminal is in front, the TUI refreshes every `refresh` seconds (5 by default); in the background, every 60 s.
+
+### Architecture Decisions
+
+- **Checkpoint F1 is a real gate.** If the list read turns out fresh (P1 fails), the delay is a bug in `asn`. Then T45–T47 are replaced by a task that reproduces it in an app test and fixes it. If the single-task read is fresh (P2 fails), T47 is dropped. No F29 code is written before the numbers are in.
+- **The probe is an example, not a subcommand.** It's a developer tool, not a user action, so ADR-001's CLI-first rule doesn't apply. It makes its writes and reads through the same `core`/`api` functions as the TUI, so it measures the requests the TUI actually sends.
+  - Events are read with a plain `reqwest` request inside the example, so no `api` surface is added for a feature that isn't adopted.
+  - `load_config` moves from `main.rs` into `config::load`, so the example loads settings exactly as `asn` does, without a copy.
+  - Its pure checks (does this read show the write) get unit tests, and `[[example]] test = true` makes `cargo test` run them in CI.
+- **The Rex harness is a shell script next to `scripts/formula.sh`.** It drives `target/release/asn`, and prints that binary's version and build time first, because a stale binary is a known trap (CLAUDE.md). It reads the screen with `rex capture`.
+  - Probe names are short and unique (`p<n>-<hhmmss>`), so a 28-cell card doesn't truncate them.
+  - Column checks use each column header's horizontal range on the captured screen.
+- **Pending changes are a pure module, `tui/pending.rs`** (ADR-002), the way `board.rs` and `picker.rs` are. It generalises what `apply_pending_marks` already does for the Inbox.
+  - Entries are keyed by task GID and the thing written. Each keeps the value before and after the write, which is how a load that shows a third value counts as "superseded".
+  - An entry is recorded on the **confirming** `Msg`, not when the write is sent. So a failed write leaves nothing, and today's optimistic edits and restores stay as they are.
+- **The board goes through `BoardView::replace`.** On a confirmed create or move, and on every `BoardLoaded`, the app applies the pending changes to the board, then hands it to `replace`. Cursor-by-GID, lanes and the held reload during the completion animation (F23) keep working with no new `BoardView` API. A new card is inserted at the top of its section, which is where Asana's `addTask` puts it.
+- **No clock in `App`.** Expiry and the background back-off count ticks. The timer ticks every `refresh` seconds, and the app decides whether a tick polls: in the background, every ⌈60 / refresh⌉-th tick. Expiry is ⌈600 / refresh⌉ ticks, so 10 minutes at any interval.
+- **Focus reports use crossterm's `EnableFocusChange`.** They're switched off wherever raw mode is restored, including the panic path, so a crash doesn't leave the shell echoing `^[[I`/`^[[O`.
+- **No new dependencies, theme roles or keys.** The help overlay is unchanged.
+
+### Dependency Graph
+
+```
+T42 spec + plan
+  ├── T43 API probe (examples/latency.rs, config::load) ──┐
+  └── T44 Rex harness (scripts/tui-latency.sh) ───────────┴── Checkpoint F1 (baseline, decision)
+                                                                 └── T45 pending.rs + create, move
+                                                                       └── T46 assign, field, complete
+                                                                             └── T47 detail side (if P2 lags)
+                                                                                   └── Checkpoint F2
+                                                                                         └── T48 `refresh` drives the poll
+                                                                                               └── T49 focus back-off
+                                                                                                     └── Checkpoint F3
+                                                                                                           └── T50 docs → T51 release
+```
+
+T43 and T44 are independent and can run in parallel. From T45 on, every task edits `app.rs` and `app_tests.rs`, so they run in order.
+
+### Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| The delay is our bug, not Asana's (P1 fails) | High: F29 would treat a symptom | Checkpoint F1 decides before any F29 code; the replacement task reproduces the bug in an app test first. |
+| Asana lags longer than 10 minutes, so a pending change expires and the card flicks back | Med | P5: the expiry is checked against F28's maximum, and raised if needed. |
+| A pending change hides a real change made by someone else | Med | "Superseded" ends it as soon as a load shows a third value. Create and complete have no third value, so the expiry bounds them. |
+| A 5 s refresh hits the free plan's 150 a minute on a large board, or with heavy CLI use alongside | Med | F30's cost table is in the README and the config comment. A 429 is retried once, then that refresh fails with a toast and the next one tries again. `refresh = 10` or more is the documented fix. |
+| Focus reporting is left on after a crash | Med | It's turned off in the same cleanup and panic paths as raw mode, and checked by hand at Checkpoint F3. |
+| A terminal doesn't report focus (P4) | Low | It's treated as in front: it polls at the interval, which costs requests but nothing else. |
+| Screen-scraping in the Rex harness is brittle | Med | Short unique names, header-range column checks, a 5-minute timeout per check (`>300`, never a hang), and the API probe as a cross-check. |
+| `app.rs` (about 2,750 lines) grows | Med | The logic lives in `pending.rs`; `app.rs` only records entries and applies them at two points. |
+| The probe leaves tasks behind, or a real GID lands in the repo | Low | It completes its tasks even after a failure (agreed). GIDs only ever come from the command line, and a grep of the diff is part of each task's verification. |
+
+### Open Questions (Phase 8)
+
+- ~~The default interval~~: 5 s, with the cost spelled out (the user, 2026-11-24).
+- ~~Commit the Rex harness~~: yes (the user, 2026-11-24).
+- ~~Delete or complete the probe tasks~~: complete (the user, 2026-11-24).
+- T47 depends on P2; Checkpoint F1 decides it.
+- The release number: v0.4.0 is assumed (a new setting and new behaviour). Asked at T51.
 

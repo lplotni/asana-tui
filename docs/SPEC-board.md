@@ -256,6 +256,139 @@ asn project fields <project-gid|name>          # a project's single-select field
 - Snapshots: lanes fitting, lanes paged, a tall grid scrolled down, `NO_COLOR`, the option picker.
 - CLI: `--lanes` text and JSON, `asn task field`, `asn project fields`, and exit 1 with candidates.
 
+## Feature Spec — Fresh boards (F28–F30)
+
+Added after F27 at the user's request (2026-11-24). A task created, moved or edited in the TUI can take minutes to show on the board and in the detail. Yet every such write already starts a board reload as soon as Asana confirms it (F14, F10, F17, F27; `reload_board` in `tui/app.rs`). So the 60 s poll alone can't explain minutes. The likely cause is that Asana's reads lag behind its writes. Asana's docs don't mention read-after-write consistency, so F28 measures it before anything changes.
+
+**Problem:** How might we make every change show on the board and in the detail fast enough that you never wonder whether it worked?
+
+**Target:** your own writes show at once and never flick back. Changes from elsewhere (the `asn` CLI, the Claude skill, the web app, teammates) show within the refresh interval (5 s by default), plus whatever lag F28 measures on Asana's side.
+
+**Order:** F28 first, as the baseline, then F29, then F30. F28's results settle the points marked *(after F28)*. F28 runs again after F29 and after F30, and all three tables go into Findings from Use. No new dependencies: focus reports come from `crossterm`.
+
+### F28. Latency probe
+
+Two tools. Both write to a throwaway board, such as a personal to-do project. Its GID is given on the command line and is never committed.
+
+- **API probe:** `cargo run --release --example latency -- <project-gid> [--runs 3] [--every 2]`.
+  - Each run makes these writes on a new task named `asn latency probe <time> #<n>`, one at a time:
+    1. create it, in the first section
+    2. move it to the second section
+    3. assign it to the token's own user
+    4. set the board's first single-select field (skipped when there is none)
+    5. complete it
+  - It times how long Asana takes to confirm each write (`confirm-ms`). Then it reads the following every `--every` seconds, staggered, until each read shows the write or 5 minutes pass:
+    1. `GET /projects/{gid}/tasks` with the board's exact query: what a board reload sees
+    2. `GET /tasks/{gid}`: what a detail reload sees
+    3. `GET /projects/{gid}/events` with a sync token: what Events would see (Not Doing, P3)
+  - It prints one row per write: `write  confirm-ms  list-s  task-s  events-s`, as the median and the maximum over the runs, with `>300` for a timeout.
+  - At the end it completes every task it created, even after a failure, rather than deleting them (agreed by the user, 2026-11-24). It never assigns anyone but the token's own user.
+  - At the default 2 s it sends about 90 requests a minute, under the free plan's 150.
+  - Events are read with a plain request inside the example. No `api` method is added for them.
+- **End to end (Rex):** `scripts/tui-latency.sh <project-gid>`. It is committed even though it needs Rex (agreed by the user, 2026-11-24).
+  - It starts `target/release/asn --project <gid>` in a new Rex pane at 120×40 and waits for the board.
+  - For each write below, it sends the keys and captures the pane every 200 ms until the change is on screen. It then keeps capturing for 2 minutes, to catch the change flicking back.
+  - It prints `write  visible-ms  reverted` for each run.
+
+  | Write | Keys | On screen when |
+  |---|---|---|
+  | create | `Tab q`, name, `Enter` | the card is in its column |
+  | move | `m`, section, `Enter` | the card is in the other column |
+  | assign | `Tab a`, own name, `Enter` | the card shows the user's initials |
+  | field | `F`, option, `Enter` | the detail shows the option |
+  | description | `Tab e`, text, `Ctrl-s` | the detail shows the text |
+  | comment | `c`, text, `Ctrl-s` | the detail shows the comment |
+  | complete | `d` | the card is gone, and stays gone |
+
+- **Decision after F28** (assumptions P1–P3):
+
+  | F28 shows | Then |
+  |---|---|
+  | The list read shows writes within about 2 s | The delay comes from `asn`, not Asana. Reproduce it in a failing app test and fix that bug first. Keep only the parts of F29 the fix leaves stale. |
+  | The list read lags, the task read doesn't | F29, without its detail half. |
+  | Both lag | F29 as written. |
+  | Events arrive in under 5 s (median) | Reconsider Events as a cheaper way for F30 to notice changes. |
+
+### F29. Own writes show at once
+
+- When Asana confirms a write made in the TUI, the board and the detail show its result right away. They use what the app already has (the request and Asana's response), not a reload:
+
+  | Write | Board | Detail |
+  |---|---|---|
+  | create (`Tab q`, F14, F26) | the card at the top of its section, in its lane, selected | — |
+  | move (`m`) | the card at the top of its new column | the new section |
+  | assign (`Tab a`) | the new initials | the new assignee (as today) |
+  | field (`F`) | the card in its new lane | the new option |
+  | complete or reopen (`d`) | the card gone or back (F16, F23) | `✓ Completed` or not |
+  | description (`Tab e`) | — | the new text (already shown while saving) |
+  | comment (`c`) | — | the comment (already shown while posting) |
+
+- **A stale read can't undo them.** Each confirmed write is kept as a pending change to that task. Every board load and detail load passes through the pending changes before it's shown. This is how the Inbox already keeps read marks that Asana hasn't confirmed (`apply_pending_marks`). A pending change ends when, as applicable:
+  - **confirmed:** a load shows the written value, the new card, the missing completed card, or the posted comment.
+  - **superseded:** a load shows a value that is neither the written one nor the one before it, because someone changed it since.
+  - **expired:** 10 minutes have passed (*after F28*: check this against the worst lag measured).
+
+  Once a change ends, loads are shown as they come. A later write to the same field replaces the pending change. A failed write never creates one, and today's failure handling (restore and toast) stays as it is.
+- The reload after each write stays. It's how a pending change gets confirmed, and it brings in other changes too.
+- Nothing on screen marks a change as pending.
+- **Where:** a pure module, `tui/pending.rs`, as `board.rs` is. `app.rs` applies it in `board_loaded` and on `DetailLoaded`. F29 sends no new requests.
+
+### F30. Refresh while you're looking
+
+- **Interval:** while the terminal has focus, the Inbox, the board on screen and the shown task's detail reload every `refresh` seconds (default 5, chosen by the user, 2026-11-24). This replaces the fixed 60 s of F9 and the Inbox (ADR-005).
+- **Config:** one new key, as in F22:
+
+  | Key | Env | Values | Default |
+  |---|---|---|---|
+  | `refresh` | `ASN_REFRESH` | whole seconds, 5–60 | `5` |
+
+  A value out of range, or not a number, is an error naming the key and where it came from, like the other keys. `asn init` writes it as a commented-out default.
+- **Cost, stated plainly in the README, in `asn init`'s comment for the key, and here:**
+  - One refresh is 1 (Inbox) + 3 + ⌈tasks / 100⌉ (board) + 3 (detail: task, stories, attachments) requests.
+  - Asana limits each token per minute: **150 requests on the free plan, 1,500 on paid plans, Enterprise included.** The `asn` CLI and the Claude skill share the limit when they use the same token.
+
+  | Board | Requests per refresh | Per minute at 5 s (default) | at 10 s | at 30 s |
+  |---|---|---|---|---|
+  | 100 tasks | 8 | 96 | 48 | 16 |
+  | 300 tasks | 10 | 120 | 60 | 20 |
+  | 500 tasks | 12 | 144 | 72 | 24 |
+  | 1,000 tasks | 17 | 204 | 102 | 34 |
+
+  - **Free plan:** the 5 s default fits boards up to about 300 tasks, with a little room left for the CLI. Above about 400 tasks, or with heavy CLI use alongside, set `refresh = 10` or more.
+  - **Paid plans (Enterprise included):** 5 s fits any board, with plenty of room left.
+  - **Over the limit:** Asana answers 429. `asn` waits for `Retry-After` and tries once more, as today. A second 429 fails that refresh: the board keeps its data and shows `Refresh failed: …` (F9), and the next refresh tries again. A CLI command run at the same moment can fail the same way.
+- **Focus:** the TUI turns on the terminal's focus reports, and turns them off on exit, as it does raw mode.
+  - In the background, it refreshes every 60 s, as today.
+  - Back in front, it refreshes at once if the last refresh is older than the interval, then keeps to the interval.
+  - A terminal that never reports focus counts as in front.
+- `R` still refreshes at once. A reload asked for during a load is still queued (ADR-005), so faster ticks never run two loads of one board at the same time.
+- **ADR-011** records the change to ADR-005: a configurable, focus-aware interval. It also says why Events still aren't used.
+
+**Tests (F28–F30):**
+- F28: CI builds the example (`clippy --all-targets`). Its "does this read show the write" checks are plain functions, unit-tested on fixture JSON.
+- F29, `tui/pending.rs`: each write's effect on a board and on a detail; a change being confirmed, superseded and expired; a later write replacing an earlier one; a task in two projects.
+- F29, app tests:
+  - for each write, the card or detail changes on the confirming `Msg`, before any reload
+  - a stale `BoardLoaded` or `DetailLoaded` after that doesn't undo the change
+  - a confirming load ends the pending change
+  - a failed write leaves nothing pending
+  - a reload held during the completion animation (F23) still works
+- F30, `config.rs`: `refresh` from the environment, the file and the default; range and type errors.
+- F30, app tests:
+  - while focused, ticks at the interval load the board
+  - after focus is lost, the board loads once per 60 s
+  - regaining focus loads at once, but only when the last refresh is older than the interval
+  - `R` and the queued reload work as before
+- No new snapshots: nothing is drawn differently.
+
+**Done when:**
+1. F28's three tables (before, after F29, after F30) are in Findings from Use.
+2. In the Rex run, every write is on screen within the API probe's `confirm-ms` for that write plus 200 ms (median over 3 runs).
+3. In the same runs, no change flicks back during its 2-minute watch.
+4. A change made with `asn` in another pane shows in the focused TUI within the interval plus the list lag F28 measured.
+5. In the background, the board loads at most once a minute (app test).
+6. CI is green.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**
@@ -361,6 +494,12 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **L2: The grid stays readable at 80 columns with several lanes.** Confirmed by the user at Checkpoint L2 (2026-11-19). Test: Checkpoint L2. If not, first try hiding the lane separator line, before collapsing lanes.
 - [ ] **L3: Option order is how the team reads lanes.** Test: dogfood. If not, consider sorting by card count.
 
+- [ ] **P1: Asana's list read (`GET /projects/{gid}/tasks`) lags behind writes by more than a few seconds.** Test: F28. If it doesn't, the delay is a bug in `asn`. Reproduce it in an app test and fix it first (F28's decision table).
+- [ ] **P2: The single-task read (`GET /tasks/{gid}`) lags too.** Test: F28. If it doesn't, F29 drops its detail half.
+- [ ] **P3: Events arrive about a minute late.** Asana's docs say they are "delivered within a minute (on average)" and "at most once". Test: F28's `events-s` column. If they arrive in under 5 s, reconsider Events for F30.
+- [ ] **P4: The terminals in use report focus.** That includes Rex, and tmux only with `focus-events on`. Test: run F30 in each. If one doesn't, the TUI refreshes at the interval all the time, which costs requests but nothing else.
+- [ ] **P5: 10 minutes is longer than Asana's worst lag.** Test: F28's maximums. If not, raise F29's expiry.
+
 - [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.
 
 ## Not Doing (and Why)
@@ -377,6 +516,16 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **(F24–F27) Lanes by multi-select fields:** a card would need to appear in several lanes.
 - **(F24–F27) Lanes by assignee, section or due date:** only single-select fields for now.
 - **(F24–F27) Editing field definitions or options, reordering or collapsing lanes:** done in Asana; the board shows the result.
+
+- **(F28–F30) Events API:** Asana delivers events "within a minute (on average)" and "at most once". So they would arrive later than a 5 s poll and would still need the poll as a fallback. Revisit if P3 fails, as a cheaper way to notice changes.
+- **(F28–F30) Fetching only the changed task after a write:** with F29, the reload after a write only confirms, and one load path is simpler than two. Revisit if F30's request cost bites.
+- **(F28–F30) Retrying the reload after a write until it shows the change:** F29 makes a stale reload harmless, and F30 brings the next one within seconds.
+- **(F28–F30) Webhooks:** they need a public HTTPS endpoint, which a terminal app doesn't have.
+- **(F28–F30) The CLI telling a running TUI to reload:** it needs a local socket or file, for a case F30 already covers.
+- **(F28–F30) A "synced n s ago" line, or a mark on pending cards:** the point is that you don't need to know.
+- **(F28–F30) A request budget instead of an interval:** people think in seconds, and the cost per refresh is documented instead.
+- **(F28–F30) Refreshing boards that aren't on screen:** as today, only the board on screen polls.
+- **(F28–F30) `p` onto the board on screen, in F29:** Asana picks the section, so the card waits for the reload, as today.
 
 ## Findings from Use
 
