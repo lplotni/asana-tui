@@ -2,7 +2,7 @@ use std::process::ExitCode;
 
 use asn::api::{ASANA_API_URL, ApiError, Client};
 use asn::cli::inbox;
-use asn::config::{self, Config, ConfigError, FileConfig};
+use asn::config;
 use asn::core;
 use asn::core::resolve::Unresolved;
 use asn::setup;
@@ -242,16 +242,6 @@ async fn init() -> Result<setup::Outcome, ExitCode> {
     .map_err(|err| fail(&err, 1))
 }
 
-/// The settings from the environment, then the config file (spec F22).
-fn load_config() -> Result<Config, ConfigError> {
-    let env = |key: &str| std::env::var(key).ok();
-    let file = match config::file_path(env) {
-        Some(path) => FileConfig::read(&path)?,
-        None => FileConfig::default(),
-    };
-    Config::resolve(env, &file)
-}
-
 #[expect(clippy::too_many_lines, reason = "one arm per subcommand")]
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -284,7 +274,7 @@ async fn main() -> ExitCode {
         }
     }
 
-    let config = match load_config() {
+    let config = match config::load() {
         Ok(config) => config,
         Err(err) => return fail(&err, err.exit_code()),
     };

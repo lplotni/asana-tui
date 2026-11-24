@@ -974,7 +974,7 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 
 ---
 
-### - [ ] T43: API latency probe
+### - [x] T43: API latency probe
 
 **Description:** `examples/latency.rs`, run as `cargo run --release --example latency -- <project-gid> [--runs 3] [--every 2]`.
 - **Config:** `load_config` moves from `main.rs` into `config::load`, so the example and `asn` share it.
@@ -989,17 +989,17 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
   - `Client::task`
   - `GET /projects/{gid}/events`, as a plain `reqwest` request. A 412 gives the first sync token, and any event whose resource is the task counts.
 - **Output:** a row per write, `write  confirm-ms  list-s  task-s  events-s`, with the median and maximum over the runs, `>300` for a timeout and `n/a` for a skipped write.
-- **Cleanup:** it completes every task it created at the end, also after an error or Ctrl-C (best effort).
+- **Cleanup:** it completes every task it created at the end, also after an error. An interrupted run (Ctrl-C) leaves its task open, so each run first completes open tasks named `asn latency probe …` (handling Ctrl-C would need tokio's `signal` feature).
 
 **Acceptance criteria:**
-- [ ] One run on the throwaway board prints a row for each write, with every column filled.
-- [ ] At the default `--every 2`, it sends no more than about 90 requests a minute, plus the writes.
-- [ ] Afterwards no probe task is left open, even when a write failed (forced by passing a section-less project, or killing it mid-run).
+- [x] One run on the throwaway board prints a row for each write, with every column filled.
+- [x] At the default `--every 2`, it sends no more than about 90 requests a minute, plus the writes.
+- [x] Afterwards no probe task is left open, even when a write failed (forced by passing a section-less project, or killing it mid-run).
 
 **Verification:**
-- [ ] The "does this read show the write" checks are pure functions with unit tests on fixture JSON: a list with and without the task, in each section, with each assignee and field value, without a completed task; a task read; events about the task and about another task. `[[example]] name = "latency"` with `test = true`, so `cargo test` runs them.
-- [ ] `asn` still loads its config the same way (the existing config and CLI tests).
-- [ ] `cargo test`, clippy and fmt are clean. Manual: `cargo run --release --example latency -- <board-gid> --runs 1`.
+- [x] The "does this read show the write" checks are pure functions with unit tests on fixture JSON: a list with and without the task, in each section, with each assignee and field value, without a completed task; a task read; events about the task and about another task. `[[example]] name = "latency"` with `test = true`, so `cargo test` runs them.
+- [x] `asn` still loads its config the same way (the existing config and CLI tests).
+- [x] `cargo test`, clippy and fmt are clean. Manual: `cargo run --release --example latency -- <board-gid> --runs 1`.
 
 **Dependencies:** T42
 

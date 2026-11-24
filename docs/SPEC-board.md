@@ -282,7 +282,7 @@ Two tools. Both write to a throwaway board, such as a personal to-do project. It
     2. `GET /tasks/{gid}`: what a detail reload sees
     3. `GET /projects/{gid}/events` with a sync token: what Events would see (Not Doing, P3)
   - It prints one row per write: `write  confirm-ms  list-s  task-s  events-s`, as the median and the maximum over the runs, with `>300` for a timeout.
-  - At the end it completes every task it created, even after a failure, rather than deleting them (agreed by the user, 2026-11-24). It never assigns anyone but the token's own user.
+  - At the end it completes every task it created, even after a failure, rather than deleting them (agreed by the user, 2026-11-24). An interrupted run's open tasks are completed when the next run starts. It never assigns anyone but the token's own user.
   - At the default 2 s it sends about 90 requests a minute, under the free plan's 150.
   - Events are read with a plain request inside the example. No `api` method is added for them.
 - **End to end (Rex):** `scripts/tui-latency.sh <project-gid>`. It is committed even though it needs Rex (agreed by the user, 2026-11-24).

@@ -161,6 +161,17 @@ pub fn file_path(env: impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
     Some(base.join("asn").join("config.toml"))
 }
 
+/// The settings from the process environment, then the config file, then
+/// the defaults (spec F22).
+pub fn load() -> Result<Config, ConfigError> {
+    let env = |key: &str| std::env::var(key).ok();
+    let file = match file_path(env) {
+        Some(path) => FileConfig::read(&path)?,
+        None => FileConfig::default(),
+    };
+    Config::resolve(env, &file)
+}
+
 /// Whether the environment alone names a workspace and a token (or a token
 /// command), as setups from before the config file do. Then the TUI's first
 /// run needs no interview (ADR-010). The token command isn't run.
