@@ -1139,16 +1139,37 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
-### - [ ] Checkpoint F3: near-live
+### - [x] T49a: A load older than an own write isn't shown (found at Checkpoint F3)
 
-- [ ] Both tools run a third time; the third table goes into Findings from Use.
-- [ ] Done when 4: a change made with `asn` in another pane shows in the focused TUI within the interval plus the list lag F28 measured.
-- [ ] Done when 5: the background back-off holds (T49's tests), and P4 is settled for Rex and tmux.
-- [ ] Human review.
+**Description:** The first Checkpoint F3 harness run showed a completed card coming back. With a refresh every 5 s, a board load was running when `d` was pressed. Its result, which still had the task open, arrived after the card had left, and the card stayed until the next load. A detail reload, now also every 5 s, can undo an optimistic description or a just-posted comment the same way. A pure `tui/writes.rs` counts own writes until Asana answers them, and records whether each board or detail load started with none in flight. A load that started while one was, or that a write was sent or answered during, keeps the screen as it is, and a fresh load follows. A write whose answer never comes is given up after two minutes of ticks. `App::update` does the bookkeeping in one place: answers on the way in, sends and load starts on the way out.
+
+**Acceptance criteria:**
+- [x] A board load older than a completion doesn't bring the card back; a fresh load follows the confirmation, or follows at once when the write was already answered.
+- [x] A detail load older than a description save or a comment doesn't undo it.
+- [x] A write without an answer holds loads back for two minutes at most.
+
+**Verification:**
+- [x] App tests, written first and failing (4 of 5; the two-minute limit passed trivially before), and `writes.rs` unit tests.
+- [x] `cargo test`, clippy and fmt are clean. The harness runs three times on the throwaway board, and nothing flicks back.
+
+**Dependencies:** T49
+
+**Files likely touched:** `src/tui/writes.rs`, `src/tui/app.rs`, `src/tui/mod.rs`, `src/tui/app_tests.rs`
+
+**Estimated scope:** M
 
 ---
 
-### - [ ] T50: README, ADR-011 and spec updates
+### - [x] Checkpoint F3: near-live
+
+- [x] Both tools ran a third time. The first harness run found a completed card coming back (fixed by T49a). After the fix, three harness runs had nothing flick back, and the probe was unchanged. The results are in Findings from Use.
+- [x] Done when 4: tasks made with the CLI in another pane showed in the focused TUI 0.05–1.2 s after the CLI returned, well within the 5 s interval plus the list lag.
+- [x] Done when 5: the background back-off holds (T49's tests, and the Rex check with a focus-out sequence). P4 is settled only partly: Rex reports focus changes the way the TUI parses them, checked by sending the sequences. A real focus switch, and tmux, are for the user.
+- [ ] Human review. The user asked for every task in one go; reported with the results.
+
+---
+
+### - [x] T50: README, ADR-011 and spec updates
 
 **Description:**
 - **README:** the `refresh` setting in the config table, and F30's cost table with the limits (free plan 150 a minute; paid plans, Enterprise included, 1,500). It also says what happens over the limit, and how to run the probe and the harness.
@@ -1157,13 +1178,13 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 - **`docs/SPEC.md`:** the 60 s Inbox line now matches F30.
 
 **Acceptance criteria:**
-- [ ] The README's cost table and limits match F30.
-- [ ] No doc still says the board or the Inbox polls every 60 s, except for the background back-off.
-- [ ] ADR-011 is listed in `docs/decisions/README.md`.
+- [x] The README's cost table and limits match F30 ("Refresh and rate limits", linked from the config table).
+- [x] No doc still says the board or the Inbox polls every 60 s, except for the background back-off. The v0.1 and v0.2 lines that did now point to F30. CLAUDE.md's reload gotcha is updated too.
+- [x] ADR-011 is listed in `docs/decisions/README.md`, and ADR-005's status points to it.
 
 **Verification:**
-- [ ] `grep -rn "60 s" README.md docs/` shows only background references.
-- [ ] `cargo test` passes (the skill test is unaffected).
+- [x] `git grep "60 s"` over README and docs shows only historical lines that point to F30, and the background references.
+- [x] `cargo test` passes (the skill test is unaffected).
 
 **Dependencies:** Checkpoint F3
 

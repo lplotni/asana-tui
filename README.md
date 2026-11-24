@@ -48,6 +48,7 @@ Every setting can also come from an environment variable, which wins over the fi
 | `search` | `ASN_SEARCH` | How `S` and `asn search` find tasks: `tasks` (default) uses Asana's full-text [task search](https://developers.asana.com/reference/searchtasksforworkspace) (names and descriptions; paid plans only); `typeahead` matches task names like the web search box and works on every plan |
 | `theme` | `ASN_THEME` | `terminal` (default, follows your terminal's colors), `dark`, `light`, or a path to a theme file ([example](themes/terminal.toml)) |
 | `animations` | `ASN_ANIMATIONS` | A completed board card is struck through before it leaves: `true` (default) or `false` in the file, `on` or `off` in the variable |
+| `refresh` | `ASN_REFRESH` | Seconds between refreshes while the terminal is in front: 5 to 60, default 5. In the background, `asn` refreshes once a minute. See [Refresh and rate limits](#refresh-and-rate-limits) |
 | | `NO_COLOR` | Disables colors |
 
 ```toml
@@ -59,6 +60,23 @@ animations = false
 ```
 
 CLI subcommands read the same file but never ask questions, so scripts behave the same with or without it.
+
+### Refresh and rate limits
+
+The TUI shows your own changes as soon as Asana confirms them (usually 2–5 s). Everything else (other people's changes, the `asn` CLI, the Claude Code skill, the web app) arrives with the next refresh. While the terminal is in front, that is every `refresh` seconds, **5 by default**. When your terminal reports focus, `asn` refreshes only once a minute while it's in the background, and catches up at once when you come back.
+
+Each refresh costs requests, and Asana limits them per token: **150 a minute on the free plan, 1,500 on paid plans (Enterprise included).** The `asn` CLI and the Claude Code skill count against the same limit when they use the same token. One refresh is 1 (Inbox) + 3 + ⌈tasks / 100⌉ (the board on screen) + 3 (the task shown) requests:
+
+| Board | Requests per refresh | Per minute at 5 s (default) | at 10 s | at 30 s |
+|---|---|---|---|---|
+| 100 tasks | 8 | 96 | 48 | 16 |
+| 300 tasks | 10 | 120 | 60 | 20 |
+| 500 tasks | 12 | 144 | 72 | 24 |
+| 1,000 tasks | 17 | 204 | 102 | 34 |
+
+- **Free plan:** 5 s fits boards up to about 300 tasks, with a little room for the CLI. For larger boards, or heavy CLI use alongside, set `refresh = 10` or more.
+- **Paid plans:** 5 s fits any board.
+- **Over the limit:** Asana answers 429. `asn` waits as Asana asks and tries once more. If that fails too, that refresh fails with a `Refresh failed: …` message, the board keeps what it shows, and the next refresh tries again. A CLI command run at the same moment can fail the same way.
 
 ## Use
 
@@ -80,7 +98,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
 | `V` | Select a range, then `e` `u` `x` |
 | `f` | Unread only / all |
-| `R` | Refresh (also every 60 s) |
+| `R` | Refresh now (it also happens every `refresh` seconds, 5 by default) |
 | `/` then `n` / `N` | Filter the loaded Inbox by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
 | `P` | Open a project's board: type to search projects (boards opened this session are listed first) |
 | `b` | Open the board of the task's project, on that task (asks which project if it's in several) |
@@ -91,7 +109,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 
 ### Boards
 
-`P` (or `asn --project <project-gid>`) opens a project as a board: one column per section, one card per open task with its assignee's initials and due date (`!` when overdue). When not every column fits, `h`/`l` page across them and the top line counts the hidden ones (`‹ 2  1 ›`). The board refreshes every 60 s.
+`P` (or `asn --project <project-gid>`) opens a project as a board: one column per section, one card per open task with its assignee's initials and due date (`!` when overdue). When not every column fits, `h`/`l` page across them and the top line counts the hidden ones (`‹ 2  1 ›`). The board refreshes with the rest of `asn`: every 5 s while the terminal is in front (see [Refresh and rate limits](#refresh-and-rate-limits)).
 
 ![asn showing a project board with four sections, one of them paged off to the right](docs/board.svg)
 
@@ -193,7 +211,7 @@ These come from Asana's public API (most from the [Notifications API](https://fo
 
 - **No archive.** The API can only mark notifications read or unread. `e` marks an item read, and it stays in the list, unlike `E` in the web Inbox, which removes it. Archive in the web app if you want an item gone: archived items disappear from `asn` at its next refresh.
 - **No grouping.** The web Inbox can bundle several notifications about one task into one card; `asn` lists them one by one.
-- **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R` or every 60 s).
+- **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R`, or every 5 s while the terminal is in front).
 - **Descriptions are edited as plain text.** Saving keeps @-mentions but replaces other formatting (links, lists, bold); `asn` asks first when a description has any. Edit formatted descriptions on the web.
 - **Mentions look like comments.** The API doesn't mark @mentions separately.
 - **Some tasks' comments can't be loaded.** For some tasks (likely those with replies to comments), Asana refuses the comment list with "unsupported parent in the public API: CommentStory". `asn` still shows the rest of the task and says why the comments are missing; read them on the web.
@@ -209,6 +227,15 @@ cargo run --example screenshot > docs/screenshot.svg            # regenerate the
 cargo run --example screenshot -- board > docs/board.svg
 cargo run --example screenshot -- lanes > docs/lanes.svg
 ```
+
+How quickly changes show up, measured on a throwaway board of your own (pass its GID, never commit it):
+
+```sh
+cargo run --release --example latency -- <project-gid>   # Asana: confirm time, and when each read shows a write
+cargo build --release && scripts/tui-latency.sh <project-gid>   # the TUI, driven in a Rex pane
+```
+
+The probe creates, moves, assigns, sets a field on and completes tasks named `asn latency probe …`, and completes them afterwards. The harness runs inside a Rex terminal (it needs `REX_SESSION`) and does the same through the TUI's keys, watching each change for two minutes in case it flicks back.
 
 Why it's built this way: [architecture decisions](docs/decisions/README.md). Specs: [v0.1](docs/SPEC.md), [v0.2 and boards](docs/SPEC-board.md), [Claude Code](docs/SPEC-skill.md).
 

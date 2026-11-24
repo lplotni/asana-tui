@@ -33,7 +33,7 @@ You reach a board three ways: the project switcher (`P`), `b` on an Inbox task, 
 
 A card's column is its membership whose `project.gid` is this project. Other memberships are ignored, because a task can be in several projects. A task whose section isn't in the section list goes into a leading **(no section)** column, which is shown only when it has cards.
 
-**Request budget:** one load is 2 + ⌈tasks / 100⌉ requests, i.e. 5 for 300 tasks. Only the board on screen is polled, every 60 s. Together with the Inbox's 1/min, that stays far below the ~150 req/min free-plan limit.
+**Request budget:** one load is 2 + ⌈tasks / 100⌉ requests, i.e. 5 for 300 tasks. Only the board on screen is polled, every 60 s. Together with the Inbox's 1/min, that stays far below the ~150 req/min free-plan limit. (F30 changes this to every `refresh` seconds while the terminal is in front, 5 by default, with its own budget.)
 
 ## Feature Spec — v0.2
 
@@ -53,7 +53,7 @@ A card's column is its membership whose `project.gid` is this project. Other mem
   - Empty section: an empty column with `no tasks` in `text_muted`.
   - Failed first load: an error screen naming the project and the reason.
   - Failed poll: the board keeps its last data, and an error toast is shown.
-- **Refresh:** the visible board polls every 60 s, and `R` refreshes it now. After a refresh the cursor stays on the same task GID. If that task is gone (completed, moved out of the project), the cursor goes to the same position in the same column, clamped.
+- **Refresh:** the visible board polls every `refresh` seconds while the terminal is in front (F30: 5 by default; was 60 s), and once a minute in the background. `R` refreshes it now. After a refresh the cursor stays on the same task GID. If that task is gone (completed, moved out of the project), the cursor goes to the same position in the same column, clamped.
 - **Session cache:** every board opened this session stays in memory with its cursor. Reopening one shows it at once and refreshes it in the background. Nothing is written to disk.
 
 ### F10. Task detail from the board
@@ -176,6 +176,7 @@ Added after F21 at the user's request (2026-11-17). F22 supersedes ADR-003 with 
   | `search` | `ASN_SEARCH` | `"tasks"`, `"typeahead"` | `"tasks"` |
   | `theme` | `ASN_THEME` | `"terminal"`, `"dark"`, `"light"`, or a theme file path | `"terminal"` |
   | `animations` | `ASN_ANIMATIONS` (`on`/`off`) | `true`, `false` | `true` |
+  | `refresh` | `ASN_REFRESH` | whole seconds, 5–60 (F30) | `5` |
 
 - **Precedence:** a non-empty environment variable, then the file, then the default. `ASANA_TOKEN` still wins over any `token_cmd`. `NO_COLOR` stays environment-only.
 - **No secrets in the file:** a `token` key is an error: `config.toml: "token" isn't allowed — put a command that prints it in token_cmd, or set ASANA_TOKEN`. Unknown keys and wrongly typed values are errors that name the file, the key and the line (exit 1).
@@ -373,6 +374,7 @@ Found by F28 (2026-11-24). Saving a description used to compare the task's `modi
   - Back in front, it refreshes at once if the last refresh is older than the interval, then keeps to the interval.
   - A terminal that never reports focus counts as in front.
 - `R` still refreshes at once. A reload asked for during a load is still queued (ADR-005), so faster ticks never run two loads of one board at the same time.
+- **A load older than an own write isn't shown over it.** Found at Checkpoint F3: with a refresh every 5 s, a load is often running when a write is made, and its result can still have the task as it was. A completed card came back until the next load, and a saved description or a just-posted comment could vanish the same way. So while an own write is unanswered, a board or detail load that may predate it isn't shown over what the screen shows. That's a load that started while a write was in flight, or one that a write was sent or answered during. A fresh load follows: at once, or when the write is answered. A write whose answer never comes stops holding loads back after two minutes. The state is pure, in `tui/writes.rs`.
 - **ADR-011** records the change to ADR-005: a configurable, focus-aware interval. It also says why Events still aren't used.
 
 **Tests (F28–F30):**
@@ -508,7 +510,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **P1: Asana's list read (`GET /projects/{gid}/tasks`) lags behind writes by more than a few seconds.** Test: F28. If it doesn't, the delay is a bug in `asn`. Reproduce it in an app test and fix it first (F28's decision table). **Didn't hold** (F28, 2026-11-24): the list showed every write on its first read, 0.4–0.7 s after confirmation. The bug F28 found is F29a.
 - [x] **P2: The single-task read (`GET /tasks/{gid}`) lags too.** Test: F28. If it doesn't, F29 drops its detail half. **Didn't hold:** the task read showed every write on its first poll.
 - [x] **P3: Events arrive about a minute late.** Asana's docs say they are "delivered within a minute (on average)" and "at most once". Test: F28's `events-s` column. If they arrive in under 5 s, reconsider Events for F30. **Didn't hold:** events arrived in about 4 s (7.2 s at most). Reconsidered at Checkpoint F1 and still not used (Not Doing).
-- [ ] **P4: The terminals in use report focus.** That includes Rex, and tmux only with `focus-events on`. Test: run F30 in each. If one doesn't, the TUI refreshes at the interval all the time, which costs requests but nothing else.
+- [ ] **P4: The terminals in use report focus.** That includes Rex, and tmux only with `focus-events on`. Test: run F30 in each. If one doesn't, the TUI refreshes at the interval all the time, which costs requests but nothing else. **Partly checked** (2026-11-24): the TUI backs off on the focus sequences when they're sent into a Rex pane. A window that starts unfocused gets no report until its focus changes. A real focus switch in Rex, and tmux, are still to be tried.
 - [x] **P5: 10 minutes is longer than Asana's worst lag.** Test: F28's maximums. If not, raise F29's expiry. **Moot:** F29's pending changes aren't built (P1).
 
 - [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.
@@ -519,7 +521,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **Custom fields, tags, subtask/comment counts on cards:** assignee and due date are what a glance needs, and narrow cards depend on that.
 - **Reordering cards, editing sections:** these are workflow, not status. `m` already covers moving between sections, and `o` covers the rest.
 - **Section summaries and "what changed since I last looked":** strong ideas for glancing, but post-MVP. Revisit if scanning 300 cards turns out slow.
-- **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** 60 s polling and session recents cover the job, and nothing is written to disk.
+- **Persisted recents, pinned projects (`ASN_PROJECTS`), Events API sync, local mirror:** polling (every few seconds since F30) and session recents cover the job, and nothing is written to disk.
 - **Showing completed tasks:** they are hidden, to keep columns about current work.
 - **Multiple boards side by side, portfolios, My Tasks board:** one project at a time. "My Tasks" as a startup view stays a separate idea.
 
@@ -551,6 +553,8 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
   - API probe, 3 runs (median/max). Confirmation: create 4237/4865 ms (two requests), move 1817/2001 ms, assign 2088/2600 ms, complete 2390/2404 ms. Then the list read showed each write in 0.4–0.7 s (its first read), the task read on its first poll, and events in about 4 s (7.2 s at most).
   - Rex harness, on both the Homebrew v0.3.0 binary and HEAD: create on screen 4.7 s after `Enter`, move 2.5–2.8 s, assign 2.5–3.1 s, comment and completion at once. Nothing flicked back, except the description: shown at once, but then refused as changed on the web and shown as before (F29a).
   - After F29a (Checkpoint F2, 2-minute watches): create 5.0 s, move 2.5 s, assign 3.0 s; description, comment and completion at once. Nothing flicked back, the description included. Each write shows within Asana's confirmation time plus one reload (0.5–0.9 s).
+  - Checkpoint F3, with the 5 s refresh: the first harness run showed a completed card coming back. A refresh started before `d` returned the task still open, so the stale-load rule was added to F30. After it, three runs: create 4.2–4.7 s, move 2.5–2.8 s, assign 2.5–3.4 s; description, comment and completion at once. Nothing flicked back. The probe was unchanged: list 0.4–0.6 s, events about 4 s.
+  - Changes from elsewhere: tasks made with `asn project new` in another pane showed in the running TUI 0.05–1.2 s after the CLI returned (before: up to 60 s). With the terminal in the background (a focus-out sequence sent into the pane), one didn't show within 15 s; back in front, it showed in 0.6 s.
   - So the TUI shows its own writes Asana's confirmation time plus one reload after the key, and Asana's confirmation is most of it. A delay of minutes didn't reproduce in a fresh session.
 
 ## Open Questions

@@ -1,7 +1,7 @@
 # ADR-005: Poll and cache in memory; no local mirror
 
 ## Status
-Accepted
+Accepted; the 60 s interval is replaced by [ADR-011](ADR-011-refresh-every-few-seconds-while-in-front.md) (every few seconds while in front, once a minute in the background)
 
 ## Date
 2026-11-16, extended for boards 2026-11-17 (recorded 2026-11-17)

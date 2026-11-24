@@ -87,7 +87,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 - **Stack:** `ratatui` + `crossterm`, `tokio`, `reqwest` (rustls), `serde`, `clap`, `anyhow`, `toml` (theme files), `terminal-colorsaurus` (queries the terminal's fg/bg colors). That crate handles the raw-mode read, timeout, and known-unsupported terminals. Writing that ourselves would duplicate a lot of terminal-specific edge cases, and the cost is one small dependency. Colors are parsed with ratatui's own `Color: FromStr` (names, `#rrggbb`, 0–255 indexes), so there's no separate color library. Dev-only: `wiremock` for API tests and ratatui's `TestBackend` for rendering snapshots.
 - **Concurrency:** the TUI event loop never blocks on the network. API calls run as tokio tasks and report back to the loop through a channel. The UI shows a loading state and keeps responding to keys.
 - **Data:** an in-memory cache per session, keyed by task GID. No local database in the MVP.
-- **Budget for the free-plan rate limit (~150 req/min):** the Inbox is polled every 60 s and on `R`. Task detail is fetched on selection after 250 ms of idle cursor (2 requests: task + stories) and cached. Writes invalidate only the affected task.
+- **Budget for the free-plan rate limit (~150 req/min):** the Inbox is polled every 60 s and on `R`. (Since [SPEC-board F30](SPEC-board.md), 2026-11-24: every `refresh` seconds while the terminal is in front, 5 by default, and once a minute in the background.) Task detail is fetched on selection after 250 ms of idle cursor (2 requests: task + stories) and cached. Writes invalidate only the affected task.
 
 ## Feature Spec — v0.1
 
@@ -248,7 +248,7 @@ asn project add <task-gid> <project-gid> [--section GID]
 - [x] **Archive is `E` in the web app** (confirmed by the user). `e` is therefore the mark-read alias, and editing the description moved to `Tab e`.
 - [ ] **`U` moves an item back to the Inbox in the web app.** Test: try it in the web Inbox during T0.
 - [x] **Our terminals answer color queries.** Rex: yes, in under 1 ms (checked in T5). Ghostty: not checked yet. Test: in Rex (and Ghostty), run `printf '\e]11;?\e\\'; read -rs -t1 -d '\' r; printf '%q\n' "$r"`. A reply like `rgb:1e1e/1e1e/2e2e` means tints will work. If there's no reply, everyone on that terminal gets the palette-only fallback.
-- [ ] **60 s polling is fresh enough.** Test: ask the dogfooders. The API has no push option.
+- [x] **60 s polling is fresh enough.** Test: ask the dogfooders. The API has no push option. **Didn't hold:** the user wanted changes near-live (2026-11-24), so it's 5 s while the terminal is in front ([SPEC-board F30](SPEC-board.md), ADR-011).
 
 ## MVP Scope
 
