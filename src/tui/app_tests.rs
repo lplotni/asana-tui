@@ -4434,3 +4434,135 @@ fn coming_back_with_nothing_skipped_adds_no_load() {
 
     assert_eq!(board_loads(&effects), 0);
 }
+
+// --- F30: a load older than an own write isn't shown over it ----------------
+
+fn card_gids(app: &App) -> Vec<String> {
+    app.board_view()
+        .map(|v| {
+            v.columns()
+                .iter()
+                .flat_map(|c| c.tasks.iter().map(|t| t.gid.clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn detail_loads(effects: &[Effect]) -> Vec<&str> {
+    effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::LoadDetail { gid } => Some(gid.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn board_loaded(app: &mut App) -> Vec<Effect> {
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    })
+}
+
+#[test]
+fn a_board_load_older_than_a_completion_doesnt_bring_the_card_back() {
+    let mut app = on_board(&[2]);
+    assert_eq!(
+        board_loads(&app.update(Msg::Tick)),
+        1,
+        "a refresh is running"
+    );
+    keys(&mut app, "d");
+
+    // The refresh started before the completion, so it still has the card.
+    board_loaded(&mut app);
+
+    assert!(!card_gids(&app).contains(&"c0-0".to_owned()));
+    let effects = app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+    assert_eq!(
+        board_loads(&effects),
+        1,
+        "a fresh load follows the confirmation"
+    );
+}
+
+#[test]
+fn a_board_load_a_confirmed_write_overtook_is_followed_by_a_fresh_one() {
+    let mut app = on_board(&[2]);
+    app.update(Msg::Tick);
+    keys(&mut app, "d");
+    app.update(completed_set("c0-0", "Card 0-0", true, Ok(())));
+
+    let effects = board_loaded(&mut app);
+
+    assert!(!card_gids(&app).contains(&"c0-0".to_owned()));
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn a_detail_load_older_than_a_description_save_doesnt_undo_it() {
+    let mut app = loaded(3, 10);
+    with_notes(&mut app, "Old text", "<body>Old text</body>");
+    app.update(Msg::Tick);
+    let effects = app.update(Msg::InboxLoaded(Ok((inbox(3, |_| false), None))));
+    assert_eq!(
+        detail_loads(&effects),
+        ["t0"],
+        "the refresh reloads the shown task"
+    );
+    app.update(Msg::Written {
+        kind: EditorKind::Description,
+        task_gid: "t0".into(),
+        text: Some("New text\n".into()),
+    });
+
+    let mut old = task_detail();
+    old.task.notes = "Old text".into();
+    app.update(Msg::DetailLoaded {
+        gid: "t0".into(),
+        result: Ok(Box::new(old)),
+    });
+
+    assert_eq!(notes_of(&app), "New text\n");
+}
+
+#[test]
+fn a_comment_survives_a_detail_load_older_than_it() {
+    let mut app = loaded(3, 10);
+    loaded_detail(&mut app, "t0");
+    app.update(Msg::Tick);
+    app.update(Msg::InboxLoaded(Ok((inbox(3, |_| false), None))));
+    app.update(Msg::Written {
+        kind: EditorKind::Comment,
+        task_gid: "t0".into(),
+        text: Some("Shipped it".into()),
+    });
+
+    app.update(Msg::DetailLoaded {
+        gid: "t0".into(),
+        result: Ok(Box::new(task_detail())),
+    });
+
+    let Some(Detail::Loaded(detail)) = app.selected_detail() else {
+        panic!("not loaded");
+    };
+    assert!(
+        detail
+            .comments
+            .iter()
+            .any(|c| c.text.as_deref() == Some("Shipped it"))
+    );
+}
+
+#[test]
+fn a_write_whose_result_never_comes_holds_loads_back_two_minutes_at_most() {
+    let mut app = on_board(&[2]);
+    app.set_refresh(std::time::Duration::from_secs(60));
+    keys(&mut app, "d");
+
+    ticks(&mut app, 2);
+
+    // Asana's data is shown again: the completion was never confirmed.
+    assert!(card_gids(&app).contains(&"c0-0".to_owned()));
+}

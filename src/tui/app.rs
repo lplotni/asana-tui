@@ -7,6 +7,7 @@ use ratatui_textarea::{CursorMove, TextArea};
 use super::board::BoardView;
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
+use super::writes::{Load, Writes};
 use crate::present::{detail, format};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -157,6 +158,24 @@ pub enum Msg {
     },
 }
 
+impl Msg {
+    /// The task (for a new task, the project) of the write this message
+    /// answers, if it answers one (F30).
+    fn answers_write(&self) -> Option<&str> {
+        match self {
+            Msg::TaskCreated { project_gid, .. } => Some(project_gid),
+            Msg::MovedToSection { task_gid, .. }
+            | Msg::Assigned { task_gid, .. }
+            | Msg::FieldSet { task_gid, .. }
+            | Msg::CompletedSet { task_gid, .. }
+            | Msg::AddedToProject { task_gid, .. }
+            | Msg::NotesSaved { task_gid, .. }
+            | Msg::CommentPosted { task_gid, .. } => Some(task_gid),
+            _ => None,
+        }
+    }
+}
+
 /// Work for the event loop.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Effect {
@@ -279,6 +298,25 @@ pub enum Effect {
         section: Named,
         previous: Option<Named>,
     },
+}
+
+impl Effect {
+    /// The task (for a new task, the project) this effect writes to, if it
+    /// writes one: its answer is [`Msg::answers_write`]. Marking
+    /// notifications read isn't counted; it changes no task (F30).
+    fn write_about(&self) -> Option<&str> {
+        match self {
+            Effect::CreateTask { project_gid, .. } => Some(project_gid),
+            Effect::MoveToSection { task_gid, .. }
+            | Effect::Assign { task_gid, .. }
+            | Effect::SetField { task_gid, .. }
+            | Effect::SetCompleted { task_gid, .. }
+            | Effect::AddToProject { task_gid, .. }
+            | Effect::SaveNotes { task_gid, .. }
+            | Effect::PostComment { task_gid, .. } => Some(task_gid),
+            _ => None,
+        }
+    }
 }
 
 /// How long the cursor rests on a task before its details load.
@@ -566,6 +604,9 @@ pub struct App {
     /// How many ticks make a minute (0 until [`App::set_refresh`]: every tick
     /// refreshes).
     ticks_per_minute: u32,
+    /// Own writes not answered yet, so a load older than one isn't shown
+    /// over what the screen already shows (F30).
+    writes: Writes,
     /// Completions sent to Asana and not confirmed yet, by task GID.
     completions_in_flight: HashSet<String>,
     /// Tasks to reopen once Asana confirms their completion: `d` came
@@ -625,6 +666,9 @@ impl App {
     }
 
     pub fn update(&mut self, msg: Msg) -> Vec<Effect> {
+        if let Some(key) = msg.answers_write() {
+            self.writes.settled(key);
+        }
         let before = self.selected_task_gid().map(str::to_owned);
         let mut effects = self.handle(msg);
         let after = self.selected_task_gid().map(str::to_owned);
@@ -636,6 +680,21 @@ impl App {
                 } else {
                     effects.push(Effect::ScheduleDetail { gid });
                 }
+            }
+        }
+        // Writes first: a load started along with a write may predate it.
+        for effect in &effects {
+            if let Some(key) = effect.write_about() {
+                self.writes.sent(key);
+            }
+        }
+        for effect in &effects {
+            match effect {
+                Effect::LoadBoard { project_gid } => {
+                    self.writes.started(Load::Board(project_gid.clone()));
+                }
+                Effect::LoadDetail { gid } => self.writes.started(Load::Detail(gid.clone())),
+                _ => {}
             }
         }
         effects
@@ -726,6 +785,9 @@ impl App {
                 Vec::new()
             }
             Msg::Tick => {
+                // A write whose answer never came stops holding loads back
+                // after two minutes.
+                self.writes.tick(self.ticks_per_minute.max(1) * 2);
                 if self.in_background && self.skipped_ticks + 1 < self.ticks_per_minute {
                     self.skipped_ticks += 1;
                     return Vec::new();
@@ -781,6 +843,13 @@ impl App {
                 vec![Effect::LoadDetail { gid }]
             }
             Msg::DetailLoaded { gid, result } => {
+                // Older than an own write: keep what's shown (the write
+                // included); the next refresh loads it again.
+                if self.writes.stale(&Load::Detail(gid.clone()))
+                    && matches!(self.details.get(&gid), Some(Detail::Loaded(_)))
+                {
+                    return Vec::new();
+                }
                 let detail = match result {
                     Ok(detail) => Detail::Loaded(detail),
                     Err(message) => Detail::Failed(message),
@@ -1499,6 +1568,19 @@ impl App {
             return Vec::new();
         };
         slot.reloading = false;
+        // Older than an own write: keep what's shown (a completed card stays
+        // gone). A fresh load follows, at once if no write is in flight, else
+        // when one is answered (its handler reloads) or at the next refresh.
+        if self.writes.stale(&Load::Board(project_gid.to_owned()))
+            && matches!(slot.state, BoardState::Loaded(_))
+        {
+            slot.reload_queued = false;
+            return if self.writes.any_in_flight() {
+                Vec::new()
+            } else {
+                self.reload_board()
+            };
+        }
         if let Ok(board) = &result {
             slot.project = board.project.clone();
         }

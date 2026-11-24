@@ -9,6 +9,7 @@ pub mod picker;
 pub mod theme;
 pub mod tint;
 pub mod ui;
+pub mod writes;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
