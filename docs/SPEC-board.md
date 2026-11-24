@@ -550,7 +550,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **F28 baseline (2026-11-24), on a throwaway board of about 20 open tasks with five sections and no single-select field.**
   - API probe, 3 runs (median/max). Confirmation: create 4237/4865 ms (two requests), move 1817/2001 ms, assign 2088/2600 ms, complete 2390/2404 ms. Then the list read showed each write in 0.4–0.7 s (its first read), the task read on its first poll, and events in about 4 s (7.2 s at most).
   - Rex harness, on both the Homebrew v0.3.0 binary and HEAD: create on screen 4.7 s after `Enter`, move 2.5–2.8 s, assign 2.5–3.1 s, comment and completion at once. Nothing flicked back, except the description: shown at once, but then refused as changed on the web and shown as before (F29a).
-  - After F29a (Checkpoint F2): create 4.2 s, move 2.3 s, assign 2.8 s, description, comment and completion at once. Nothing flicked back, the description included. Each write shows within Asana's confirmation time plus 0.5–0.7 s, one reload.
+  - After F29a (Checkpoint F2, 2-minute watches): create 5.0 s, move 2.5 s, assign 3.0 s; description, comment and completion at once. Nothing flicked back, the description included. Each write shows within Asana's confirmation time plus one reload (0.5–0.9 s).
   - So the TUI shows its own writes Asana's confirmation time plus one reload after the key, and Asana's confirmation is most of it. A delay of minutes didn't reproduce in a fresh session.
 
 ## Open Questions

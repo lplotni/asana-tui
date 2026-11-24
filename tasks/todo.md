@@ -1076,10 +1076,10 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
-### - [ ] Checkpoint F2: own writes show and stay
+### - [x] Checkpoint F2: own writes show and stay
 
-- [ ] The harness runs again on the throwaway board. Every write is on screen within its `confirm-ms` plus one reload, 1 s at most, and nothing flicks back, including the description. The result goes into Findings from Use.
-- [ ] Human review.
+- [x] The harness ran again on the throwaway board, with the 2-minute watch, after T45. Create showed in 5.0 s, move in 2.5 s and assign in 3.0 s: each within Asana's confirmation time plus one reload (0.5–0.9 s). Description, comment and completion showed at once. Nothing flicked back, the description included. The result is in Findings from Use.
+- [ ] Human review. The user asked for every task in one go; reported with the results.
 
 ---
 
@@ -1112,7 +1112,7 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
-### - [ ] T49: Back off while the terminal isn't in front
+### - [x] T49: Back off while the terminal isn't in front
 
 **Description:**
 - `EnableFocusChange` at start; `DisableFocusChange` wherever raw mode is restored, including on panic.
@@ -1122,14 +1122,14 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 - With no focus report yet, the terminal counts as in front.
 
 **Acceptance criteria:**
-- [ ] In the background, the board loads at most once a minute.
-- [ ] Coming back after a skipped poll loads at once; coming back with no poll skipped doesn't add a load.
-- [ ] After quitting, or after a panic, the shell doesn't echo `^[[I` or `^[[O` on focus changes.
+- [x] In the background, the board loads at most once a minute (at 5, 7 and 60 s intervals).
+- [x] Coming back after a skipped poll loads at once; coming back with no poll skipped doesn't add a load.
+- [x] After quitting, or after a panic, the shell doesn't echo `^[[I` or `^[[O` on focus changes. Reports are switched off wherever raw mode is restored: on quit, in the panic hook, and while `$EDITOR` runs. Checked after `:q` in a kept-open Rex pane; the panic path wasn't triggered by hand.
 
 **Verification:**
-- [ ] App tests for the tick patterns, in front and in the background, with a 5 s and a 60 s interval.
-- [ ] Manual in Rex, and in tmux with `focus-events on` (P4).
-- [ ] `cargo test`, clippy and fmt are clean.
+- [x] App tests for the tick patterns, in front and in the background, with a 5 s, a 7 s and a 60 s interval.
+- [x] Manual in Rex: after a focus-out sequence (`ESC [O`, sent into the pane), a task made with the CLI didn't show within 15 s; after focus-in (`ESC [I`) it showed in 0.6 s. A window that starts unfocused gets no report until its focus changes, so it counts as in front. A real focus switch, and tmux, are left for the user (P4); switching their focus could have sent their keystrokes into a TUI open on a real board.
+- [x] `cargo test`, clippy and fmt are clean.
 
 **Dependencies:** T48
 

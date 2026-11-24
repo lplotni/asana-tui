@@ -83,8 +83,10 @@ pub enum Msg {
         project_gid: String,
         result: Result<Board, String>,
     },
-    /// The 60-second refresh timer.
+    /// The refresh timer, every `refresh` seconds (spec F30).
     Tick,
+    /// The terminal gained (`true`) or lost focus (spec F30).
+    Focus(bool),
     /// The next frame of an animation, every 40 ms while [`App::animating`].
     Frame,
     /// The Inbox from the first page (start or refresh).
@@ -557,6 +559,13 @@ pub struct App {
     undo_complete: Option<(String, String)>,
     /// Completed board cards animate before they leave (spec F23).
     pub animations: bool,
+    /// The terminal reported it lost focus: refresh about once a minute (F30).
+    in_background: bool,
+    /// Ticks since the last refresh, while in the background.
+    skipped_ticks: u32,
+    /// How many ticks make a minute (0 until [`App::set_refresh`]: every tick
+    /// refreshes).
+    ticks_per_minute: u32,
     /// Completions sent to Asana and not confirmed yet, by task GID.
     completions_in_flight: HashSet<String>,
     /// Tasks to reopen once Asana confirms their completion: `d` came
@@ -717,9 +726,20 @@ impl App {
                 Vec::new()
             }
             Msg::Tick => {
-                let mut effects = self.refresh();
-                effects.extend(self.reload_board());
-                effects
+                if self.in_background && self.skipped_ticks + 1 < self.ticks_per_minute {
+                    self.skipped_ticks += 1;
+                    return Vec::new();
+                }
+                self.poll()
+            }
+            Msg::Focus(in_front) => {
+                let back = in_front && self.in_background;
+                self.in_background = !in_front;
+                if back && self.skipped_ticks > 0 {
+                    self.poll()
+                } else {
+                    Vec::new()
+                }
             }
             Msg::BoardLoaded {
                 project_gid,
@@ -1322,6 +1342,22 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Sets how often [`Msg::Tick`] comes, so the background refreshes about
+    /// once a minute (F30).
+    pub fn set_refresh(&mut self, every: std::time::Duration) {
+        let ticks = 60u64.div_ceil(every.as_secs().max(1));
+        self.ticks_per_minute = u32::try_from(ticks).unwrap_or(u32::MAX);
+    }
+
+    /// One refresh: the Inbox (which reloads the shown detail) and the board
+    /// on screen.
+    fn poll(&mut self) -> Vec<Effect> {
+        self.skipped_ticks = 0;
+        let mut effects = self.refresh();
+        effects.extend(self.reload_board());
+        effects
     }
 
     /// Reloads the board on screen, unless a load of it is running.

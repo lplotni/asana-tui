@@ -56,6 +56,14 @@ pub async fn run(
     // ratatui::init enters raw mode and the alternate screen, and installs a
     // panic hook that restores the terminal before the panic is printed.
     let mut terminal = ratatui::init();
+    // Focus reports let a refresh back off in the background (F30). They're
+    // switched off wherever raw mode is restored, the panic hook included.
+    focus_reports(true);
+    let restore = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        focus_reports(false);
+        restore(info);
+    }));
     // Ask the terminal which graphics protocol it speaks before the input
     // reader starts, so the reader doesn't swallow the answer.
     let picker = ratatui_image::picker::Picker::from_query_stdio()
@@ -71,6 +79,7 @@ pub async fn run(
         None => App::new(),
     };
     app.animations = config.animations;
+    app.set_refresh(config.refresh);
     app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
     let mut next_frame: Option<Instant> = None;
     run_effects(effects, &client, &workspace, search, &tx, &mut writes);
@@ -128,6 +137,7 @@ pub async fn run(
         }
     };
 
+    focus_reports(false);
     ratatui::restore();
     let unfinished = finish_writes(&mut writes, WRITE_GRACE).await;
     if unfinished > 0 {
@@ -170,6 +180,7 @@ async fn edit_in_terminal(
     initial: String,
 ) -> Option<String> {
     input.pause().await;
+    focus_reports(false);
     ratatui::restore();
     let editor = editor.to_owned();
     let text = tokio::task::spawn_blocking(move || editor::edit(&editor, &initial))
@@ -182,6 +193,7 @@ async fn edit_in_terminal(
         std::io::stdout(),
         ratatui::crossterm::terminal::EnterAlternateScreen
     );
+    focus_reports(true);
     let _ = terminal.clear();
     input.resume();
     text
@@ -211,6 +223,8 @@ fn spawn_input_reader(tx: UnboundedSender<Msg>, gate: Arc<InputGate>) {
                 Ok(Event::Resize(width, height)) => {
                     Msg::Resize(ui::sizes(ratatui::layout::Rect::new(0, 0, width, height)))
                 }
+                Ok(Event::FocusGained) => Msg::Focus(true),
+                Ok(Event::FocusLost) => Msg::Focus(false),
                 Ok(_) => continue,
                 Err(_) => break,
             };
@@ -502,6 +516,18 @@ fn run_effects(
             tokio::spawn(task);
         }
     }
+}
+
+/// Turns the terminal's focus reports on or off (F30). Off wherever raw mode
+/// is restored, so neither the shell nor `$EDITOR` gets `^[[I`/`^[[O`.
+fn focus_reports(on: bool) {
+    use ratatui::crossterm::event::{DisableFocusChange, EnableFocusChange};
+    let mut out = std::io::stdout();
+    let _ = if on {
+        ratatui::crossterm::execute!(out, EnableFocusChange)
+    } else {
+        ratatui::crossterm::execute!(out, DisableFocusChange)
+    };
 }
 
 /// Sends [`Msg::Tick`] every `every` (the `refresh` setting, F30): the

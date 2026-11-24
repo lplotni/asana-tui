@@ -4363,3 +4363,74 @@ fn ticks_during_a_slow_board_load_queue_a_single_reload() {
         "one reload follows, however many ticks came"
     );
 }
+
+// --- F30: back off while the terminal isn't in front -----------------------
+
+/// Sends `n` ticks, answering every board load at once; returns how many
+/// board loads they started.
+fn ticks(app: &mut App, n: usize) -> usize {
+    let mut loads = 0;
+    for _ in 0..n {
+        let started = board_loads(&app.update(Msg::Tick));
+        if started > 0 {
+            app.update(Msg::BoardLoaded {
+                project_gid: "42".into(),
+                result: Ok(project_board(&[2])),
+            });
+        }
+        loads += started;
+    }
+    loads
+}
+
+#[test]
+fn in_the_background_the_board_loads_once_a_minute() {
+    for (every, minute_of_ticks) in [(5, 12), (7, 9), (60, 1)] {
+        let mut app = on_board(&[2]);
+        app.set_refresh(std::time::Duration::from_secs(every));
+        app.update(Msg::Focus(false));
+
+        assert_eq!(ticks(&mut app, minute_of_ticks * 2), 2, "every {every} s");
+    }
+}
+
+#[test]
+fn in_front_the_board_loads_on_every_tick() {
+    let mut app = on_board(&[2]);
+    app.set_refresh(std::time::Duration::from_secs(5));
+    app.update(Msg::Focus(false));
+    app.update(Msg::Focus(true));
+
+    assert_eq!(ticks(&mut app, 3), 3);
+}
+
+#[test]
+fn a_terminal_that_never_reports_focus_counts_as_in_front() {
+    let mut app = on_board(&[2]);
+    app.set_refresh(std::time::Duration::from_secs(5));
+
+    assert_eq!(ticks(&mut app, 3), 3);
+}
+
+#[test]
+fn coming_back_after_a_skipped_refresh_refreshes_at_once() {
+    let mut app = on_board(&[2]);
+    app.set_refresh(std::time::Duration::from_secs(5));
+    app.update(Msg::Focus(false));
+    assert_eq!(ticks(&mut app, 1), 0, "skipped in the background");
+
+    let effects = app.update(Msg::Focus(true));
+
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn coming_back_with_nothing_skipped_adds_no_load() {
+    let mut app = on_board(&[2]);
+    app.set_refresh(std::time::Duration::from_secs(5));
+    app.update(Msg::Focus(false));
+
+    let effects = app.update(Msg::Focus(true));
+
+    assert_eq!(board_loads(&effects), 0);
+}

@@ -159,12 +159,12 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - ~~T46, T47~~: dropped at Checkpoint F1 (F29's pending changes; Asana's reads are fresh)
 
 #### Checkpoint F2: own writes show and stay
-- [ ] Second harness run: each write on screen within `confirm-ms` plus one reload, and nothing flicks back (the description included)
+- [x] Second harness run: each write on screen within `confirm-ms` plus one reload, and nothing flicks back (the description included)
 - [ ] Human review
 
 #### 8c: Refresh while you're looking (F30)
 - [x] T48: The `refresh` setting drives the poll (default 5 s)
-- [ ] T49: Back off while the terminal isn't in front
+- [x] T49: Back off while the terminal isn't in front
 
 #### Checkpoint F3: near-live
 - [ ] Third run of both tools; a change made with the CLI in another pane shows within the interval plus Asana's lag; P4 is checked in Rex and tmux
