@@ -311,6 +311,9 @@ Two tools. Both write to a throwaway board, such as a personal to-do project. It
 
 ### F29. Own writes show at once
 
+**Superseded at Checkpoint F1 (2026-11-24).** F28 found Asana's reads fresh: the board's list showed every write on its first read, 0.4–0.7 s after Asana confirmed it. So no reload ever undoes a confirmed write, and the pending changes below would guard against something that doesn't happen. They are in Not Doing. What F28 did find, a bug in `asn`, is fixed by F29a. The rest of this section is kept as it was written.
+
+
 - When Asana confirms a write made in the TUI, the board and the detail show its result right away. They use what the app already has (the request and Asana's response), not a reload:
 
   | Write | Board | Detail |
@@ -333,7 +336,13 @@ Two tools. Both write to a throwaway board, such as a personal to-do project. It
 - Nothing on screen marks a change as pending.
 - **Where:** a pure module, `tui/pending.rs`, as `board.rs` is. `app.rs` applies it in `board_loaded` and on `DetailLoaded`. F29 sends no new requests.
 
-### F30. Refresh while you're looking
+### F29a. Own writes refresh the task's detail
+
+Found by F28 (2026-11-24). A task's detail is cached as soon as its card or notification is selected, with the task's `modified_at`. Saving a description compares that `modified_at` with Asana's, to avoid overwriting someone else's edit. But a move, an assignment, a completion, a comment (all of which change `modified_at`, checked on Asana) or adding the task to a project didn't refresh the cached detail. So a description saved after any of them, on the same task, was refused with `Description not saved: the task was changed on the web while you were editing`, and the detail showed the old text again.
+
+- After Asana confirms one of these writes, the task's detail reloads if it is cached: move (`m`), assign (`Tab a`), complete or reopen (`d`), add to a project (`p`), comment (`c`). Setting a field (`F`) and saving a description already did. The reload brings Asana's `modified_at`, fields and comments. It is the existing detail load (3 requests), not a new one.
+- A failed write doesn't reload anything, and its existing restore and toast are unchanged.
+
 
 - **Interval:** while the terminal has focus, the Inbox, the board on screen and the shown task's detail reload every `refresh` seconds (default 5, chosen by the user, 2026-11-24). This replaces the fixed 60 s of F9 and the Inbox (ADR-005).
 - **Config:** one new key, as in F22:
@@ -383,7 +392,7 @@ Two tools. Both write to a throwaway board, such as a personal to-do project. It
 
 **Done when:**
 1. F28's three tables (before, after F29, after F30) are in Findings from Use.
-2. In the Rex run, every write is on screen within the API probe's `confirm-ms` for that write plus 200 ms (median over 3 runs).
+2. In the Rex run, every write is on screen within the API probe's `confirm-ms` for that write plus one reload, 1 s at most (median over 3 runs). (Was `confirm-ms` + 200 ms, which needed F29; changed at Checkpoint F1.)
 3. In the same runs, no change flicks back during its 2-minute watch.
 4. A change made with `asn` in another pane shows in the focused TUI within the interval plus the list lag F28 measured.
 5. In the background, the board loads at most once a minute (app test).
@@ -494,11 +503,11 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - [x] **L2: The grid stays readable at 80 columns with several lanes.** Confirmed by the user at Checkpoint L2 (2026-11-19). Test: Checkpoint L2. If not, first try hiding the lane separator line, before collapsing lanes.
 - [ ] **L3: Option order is how the team reads lanes.** Test: dogfood. If not, consider sorting by card count.
 
-- [ ] **P1: Asana's list read (`GET /projects/{gid}/tasks`) lags behind writes by more than a few seconds.** Test: F28. If it doesn't, the delay is a bug in `asn`. Reproduce it in an app test and fix it first (F28's decision table).
-- [ ] **P2: The single-task read (`GET /tasks/{gid}`) lags too.** Test: F28. If it doesn't, F29 drops its detail half.
-- [ ] **P3: Events arrive about a minute late.** Asana's docs say they are "delivered within a minute (on average)" and "at most once". Test: F28's `events-s` column. If they arrive in under 5 s, reconsider Events for F30.
+- [x] **P1: Asana's list read (`GET /projects/{gid}/tasks`) lags behind writes by more than a few seconds.** Test: F28. If it doesn't, the delay is a bug in `asn`. Reproduce it in an app test and fix it first (F28's decision table). **Didn't hold** (F28, 2026-11-24): the list showed every write on its first read, 0.4–0.7 s after confirmation. The bug F28 found is F29a.
+- [x] **P2: The single-task read (`GET /tasks/{gid}`) lags too.** Test: F28. If it doesn't, F29 drops its detail half. **Didn't hold:** the task read showed every write on its first poll.
+- [x] **P3: Events arrive about a minute late.** Asana's docs say they are "delivered within a minute (on average)" and "at most once". Test: F28's `events-s` column. If they arrive in under 5 s, reconsider Events for F30. **Didn't hold:** events arrived in about 4 s (7.2 s at most). Reconsidered at Checkpoint F1 and still not used (Not Doing).
 - [ ] **P4: The terminals in use report focus.** That includes Rex, and tmux only with `focus-events on`. Test: run F30 in each. If one doesn't, the TUI refreshes at the interval all the time, which costs requests but nothing else.
-- [ ] **P5: 10 minutes is longer than Asana's worst lag.** Test: F28's maximums. If not, raise F29's expiry.
+- [x] **P5: 10 minutes is longer than Asana's worst lag.** Test: F28's maximums. If not, raise F29's expiry. **Moot:** F29's pending changes aren't built (P1).
 
 - [x] **M1: Asana accepts a mention written as `<a data-asana-gid="GID"/>` in `html_text`/`html_notes`, keeps line breaks (`\n`) inside `<body>`, and notifies a mentioned person.** Test, before T14: `asn comment <task> -m $'Line one @<your-user-gid>\nLine two'` on a test task, then check it in the web app. Confirmed by the user (2026-11-17): the mention links and notifies, the line break is kept, and `&`/`<` show literally.
 
@@ -517,7 +526,8 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **(F24–F27) Lanes by assignee, section or due date:** only single-select fields for now.
 - **(F24–F27) Editing field definitions or options, reordering or collapsing lanes:** done in Asana; the board shows the result.
 
-- **(F28–F30) Events API:** Asana delivers events "within a minute (on average)" and "at most once". So they would arrive later than a 5 s poll and would still need the poll as a fallback. Revisit if P3 fails, as a cheaper way to notice changes.
+- **(F28–F30) Events API:** Asana's docs promise events "within a minute (on average)" and "at most once". F28 measured about 4 s (7.2 s at most), so P3 failed and Events were reconsidered at Checkpoint F1. They would cut F30's requests to one per refresh plus a reload when something changed. But they need sync-token handling (a 412 means a full reload) and still a fallback poll, and they don't cover the Inbox. A 5 s poll already meets the target within the free plan for boards up to about 300 tasks. Revisit if F30's request cost bites.
+- **(F28–F30) F29's pending changes:** F28 showed Asana's reads are fresh (P1, P2), so a reload never undoes a confirmed write. Applying writes locally would save the one reload after each write (0.3–0.8 s measured) at the cost of an overlay on every load. Revisit if a lag shows up.
 - **(F28–F30) Fetching only the changed task after a write:** with F29, the reload after a write only confirms, and one load path is simpler than two. Revisit if F30's request cost bites.
 - **(F28–F30) Retrying the reload after a write until it shows the change:** F29 makes a stale reload harmless, and F30 brings the next one within seconds.
 - **(F28–F30) Webhooks:** they need a public HTTPS endpoint, which a terminal app doesn't have.
@@ -534,6 +544,12 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - Checkpoints L1 and L2 (2026-11-19): `asn board --lanes`, `asn task field` and `asn project fields` matched the web app on real projects; the lanes view, `v` and `F` worked at 80, 120 and 200 columns.
 - Building F26–F27: the help overlay was full, so `j / k` and `n / N` now share a line each (one spare row is left); the board's status position counts the selected cell; the grid never scrolls past its end; the `F` picker works like `m` (no typed filter).
 
+- **F28 baseline (2026-11-24), on a throwaway board of about 20 open tasks with five sections and no single-select field.**
+  - API probe, 3 runs (median/max). Confirmation: create 4237/4865 ms (two requests), move 1817/2001 ms, assign 2088/2600 ms, complete 2390/2404 ms. Then the list read showed each write in 0.4–0.7 s (its first read), the task read on its first poll, and events in about 4 s (7.2 s at most).
+  - Rex harness, on both the Homebrew v0.3.0 binary and HEAD: create on screen 4.7 s after `Enter`, move 2.5–2.8 s, assign 2.5–3.1 s, comment and completion at once. Nothing flicked back, except the description: shown at once, but then refused as changed on the web and shown as before (F29a).
+  - So the TUI shows its own writes Asana's confirmation time plus one reload after the key, and Asana's confirmation is most of it. A delay of minutes didn't reproduce in a fresh session.
+
 ## Open Questions
 
 1. Should `asn --project` also accept a project **name** (resolved through typeahead), or only a GID? GID only is assumed for v0.2.
+2. (F14) Create in one request? `POST /tasks` with `memberships: [{project, section}]` creates the task in its section in one request: 2.0 s instead of 4.2 s, measured on 2026-11-24. But Asana puts the task at the **bottom** of the section, where today's `addTask` puts it at the top (F14). Should `Tab q` and `asn project new` trade the top position for about 2 s?

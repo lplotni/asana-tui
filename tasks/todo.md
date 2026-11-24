@@ -1036,96 +1036,45 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 
 ---
 
-### - [ ] Checkpoint F1: baseline and decision
+### - [x] Checkpoint F1: baseline and decision
 
-- [ ] Both tools run on the throwaway board against today's code (v0.3.0 behaviour). The baseline table goes into Findings from Use.
-- [ ] P1, P2, P3 and P5 are ticked or failed in the spec, with the numbers.
-- [ ] F28's decision table is applied:
-  - **P1 fails** (the list read is fresh): T45–T47 are replaced by a bug-hunt task that reproduces the delay in a failing app test first.
-  - **P2 fails** (the task read is fresh): T47 is dropped.
-- [ ] Human review before building.
+- [x] Both tools ran on the throwaway board against today's code: the Homebrew v0.3.0 binary and HEAD. The baseline is in Findings from Use.
+- [x] P1, P2, P3 and P5 are settled in the spec. Asana's reads are fresh: the list showed every write on its first read, 0.4–0.7 s after confirmation (P1 and P2 failed). Events arrived in about 4 s (P3 failed). P5 is moot.
+- [x] F28's decision table is applied. P1 failed, so the bug F28 found replaces T45–T47: a description saved after a move, an assignment, a completion or a comment was refused as "changed on the web" (F29a). F29's pending changes are dropped (Not Doing). Events were reconsidered and are still not used.
+- [ ] Human review before building. The user asked for every task in one go (2026-11-24), so the decision is reported with the results instead.
 
 ---
 
-### - [ ] T45: Pending changes: a new or moved card stays where it should
+### - [ ] T45: Own writes refresh the task's cached detail (F29a)
 
-**Description:** A pure `tui/pending.rs` (ADR-002) holds pending changes, keyed by task GID and the thing written. Each keeps the value before and after the write, and an age in ticks.
-- `apply(&mut Board)` puts pending values over a loaded board, and drops the entries a load confirms or supersedes.
-- `tick()` ages entries and expires them after ⌈600 s / interval⌉ ticks (60 s ticks until T48).
-- `app.rs`:
-  - On `TaskCreated` Ok, the card (its name, no assignee or due date, this project and section, and the lane's option as its field value) goes in at the top of its section and is selected at once.
-  - On `MovedToSection` Ok, the card goes to the top of its new column.
-  - Both go through `apply` and `BoardView::replace`, and so does every `BoardLoaded`.
-  - The reload after the write stays.
+**Description:** A task's detail is cached when its card or notification is selected, together with its `modified_at`, which guards description saves against concurrent edits. A move, an assignment, a completion or reopening, adding to a project, and a comment all change `modified_at` in Asana (checked: commenting and assigning both bump it), but none refreshed the cache. So the next description save on that task was refused as "changed on the web". After Asana confirms one of these writes, `app.rs` now also returns `Effect::LoadDetail` for the task when its detail is cached, as `field_set` and `NotesSaved` already do.
 
 **Acceptance criteria:**
-- [ ] After `Tab q`, the card is on the board and selected on `TaskCreated`, before any reload. A later load without it doesn't remove it, and a load with it ends the pending change. The same holds in the lanes view.
-- [ ] After `m`, the card is in the new column on `MovedToSection`. A stale load keeps it there; a load showing a third section wins (superseded).
-- [ ] A failed create or move leaves nothing pending, and today's toasts and restores are unchanged. An entry expires after 10 minutes' worth of ticks.
+- [ ] A confirmed `m`, `Tab a`, `d` (complete or reopen), `p` or `c` on a task whose detail is cached reloads that detail. A task without a cached detail loads nothing extra.
+- [ ] A failed write loads nothing, and its restore and toast are unchanged.
+- [ ] In the Rex harness, the description saved after a move and an assignment stays (`reverted no`).
 
 **Verification:**
-- [ ] `pending.rs` unit tests: apply, confirm, supersede, expire, a later write replacing an earlier one, a task in two projects.
-- [ ] App tests for each acceptance criterion; the existing F14, F10 and F26 tests stay green.
-- [ ] `cargo test`, clippy and fmt are clean.
+- [ ] App tests, written first and failing: one per write, the confirming `Msg` with a cached detail returns `LoadDetail`. Plus one test where a later description save uses the reloaded `modified_at`.
+- [ ] `cargo test`, clippy and fmt are clean. The harness runs on the throwaway board.
 
 **Dependencies:** Checkpoint F1
 
-**Files likely touched:** `src/tui/pending.rs`, `src/tui/mod.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
+**Files likely touched:** `src/tui/app.rs`, `src/tui/app_tests.rs`
 
-**Estimated scope:** M
-
----
-
-### - [ ] T46: Pending changes: assign, field and complete on the board
-
-**Description:** The same mechanism for `Assigned` (the card's initials), `FieldSet` (the card's value, so it changes lane) and `CompletedSet` (a completed card stays gone; a reopened one is back). The before-value is taken from the card when the write is sent.
-
-**Acceptance criteria:**
-- [ ] Each change shows on its confirming `Msg` and survives a stale `BoardLoaded`. A load with someone else's later value wins.
-- [ ] A completed card never comes back from a stale load. Undo during and after the completion animation still works, and so does the reload held during it (F23).
-
-**Verification:**
-- [ ] App tests for each write, stale and confirming; the existing F16, F17, F23 and F27 tests stay green.
-- [ ] `cargo test`, clippy and fmt are clean.
-
-**Dependencies:** T45
-
-**Files likely touched:** `src/tui/pending.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
-
-**Estimated scope:** M
+**Estimated scope:** S
 
 ---
 
-### - [ ] T47: Pending changes in the detail (only if P2 lags)
+### ~~T46: Pending changes: assign, field and complete on the board~~ and ~~T47: Pending changes in the detail~~
 
-**Description:** `apply_detail(&mut TaskDetail)` on `DetailLoaded`. It covers:
-- the field option, section, assignee and completed flag
-- the description text: `previous_notes` already holds the before-value
-- posted comments, kept until the stories contain them
-
-It's dropped if Checkpoint F1 shows the single-task read is fresh.
-
-**Acceptance criteria:**
-- [ ] After `F`, `m`, `Tab a`, `d`, a saved description and a posted comment, a stale `DetailLoaded` doesn't undo the shown change, and a confirming one ends it.
-- [ ] The description's `modified_at` guard against concurrent edits still works.
-
-**Verification:**
-- [ ] App tests for each write; the existing description, comment and field tests stay green.
-- [ ] `cargo test`, clippy and fmt are clean.
-
-**Dependencies:** T46
-
-**Files likely touched:** `src/tui/pending.rs`, `src/tui/app.rs`, `src/tui/app_tests.rs`
-
-**Estimated scope:** M
+Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never undoes a confirmed write. See Not Doing in the spec.
 
 ---
 
-### - [ ] Checkpoint F2: own writes are instant
+### - [ ] Checkpoint F2: own writes show and stay
 
-- [ ] Both tools run again on the throwaway board; the second table goes into Findings from Use.
-- [ ] Done when 2: every write is on screen within its `confirm-ms` + 200 ms (median of 3 runs).
-- [ ] Done when 3: no change flicks back during its 2-minute watch.
+- [ ] The harness runs again on the throwaway board. Every write is on screen within its `confirm-ms` plus one reload, 1 s at most, and nothing flicks back, including the description. The result goes into Findings from Use.
 - [ ] Human review.
 
 ---
@@ -1136,17 +1085,17 @@ It's dropped if Checkpoint F1 shows the single-task read is fresh.
 - `refresh` in `config.toml` or `ASN_REFRESH`: whole seconds, 5–60, default 5 (F30). It becomes `Config.refresh`.
 - Errors name the key and where it came from, like the other keys.
 - `asn init` writes it as a commented-out default, with a one-line cost note pointing to the README.
-- `spawn_refresh_timer` ticks at that interval, and `App` gets the interval for the expiry in ticks.
+- `spawn_refresh_timer` ticks at that interval, and `App` gets the interval, for T49's back-off in ticks.
 
 **Acceptance criteria:**
 - [ ] The Inbox, the board on screen and the shown detail reload every `refresh` seconds: 5 by default, or 7 with `ASN_REFRESH=7`.
 - [ ] `4`, `61`, `abc` and `5.5` are rejected with the key named, from both the environment and the file.
-- [ ] A pending change still expires after 10 minutes at any interval. A slow board load never overlaps a second load of the same board (the queued reload).
+- [ ] A slow board load never overlaps a second load of the same board (the queued reload).
 
 **Verification:**
 - [ ] `config.rs` tests: the environment over the file over the default, and the bad values.
 - [ ] Interview test: the written file has the commented-out key.
-- [ ] App tests: expiry ticks at 5 s and 60 s; ticks during a load queue at most one reload.
+- [ ] App tests: ticks during a load queue at most one reload.
 - [ ] Manual: `asn task assign` in another pane shows in the TUI within about 5 s plus Asana's lag.
 
 **Dependencies:** Checkpoint F2

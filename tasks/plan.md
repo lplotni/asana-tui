@@ -149,17 +149,17 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T44: Rex end-to-end harness (`scripts/tui-latency.sh`)
 
 #### Checkpoint F1: baseline and decision
-- [ ] Both tools run on the throwaway board against today's code, and the baseline table is in the spec's Findings from Use
-- [ ] P1, P2, P3 and P5 are settled with numbers, and F28's decision table is applied (it may replace T45–T47 or drop T47)
-- [ ] Human review before building
+- [x] Both tools ran on the throwaway board against v0.3.0 and HEAD; the baseline is in the spec's Findings from Use
+- [x] P1, P2, P3 and P5 are settled. Asana's reads are fresh (P1, P2 failed), events take about 4 s (P3 failed), and P5 is moot
+- [x] Decision applied: the bug F28 found (a false "changed on the web" after own writes) becomes F29a and T45. T46 and T47 are dropped. Events were reconsidered and are still not used
+- [ ] Human review before building (the user asked for every task in one go; reported with the results)
 
-#### 8b: Own writes show at once (F29)
-- [ ] T45: Pending changes: a new or moved card stays where it should
-- [ ] T46: Pending changes: assign, field and complete on the board
-- [ ] T47: Pending changes in the detail (only if P2 lags)
+#### 8b: Own writes (F29a)
+- [ ] T45: Own writes refresh the task's cached detail (F29a)
+- ~~T46, T47~~: dropped at Checkpoint F1 (F29's pending changes; Asana's reads are fresh)
 
-#### Checkpoint F2: own writes are instant
-- [ ] Second run of both tools; each write is on screen within its `confirm-ms` + 200 ms, and nothing flicks back
+#### Checkpoint F2: own writes show and stay
+- [ ] Second harness run: each write on screen within `confirm-ms` plus one reload, and nothing flicks back (the description included)
 - [ ] Human review
 
 #### 8c: Refresh while you're looking (F30)
@@ -352,11 +352,20 @@ T43 and T44 are independent and can run in parallel. From T45 on, every task edi
 | `app.rs` (about 2,750 lines) grows | Med | The logic lives in `pending.rs`; `app.rs` only records entries and applies them at two points. |
 | The probe leaves tasks behind, or a real GID lands in the repo | Low | It completes its tasks even after a failure (agreed). GIDs only ever come from the command line, and a grep of the diff is part of each task's verification. |
 
+### Checkpoint F1 outcome (2026-11-24)
+
+F28 overturned the plan's main assumption. Asana's board list showed every write on its first read, 0.4–0.7 s after Asana confirmed it, and the single-task read on its first poll. So the TUI shows its own writes Asana's confirmation time (1.8–4.9 s) plus one reload after the key, on both v0.3.0 and HEAD. A delay of minutes didn't reproduce in a fresh session. What did show up is a bug: a description saved after a move or an assignment on the same task was refused as "changed on the web", because those writes, like comments and completions, change `modified_at` and the cached detail kept the old one. Per F28's decision table:
+- **8b becomes T45 (F29a):** own writes reload the task's cached detail.
+- **F29's pending changes (`tui/pending.rs`, T46, T47) are dropped.** The architecture decisions above about them no longer apply. Neither does the tick-counted expiry; the tick-counted back-off (T49) stays.
+- **Events:** reconsidered, because they arrive in about 4 s. Still not used: see the spec's Not Doing.
+- **New open question:** creating a task in one request saves about 2 s, but puts it at the bottom of its section. That's for the user to decide (spec Open Question 2).
+
 ### Open Questions (Phase 8)
 
 - ~~The default interval~~: 5 s, with the cost spelled out (the user, 2026-11-24).
 - ~~Commit the Rex harness~~: yes (the user, 2026-11-24).
 - ~~Delete or complete the probe tasks~~: complete (the user, 2026-11-24).
-- T47 depends on P2; Checkpoint F1 decides it.
+- ~~T47 depends on P2~~: dropped at Checkpoint F1 (P2 failed).
+- Create in one request, at the bottom of the section instead of the top? Asked with the results (spec Open Question 2).
 - The release number: v0.4.0 is assumed (a new setting and new behaviour). Asked at T51.
 
