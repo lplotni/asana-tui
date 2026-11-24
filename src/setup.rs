@@ -186,15 +186,17 @@ pub fn file_text(answers: &Answers) -> String {
     };
     format!(
         "# asn settings. Environment variables (ASANA_WORKSPACE, ASANA_TOKEN_CMD, ASN_SEARCH,\n\
-         # ASN_THEME, ASN_ANIMATIONS) win over this file. The token is never stored here:\n\
-         # token_cmd is a command that prints it.\n\
+         # ASN_THEME, ASN_ANIMATIONS, ASN_REFRESH) win over this file. The token is never\n\
+         # stored here: token_cmd is a command that prints it.\n\
          \n\
          workspace = {}\n\
          {token_cmd}\
          \n\
          # search = \"tasks\"        # \"typeahead\" on Asana plans without full-text search\n\
          # theme = \"terminal\"      # \"dark\", \"light\", or a theme file path\n\
-         # animations = true       # false: completed cards leave the board at once\n",
+         # animations = true       # false: completed cards leave the board at once\n\
+         # refresh = 5             # seconds between refreshes while asn is in front (5-60);\n\
+         #                         # each costs about 7 + tasks/100 requests (README)\n",
         quoted(&answers.workspace),
     )
 }
@@ -295,5 +297,6 @@ mod tests {
         assert_eq!(file.search.as_deref(), Some("tasks"));
         assert_eq!(file.theme.as_deref(), Some("terminal"));
         assert_eq!(file.animations, Some(true));
+        assert_eq!(file.refresh, Some(5));
     }
 }

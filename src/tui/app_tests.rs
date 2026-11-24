@@ -4341,3 +4341,25 @@ fn a_description_saved_after_an_assignment_expects_the_description_it_started_fr
         "{effects:?}"
     );
 }
+
+// --- F30: refresh every few seconds -----------------------------------------
+
+#[test]
+fn ticks_during_a_slow_board_load_queue_a_single_reload() {
+    let mut app = on_board(&[2]);
+    assert_eq!(board_loads(&app.update(Msg::Tick)), 1);
+
+    // The load takes longer than several ticks.
+    let queued: usize = (0..3).map(|_| board_loads(&app.update(Msg::Tick))).sum();
+    let after = app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[2])),
+    });
+
+    assert_eq!(queued, 0, "never two loads of one board at once");
+    assert_eq!(
+        board_loads(&after),
+        1,
+        "one reload follows, however many ticks came"
+    );
+}

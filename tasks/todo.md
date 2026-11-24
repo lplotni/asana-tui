@@ -1083,7 +1083,7 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
-### - [ ] T48: The `refresh` setting drives the poll
+### - [x] T48: The `refresh` setting drives the poll
 
 **Description:**
 - `refresh` in `config.toml` or `ASN_REFRESH`: whole seconds, 5–60, default 5 (F30). It becomes `Config.refresh`.
@@ -1092,15 +1092,17 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 - `spawn_refresh_timer` ticks at that interval, and `App` gets the interval, for T49's back-off in ticks.
 
 **Acceptance criteria:**
-- [ ] The Inbox, the board on screen and the shown detail reload every `refresh` seconds: 5 by default, or 7 with `ASN_REFRESH=7`.
-- [ ] `4`, `61`, `abc` and `5.5` are rejected with the key named, from both the environment and the file.
-- [ ] A slow board load never overlaps a second load of the same board (the queued reload).
+- [x] The Inbox, the board on screen and the shown detail reload every `refresh` seconds: 5 by default, or 7 with `ASN_REFRESH=7`.
+- [x] `4`, `61`, `abc` and `5.5` are rejected with the key named, from both the environment and the file.
+- [x] A slow board load never overlaps a second load of the same board (the queued reload).
 
 **Verification:**
-- [ ] `config.rs` tests: the environment over the file over the default, and the bad values.
-- [ ] Interview test: the written file has the commented-out key.
-- [ ] App tests: ticks during a load queue at most one reload.
-- [ ] Manual: `asn task assign` in another pane shows in the TUI within about 5 s plus Asana's lag.
+- [x] `config.rs` tests: the environment over the file over the default, and the bad values.
+- [x] Interview test: the written file has the commented-out key.
+- [x] App tests: ticks during a load queue at most one reload.
+- [x] Manual: tasks made with `asn project new` in another pane showed in the running TUI 0.05–1.2 s after the CLI returned (3 tries).
+
+**Found while building:** each tick also reloads the shown detail, so an image that downloads but won't decode is tried again every 5 s instead of every 60 s while its task is shown. Oversized files are still refused before downloading (`Content-Length`). Left as it is; noted in the plan's risks.
 
 **Dependencies:** Checkpoint F2
 

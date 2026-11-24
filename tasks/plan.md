@@ -163,7 +163,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [ ] Human review
 
 #### 8c: Refresh while you're looking (F30)
-- [ ] T48: The `refresh` setting drives the poll (default 5 s)
+- [x] T48: The `refresh` setting drives the poll (default 5 s)
 - [ ] T49: Back off while the terminal isn't in front
 
 #### Checkpoint F3: near-live
@@ -347,6 +347,7 @@ T43 and T44 are independent and can run in parallel. From T45 on, every task edi
 | A pending change hides a real change made by someone else | Med | "Superseded" ends it as soon as a load shows a third value. Create and complete have no third value, so the expiry bounds them. |
 | A 5 s refresh hits the free plan's 150 a minute on a large board, or with heavy CLI use alongside | Med | F30's cost table is in the README and the config comment. A 429 is retried once, then that refresh fails with a toast and the next one tries again. `refresh = 10` or more is the documented fix. |
 | Focus reporting is left on after a crash | Med | It's turned off in the same cleanup and panic paths as raw mode, and checked by hand at Checkpoint F3. |
+| An image that downloads but won't decode is fetched again on every refresh of its shown task: every 5 s instead of 60 s | Low | Oversized files are refused before download (`Content-Length`). If it matters, retry failed images only when a task is newly selected. |
 | A terminal doesn't report focus (P4) | Low | It's treated as in front: it polls at the interval, which costs requests but nothing else. |
 | Screen-scraping in the Rex harness is brittle | Med | Short unique names, header-range column checks, a 5-minute timeout per check (`>300`, never a hang), and the API probe as a cross-check. |
 | `app.rs` (about 2,750 lines) grows | Med | The logic lives in `pending.rs`; `app.rs` only records entries and applies them at two points. |

@@ -32,9 +32,6 @@ const WRITE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 /// How often an animation draws its next frame (spec F23).
 const FRAME: std::time::Duration = std::time::Duration::from_millis(40);
 
-/// How often the Inbox is polled (the API has no push).
-const REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
-
 /// Runs the TUI until the user quits, on the board of `project` if given,
 /// else on the Inbox. The theme (including the terminal color query) is
 /// resolved before the terminal enters raw mode.
@@ -67,7 +64,7 @@ pub async fn run(
     let input = Arc::new(InputGate::default());
     spawn_input_reader(tx.clone(), input.clone());
     let editor = editor::editor_command(|key| std::env::var(key).ok());
-    spawn_refresh_timer(tx.clone());
+    spawn_refresh_timer(tx.clone(), config.refresh);
 
     let (mut app, effects) = match project {
         Some(project_gid) => App::new_on_board(project_gid),
@@ -507,10 +504,11 @@ fn run_effects(
     }
 }
 
-/// Sends [`Msg::Tick`] every [`REFRESH_INTERVAL`] to poll the Inbox.
-fn spawn_refresh_timer(tx: UnboundedSender<Msg>) {
+/// Sends [`Msg::Tick`] every `every` (the `refresh` setting, F30): the
+/// Inbox, the board on screen and the shown detail reload on each.
+fn spawn_refresh_timer(tx: UnboundedSender<Msg>, every: std::time::Duration) {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(REFRESH_INTERVAL);
+        let mut interval = tokio::time::interval(every);
         interval.tick().await; // The first tick fires immediately.
         loop {
             interval.tick().await;

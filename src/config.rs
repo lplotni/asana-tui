@@ -4,8 +4,10 @@
 //! file, only a command that prints it.
 
 use std::fmt;
+use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -40,7 +42,15 @@ pub struct Config {
     pub theme: Option<String>,
     /// Whether a completed board card animates before it leaves (F23).
     pub animations: bool,
+    /// How often the TUI refreshes while its terminal is in front (F30).
+    pub refresh: Duration,
 }
+
+/// The `refresh` interval's allowed whole seconds, and its default (F30).
+/// Five seconds stays under the free plan's 150 requests a minute for boards
+/// up to about 300 tasks.
+pub const REFRESH_SECS: RangeInclusive<u64> = 5..=60;
+pub const DEFAULT_REFRESH_SECS: u64 = 5;
 
 /// Which Asana API finds tasks (`ASN_SEARCH`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -62,6 +72,8 @@ pub struct FileConfig {
     pub search: Option<String>,
     pub theme: Option<String>,
     pub animations: Option<bool>,
+    /// Seconds; an integer, so a TOML string or float is a type error.
+    pub refresh: Option<i64>,
     /// Only here to reject it with a clear message. Its value is never kept.
     #[serde(default)]
     token: Option<serde::de::IgnoredAny>,
@@ -71,6 +83,7 @@ pub struct FileConfig {
 const FILE_WORKSPACE: &str = "workspace in config.toml";
 const FILE_SEARCH: &str = "search in config.toml";
 const FILE_TOKEN_CMD: &str = "token_cmd in config.toml";
+const FILE_REFRESH: &str = "refresh in config.toml";
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ConfigError {
@@ -103,6 +116,8 @@ pub enum ConfigError {
     InvalidSearch { setting: &'static str, got: String },
     #[error("ASN_ANIMATIONS must be \"on\" or \"off\", got \"{got}\"")]
     InvalidAnimations { got: String },
+    #[error("{setting} must be whole seconds from 5 to 60, got \"{got}\"")]
+    InvalidRefresh { setting: &'static str, got: String },
     #[error(
         "{path}: \"token\" isn't allowed — put a command that prints it in token_cmd, \
          or set ASANA_TOKEN"
@@ -144,6 +159,7 @@ impl ConfigError {
             | Self::InvalidWorkspace { .. }
             | Self::InvalidSearch { .. }
             | Self::InvalidAnimations { .. }
+            | Self::InvalidRefresh { .. }
             | Self::TokenInFile { .. }
             | Self::File { .. } => 1,
         }
@@ -231,6 +247,7 @@ impl Config {
         let search = search(&env, file)?;
         let theme = env("ASN_THEME").or_else(|| file.theme.clone());
         let animations = animations(&env, file)?;
+        let refresh = refresh(&env, file)?;
         let token = token(&env, file)?;
         Ok(Self {
             token,
@@ -238,6 +255,7 @@ impl Config {
             search,
             theme,
             animations,
+            refresh,
         })
     }
 }
@@ -298,6 +316,23 @@ fn animations(
         Some(got) => Err(ConfigError::InvalidAnimations {
             got: got.to_owned(),
         }),
+    }
+}
+
+/// `ASN_REFRESH`, else the file's `refresh`, else five seconds: whole
+/// seconds within [`REFRESH_SECS`].
+fn refresh(
+    env: &impl Fn(&str) -> Option<String>,
+    file: &FileConfig,
+) -> Result<Duration, ConfigError> {
+    let (got, setting) = match (env("ASN_REFRESH"), file.refresh) {
+        (Some(value), _) => (value, "ASN_REFRESH"),
+        (None, Some(secs)) => (secs.to_string(), FILE_REFRESH),
+        (None, None) => return Ok(Duration::from_secs(DEFAULT_REFRESH_SECS)),
+    };
+    match got.parse::<u64>() {
+        Ok(secs) if REFRESH_SECS.contains(&secs) => Ok(Duration::from_secs(secs)),
+        _ => Err(ConfigError::InvalidRefresh { setting, got }),
     }
 }
 
@@ -735,6 +770,50 @@ mod tests {
             "ASN_ANIMATIONS must be \"on\" or \"off\", got \"maybe\""
         );
         assert_eq!(err.exit_code(), 1);
+    }
+
+    #[test]
+    fn refresh_comes_from_the_environment_then_the_file_then_five_seconds() {
+        let base = [("ASANA_TOKEN", "secret-pat"), ("ASANA_WORKSPACE", WS)];
+        let resolve = |pairs: &[(&str, &str)], text: &str| {
+            Config::resolve(env(pairs), &file(text)).unwrap().refresh
+        };
+
+        assert_eq!(resolve(&base, ""), std::time::Duration::from_secs(5));
+        assert_eq!(
+            resolve(&base, "refresh = 30\n"),
+            std::time::Duration::from_secs(30)
+        );
+        let with_env = [base[0], base[1], ("ASN_REFRESH", "7")];
+        assert_eq!(
+            resolve(&with_env, "refresh = 30\n"),
+            std::time::Duration::from_secs(7)
+        );
+    }
+
+    #[test]
+    fn a_refresh_outside_5_to_60_whole_seconds_is_rejected() {
+        for bad in ["4", "61", "abc", "5.5", "-5"] {
+            let pairs = [
+                ("ASANA_TOKEN", "x"),
+                ("ASANA_WORKSPACE", WS),
+                ("ASN_REFRESH", bad),
+            ];
+            let err = Config::resolve(env(&pairs), &FileConfig::default()).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                format!("ASN_REFRESH must be whole seconds from 5 to 60, got \"{bad}\"")
+            );
+            assert_eq!(err.exit_code(), 1);
+        }
+        let pairs = [("ASANA_TOKEN", "x"), ("ASANA_WORKSPACE", WS)];
+        let err = Config::resolve(env(&pairs), &file("refresh = 61\n")).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "refresh in config.toml must be whole seconds from 5 to 60, got \"61\""
+        );
+        let err = file_err("refresh = 5.5\n");
+        assert!(err.to_string().contains("line 1"), "{err}");
     }
 
     #[test]
