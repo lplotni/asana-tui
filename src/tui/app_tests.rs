@@ -1359,7 +1359,6 @@ fn with_notes(app: &mut App, notes: &str, html: &str) {
     let mut detail = task_detail();
     detail.task.notes = notes.into();
     detail.task.html_notes = Some(html.into());
-    detail.task.modified_at = Some("2026-11-16T10:00:00.000Z".into());
     app.update(Msg::DetailDue { gid: "t0".into() });
     app.update(Msg::DetailLoaded {
         gid: "t0".into(),
@@ -1501,7 +1500,7 @@ fn a_changed_description_shows_at_once_and_is_saved_with_a_conflict_check() {
         [Effect::SaveNotes {
             task_gid: "t0".into(),
             text: "New text\n".into(),
-            expected_modified_at: Some("2026-11-16T10:00:00.000Z".into()),
+            expected_notes: Some("Old text".into()),
             mentions: vec![],
         }]
     );
@@ -4312,4 +4311,33 @@ fn a_new_task_that_did_not_get_its_lane_says_so() {
     let toast = app.toast.as_ref().unwrap();
     assert_eq!(toast.text, "Created, but not in Checkout: Forbidden");
     assert!(toast.is_error);
+}
+
+// --- F29a: a description save is checked against the description only --------
+
+#[test]
+fn a_description_saved_after_an_assignment_expects_the_description_it_started_from() {
+    // The assignment changed the task (and its modified_at) in Asana; that
+    // must not make the description save a conflict.
+    let mut app = on_board(&[1]);
+    let mut detail = card_detail("42");
+    detail.task.notes = "Old text".into();
+    detail.task.html_notes = Some("<body>Old text</body>".into());
+    load_task(&mut app, "c0-0", detail);
+    app.update(Msg::Assigned {
+        task_gid: "c0-0".into(),
+        result: Ok(Some(named("1200000000000011", "Ada Lovelace"))),
+    });
+
+    let effects = app.update(Msg::Written {
+        kind: EditorKind::Description,
+        task_gid: "c0-0".into(),
+        text: Some("New text\n".into()),
+    });
+
+    assert!(
+        matches!(&effects[..], [Effect::SaveNotes { expected_notes: Some(old), .. }]
+            if old == "Old text"),
+        "{effects:?}"
+    );
 }

@@ -604,7 +604,7 @@ async fn edit_description(
         return ExitCode::SUCCESS;
     }
     let mentions = core::mention::gid_mentions(&text);
-    match core::set_notes(client, gid, &text, &mentions, task.modified_at.as_deref()).await {
+    match core::set_notes(client, gid, &text, &mentions, Some(&task.notes)).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             match asn::editor::save_recovery(&format!("description-{gid}"), &text) {

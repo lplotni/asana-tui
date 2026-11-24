@@ -1045,24 +1045,28 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 
 ---
 
-### - [ ] T45: Own writes refresh the task's cached detail (F29a)
+### - [x] T45: A description save is checked against the description only (F29a)
 
-**Description:** A task's detail is cached when its card or notification is selected, together with its `modified_at`, which guards description saves against concurrent edits. A move, an assignment, a completion or reopening, adding to a project, and a comment all change `modified_at` in Asana (checked: commenting and assigning both bump it), but none refreshed the cache. So the next description save on that task was refused as "changed on the web". After Asana confirms one of these writes, `app.rs` now also returns `Effect::LoadDetail` for the task when its detail is cached, as `field_set` and `NotesSaved` already do.
+**Description:** Saving a description compared the task's `modified_at` with the cached detail's, to avoid overwriting someone else's edit. But `modified_at` changes on any write: a move, an assignment, a comment, and Asana's own follow-up about 0.65 s after a write. So a description saved after an own write on the same task was refused as "changed on the web".
+
+As first planned, own writes reloaded the cached detail. That was built test-first and run, and it didn't fix the conflict, because the reload could read the `modified_at` from before Asana's follow-up. So it was reverted, and the guard now compares what it protects:
+- `core::set_notes` takes the description the edit started from, reads Asana's `notes` (`Client::notes` replaces `Client::modified_at`), and refuses only when they differ.
+- The TUI passes the shown description it replaces; `asn desc` passes the one it read.
 
 **Acceptance criteria:**
-- [ ] A confirmed `m`, `Tab a`, `d` (complete or reopen), `p` or `c` on a task whose detail is cached reloads that detail. A task without a cached detail loads nothing extra.
-- [ ] A failed write loads nothing, and its restore and toast are unchanged.
-- [ ] In the Rex harness, the description saved after a move and an assignment stays (`reverted no`).
+- [x] A save goes through when the description is unchanged, whatever else changed about the task. A changed description refuses it, keeps the text in a file and says `the description was changed elsewhere while you were editing`.
+- [x] In the Rex harness, the description saved after a move and an assignment stays (`reverted no`).
 
 **Verification:**
-- [ ] App tests, written first and failing: one per write, the confirming `Msg` with a cached detail returns `LoadDetail`. Plus one test where a later description save uses the reloaded `modified_at`.
-- [ ] `cargo test`, clippy and fmt are clean. The harness runs on the throwaway board.
+- [x] Wiremock tests, written first and failing: a save with an unchanged description (and a newer `modified_at`) writes; a changed description writes nothing and is a conflict.
+- [x] App test: after an assignment, the save expects the description it started from.
+- [x] `cargo test`, clippy and fmt are clean. The harness runs on the throwaway board: every write shows, and nothing flicks back.
 
 **Dependencies:** Checkpoint F1
 
-**Files likely touched:** `src/tui/app.rs`, `src/tui/app_tests.rs`
+**Files likely touched:** `src/core/mod.rs`, `src/api/tasks.rs`, `src/main.rs`, `src/tui/app.rs`, `src/tui/mod.rs`, tests, `docs/SPEC.md`, `CLAUDE.md`
 
-**Estimated scope:** S
+**Estimated scope:** M
 
 ---
 

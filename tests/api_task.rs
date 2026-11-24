@@ -162,14 +162,17 @@ async fn comment_posts_the_text_and_returns_the_new_story() {
 // --- Description edits (T11) ----------------------------------------------
 
 #[tokio::test]
-async fn set_notes_writes_the_text_when_the_task_is_unchanged() {
+async fn set_notes_writes_the_text_when_the_description_is_unchanged() {
     let server = MockServer::start().await;
+    // Something else changed the task meanwhile (here, its modified_at): an
+    // assignment, a comment, or Asana's own follow-up to a write. Only the
+    // description matters (F29a).
     Mock::given(method("GET"))
         .and(path(format!("/tasks/{TASK}")))
-        .and(query_param("opt_fields", "modified_at"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(
-            json!({ "data": { "gid": TASK, "modified_at": "2026-11-16T10:00:00.000Z" } }),
-        ))
+        .and(query_param("opt_fields", "notes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {
+            "gid": TASK, "notes": "Old text\n", "modified_at": "2026-11-16T11:30:00.000Z"
+        } })))
         .mount(&server)
         .await;
     Mock::given(method("PUT"))
@@ -182,25 +185,20 @@ async fn set_notes_writes_the_text_when_the_task_is_unchanged() {
         .mount(&server)
         .await;
 
-    core::set_notes(
-        &client(&server),
-        TASK,
-        "New text",
-        &[],
-        Some("2026-11-16T10:00:00.000Z"),
-    )
-    .await
-    .unwrap();
+    core::set_notes(&client(&server), TASK, "New text", &[], Some("Old text"))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
-async fn set_notes_refuses_when_the_task_changed_meanwhile() {
+async fn set_notes_refuses_when_the_description_changed_meanwhile() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(format!("/tasks/{TASK}")))
-        .respond_with(ResponseTemplate::new(200).set_body_json(
-            json!({ "data": { "gid": TASK, "modified_at": "2026-11-16T11:30:00.000Z" } }),
-        ))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "data": { "gid": TASK, "notes": "Someone else's text" } })),
+        )
         .mount(&server)
         .await;
     Mock::given(method("PUT"))
@@ -209,17 +207,15 @@ async fn set_notes_refuses_when_the_task_changed_meanwhile() {
         .mount(&server)
         .await;
 
-    let err = core::set_notes(
-        &client(&server),
-        TASK,
-        "New text",
-        &[],
-        Some("2026-11-16T10:00:00.000Z"),
-    )
-    .await
-    .unwrap_err();
+    let err = core::set_notes(&client(&server), TASK, "New text", &[], Some("Old text"))
+        .await
+        .unwrap_err();
 
     assert!(matches!(err, core::SaveNotesError::Conflict), "{err:?}");
+    assert_eq!(
+        err.to_string(),
+        "the description was changed elsewhere while you were editing"
+    );
 }
 
 #[test]

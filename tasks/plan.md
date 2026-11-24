@@ -155,7 +155,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [ ] Human review before building (the user asked for every task in one go; reported with the results)
 
 #### 8b: Own writes (F29a)
-- [ ] T45: Own writes refresh the task's cached detail (F29a)
+- [x] T45: A description save is checked against the description only (F29a)
 - ~~T46, T47~~: dropped at Checkpoint F1 (F29's pending changes; Asana's reads are fresh)
 
 #### Checkpoint F2: own writes show and stay
@@ -355,7 +355,7 @@ T43 and T44 are independent and can run in parallel. From T45 on, every task edi
 ### Checkpoint F1 outcome (2026-11-24)
 
 F28 overturned the plan's main assumption. Asana's board list showed every write on its first read, 0.4–0.7 s after Asana confirmed it, and the single-task read on its first poll. So the TUI shows its own writes Asana's confirmation time (1.8–4.9 s) plus one reload after the key, on both v0.3.0 and HEAD. A delay of minutes didn't reproduce in a fresh session. What did show up is a bug: a description saved after a move or an assignment on the same task was refused as "changed on the web", because those writes, like comments and completions, change `modified_at` and the cached detail kept the old one. Per F28's decision table:
-- **8b becomes T45 (F29a):** own writes reload the task's cached detail.
+- **8b becomes T45 (F29a).** At first the plan was for own writes to reload the task's cached detail. That didn't fix it: Asana changes `modified_at` again about 0.65 s after a write. So the description guard now compares the description itself.
 - **F29's pending changes (`tui/pending.rs`, T46, T47) are dropped.** The architecture decisions above about them no longer apply. Neither does the tick-counted expiry; the tick-counted back-off (T49) stays.
 - **Events:** reconsidered, because they arrive in about 4 s. Still not used: see the spec's Not Doing.
 - **New open question:** creating a task in one request saves about 2 s, but puts it at the bottom of its section. That's for the user to decide (spec Open Question 2).

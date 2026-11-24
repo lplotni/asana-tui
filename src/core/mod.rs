@@ -609,7 +609,7 @@ async fn project_and_section(
 /// Why a description couldn't be saved.
 #[derive(Debug, thiserror::Error)]
 pub enum SaveNotesError {
-    #[error("the task was changed on the web while you were editing")]
+    #[error("the description was changed elsewhere while you were editing")]
     Conflict,
     #[error(transparent)]
     Api(#[from] ApiError),
@@ -633,18 +633,21 @@ pub fn has_formatting(html_notes: &str) -> bool {
 }
 
 /// Replaces the task's description with `text` (rich text if it has
-/// mentions, else plain), unless the task was modified after
-/// `expected_modified_at` (then nothing is written).
+/// mentions, else plain), unless the description is no longer
+/// `expected_notes`, the one the edit started from (then nothing is written).
+/// Only the description is compared: anything else about the task may change
+/// meanwhile (an assignment, a comment, Asana's own follow-up to a write)
+/// without making the edit a conflict (F29a).
 pub async fn set_notes(
     client: &Client,
     task_gid: &str,
     text: &str,
     mentions: &[Mention],
-    expected_modified_at: Option<&str>,
+    expected_notes: Option<&str>,
 ) -> Result<(), SaveNotesError> {
-    if let Some(expected) = expected_modified_at {
-        let current = client.modified_at(task_gid).await?;
-        if current.as_deref() != Some(expected) {
+    if let Some(expected) = expected_notes {
+        let current = client.notes(task_gid).await?;
+        if current.trim_end() != expected.trim_end() {
             return Err(SaveNotesError::Conflict);
         }
     }

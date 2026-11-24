@@ -131,7 +131,7 @@ themes/          // built-in themes as TOML, embedded with include_str!
 
 - `Tab e` opens `$EDITOR` pre-filled with the current `notes`. If the content changed after save and quit, it's sent with `PUT notes`.
 - **Rich-text guard:** writing `notes` replaces `html_notes` and drops all formatting. If `html_notes` contains anything beyond plain paragraphs (links, lists, bold, mentions), the user must confirm in the TUI with `This will remove formatting. Continue? (y/N)` before saving.
-- **Concurrency guard:** before writing, re-fetch `modified_at`. If it changed while the editor was open, abort and show a "task changed remotely" toast, keeping the edited text in the temp file so nothing is lost.
+- **Concurrency guard:** before writing, re-fetch the description (`notes`). If it changed while the editor was open, abort and show a "description changed elsewhere" toast, keeping the edited text in the temp file so nothing is lost. (Until 2026-11-24 this compared `modified_at`, which also changes on assignments, comments and Asana's own follow-up to a write, so it refused saves nobody had conflicted with: [SPEC-board F29a](SPEC-board.md).)
 
 ### F5. Add to project
 

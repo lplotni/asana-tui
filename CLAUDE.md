@@ -62,7 +62,7 @@ cargo run --example screenshot -- lanes > docs/lanes.svg
 - **`asn` on PATH is usually the Homebrew release**, and `target/release/asn` is only as fresh as the last `cargo build --release`. When behaviour looks stale, check which binary and when it was built.
 - **Mention URLs:** in plain text a person's mention is `https://app.asana.com/…/profile/<profile-id>`, and the profile ID is *not* the user GID. Map URLs to mentions by the `<a href>` in `html_text`/`html_notes` (ADR-007).
 - **Writing rich text:** use `<a data-asana-gid="…"/>` inside `<body>`, escape `& < >`, and keep `\n` as it is (confirmed on Asana). Send it only when there's a mention; otherwise send plain text.
-- **Descriptions are plain text.** Saving drops non-mention formatting, and the `has_formatting` guard asks first. `modified_at` guards against overwriting a concurrent edit.
+- **Descriptions are plain text.** Saving drops non-mention formatting, and the `has_formatting` guard asks first. The description the edit started from guards against overwriting a concurrent edit: `asn` compares it with Asana's `notes` before writing. Not `modified_at`, which changes on any write, even Asana's own follow-up to one (F29a).
 - **Board order relies on `GET /projects/{gid}/tasks` returning tasks in board order.** It does (confirmed, A1). Cards are placed by their membership in *this* project.
 - **Boards and reloads:** a reload requested during a load is queued (`reload_queued`). Don't drop it, or a created or moved card waits a minute.
 - **Tooling quirk:** `cargo fmt` reflows code, so a scripted edit made after a format run can silently miss its target. Re-read before editing, and treat compiler warnings about unused values as possible missed edits.

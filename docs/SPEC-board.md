@@ -336,12 +336,14 @@ Two tools. Both write to a throwaway board, such as a personal to-do project. It
 - Nothing on screen marks a change as pending.
 - **Where:** a pure module, `tui/pending.rs`, as `board.rs` is. `app.rs` applies it in `board_loaded` and on `DetailLoaded`. F29 sends no new requests.
 
-### F29a. Own writes refresh the task's detail
+### F29a. A description save is checked against the description only
 
-Found by F28 (2026-11-24). A task's detail is cached as soon as its card or notification is selected, with the task's `modified_at`. Saving a description compares that `modified_at` with Asana's, to avoid overwriting someone else's edit. But a move, an assignment, a completion, a comment (all of which change `modified_at`, checked on Asana) or adding the task to a project didn't refresh the cached detail. So a description saved after any of them, on the same task, was refused with `Description not saved: the task was changed on the web while you were editing`, and the detail showed the old text again.
+Found by F28 (2026-11-24). Saving a description used to compare the task's `modified_at` with the one in the cached detail, to avoid overwriting someone else's edit (v0.1, F4). But `modified_at` changes for any reason. A move, an assignment, a completion or a comment changes it (checked on Asana). So does Asana's own follow-up to a write, about 0.65 s after confirming it: an assignment that read 20:32:24.411 read 20:32:25.067 a moment later. So a description saved after any of these, on the same task, was refused with `Description not saved: the task was changed on the web while you were editing`, and the detail showed the old text again. Reloading the detail after each write didn't fix it: the reload could still read the `modified_at` from before Asana's follow-up.
 
-- After Asana confirms one of these writes, the task's detail reloads if it is cached: move (`m`), assign (`Tab a`), complete or reopen (`d`), add to a project (`p`), comment (`c`). Setting a field (`F`) and saving a description already did. The reload brings Asana's `modified_at`, fields and comments. It is the existing detail load (3 requests), not a new one.
-- A failed write doesn't reload anything, and its existing restore and toast are unchanged.
+- **The guard compares the description.** Before writing, `asn` reads the task's `notes` and compares them, ignoring trailing whitespace, with the description the edit started from. If they differ, someone changed the description meanwhile: nothing is written, and the text is kept in a file as before. Anything else about the task may change without blocking the save.
+- The message says so: `the description was changed elsewhere while you were editing`.
+- The same goes for `asn desc` in the CLI, which compares against the description it read just before.
+- `modified_at` is still loaded (and in `asn task --json`), but nothing compares it any more.
 
 
 - **Interval:** while the terminal has focus, the Inbox, the board on screen and the shown task's detail reload every `refresh` seconds (default 5, chosen by the user, 2026-11-24). This replaces the fixed 60 s of F9 and the Inbox (ADR-005).
@@ -528,6 +530,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 
 - **(F28–F30) Events API:** Asana's docs promise events "within a minute (on average)" and "at most once". F28 measured about 4 s (7.2 s at most), so P3 failed and Events were reconsidered at Checkpoint F1. They would cut F30's requests to one per refresh plus a reload when something changed. But they need sync-token handling (a 412 means a full reload) and still a fallback poll, and they don't cover the Inbox. A 5 s poll already meets the target within the free plan for boards up to about 300 tasks. Revisit if F30's request cost bites.
 - **(F28–F30) F29's pending changes:** F28 showed Asana's reads are fresh (P1, P2), so a reload never undoes a confirmed write. Applying writes locally would save the one reload after each write (0.3–0.8 s measured) at the cost of an overlay on every load. Revisit if a lag shows up.
+- **(F28–F30) Reloading a task's detail after each own write:** tried for F29a, and it didn't fix the conflict, because Asana changes `modified_at` again just after a write. The detail already shows own writes locally, and F30 reloads the shown detail every few seconds.
 - **(F28–F30) Fetching only the changed task after a write:** with F29, the reload after a write only confirms, and one load path is simpler than two. Revisit if F30's request cost bites.
 - **(F28–F30) Retrying the reload after a write until it shows the change:** F29 makes a stale reload harmless, and F30 brings the next one within seconds.
 - **(F28–F30) Webhooks:** they need a public HTTPS endpoint, which a terminal app doesn't have.
@@ -547,6 +550,7 @@ Rendering asks for theme roles, never colors (F8). New theme roles are added onl
 - **F28 baseline (2026-11-24), on a throwaway board of about 20 open tasks with five sections and no single-select field.**
   - API probe, 3 runs (median/max). Confirmation: create 4237/4865 ms (two requests), move 1817/2001 ms, assign 2088/2600 ms, complete 2390/2404 ms. Then the list read showed each write in 0.4–0.7 s (its first read), the task read on its first poll, and events in about 4 s (7.2 s at most).
   - Rex harness, on both the Homebrew v0.3.0 binary and HEAD: create on screen 4.7 s after `Enter`, move 2.5–2.8 s, assign 2.5–3.1 s, comment and completion at once. Nothing flicked back, except the description: shown at once, but then refused as changed on the web and shown as before (F29a).
+  - After F29a (Checkpoint F2): create 4.2 s, move 2.3 s, assign 2.8 s, description, comment and completion at once. Nothing flicked back, the description included. Each write shows within Asana's confirmation time plus 0.5–0.7 s, one reload.
   - So the TUI shows its own writes Asana's confirmation time plus one reload after the key, and Asana's confirmation is most of it. A delay of minutes didn't reproduce in a fresh session.
 
 ## Open Questions

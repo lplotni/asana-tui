@@ -376,14 +376,14 @@ fn run_effects(
                     task_gid,
                     text,
                     mentions,
-                    expected_modified_at,
+                    expected_notes,
                 } => {
                     let result = core::set_notes(
                         &client,
                         &task_gid,
                         &text,
                         &mentions,
-                        expected_modified_at.as_deref(),
+                        expected_notes.as_deref(),
                     )
                     .await
                     .map_err(|err| app::SaveFailure {

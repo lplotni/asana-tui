@@ -196,20 +196,20 @@ impl Client {
         Ok(response.data)
     }
 
-    /// When the task was last modified (for conflict checks).
-    pub async fn modified_at(&self, gid: &str) -> Result<Option<String>, ApiError> {
+    /// The task's description as plain text (for conflict checks).
+    pub async fn notes(&self, gid: &str) -> Result<String, ApiError> {
         #[derive(Deserialize)]
         struct Response {
-            data: Modified,
+            data: Notes,
         }
         #[derive(Deserialize)]
-        struct Modified {
+        struct Notes {
             #[serde(default)]
-            modified_at: Option<String>,
+            notes: String,
         }
-        let query = [("opt_fields", "modified_at".to_owned())];
+        let query = [("opt_fields", "notes".to_owned())];
         let response: Response = self.get(&format!("/tasks/{gid}"), &query).await?;
-        Ok(response.data.modified_at)
+        Ok(response.data.notes)
     }
 
     /// Replaces the description with plain text (Asana derives `html_notes`).

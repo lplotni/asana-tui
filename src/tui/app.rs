@@ -217,12 +217,13 @@ pub enum Effect {
         text: String,
         mentions: Vec<Mention>,
     },
-    /// Save the description unless the task changed since `expected_modified_at`.
+    /// Save the description unless it's no longer `expected_notes`, the one
+    /// the edit started from.
     SaveNotes {
         task_gid: String,
         text: String,
         mentions: Vec<Mention>,
-        expected_modified_at: Option<String>,
+        expected_notes: Option<String>,
     },
     /// Send [`Msg::SearchDue`] for `seq` after [`picker::SEARCH_DEBOUNCE`].
     ScheduleSearch {
@@ -909,7 +910,7 @@ impl App {
             } => {
                 self.previous_notes.remove(&task_gid);
                 self.toast = Some(Toast::info("Description saved"));
-                // Reload for Asana's html_notes and modified_at.
+                // Reload for Asana's html_notes.
                 vec![Effect::LoadDetail { gid: task_gid }]
             }
             Msg::NotesSaved {
@@ -2375,13 +2376,13 @@ impl App {
             return Vec::new();
         }
         let old = std::mem::replace(&mut detail.task.notes, text.clone());
-        let expected_modified_at = detail.task.modified_at.clone();
+        let expected_notes = Some(old.clone());
         self.previous_notes.insert(task_gid.clone(), old);
         vec![Effect::SaveNotes {
             task_gid,
             text,
             mentions,
-            expected_modified_at,
+            expected_notes,
         }]
     }
 
