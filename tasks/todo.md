@@ -1009,7 +1009,7 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 
 ---
 
-### - [ ] T44: Rex end-to-end harness
+### - [x] T44: Rex end-to-end harness
 
 **Description:** `scripts/tui-latency.sh <project-gid>`, next to `scripts/formula.sh`.
 - It needs Rex (`REX_SESSION`), the config, and a `target/release/asn`. It prints the binary's version and build time first, to rule out a stale build.
@@ -1020,13 +1020,13 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 - It prints `write  visible-ms  reverted` per write, then closes the block. The last write (`d`) completes the card it made.
 
 **Acceptance criteria:**
-- [ ] One run on the throwaway board prints all seven rows (six when there's no single-select field).
-- [ ] A check that can never pass (a name that never appears) ends as `>300` and moves on instead of hanging.
-- [ ] No GID, token or name is written into the script.
+- [x] One run on the throwaway board prints all seven rows (six when there's no single-select field).
+- [x] A check that can never pass ends as `>LIMIT` and stops the run instead of hanging (`LIMIT=2` run). It stops rather than moving on, because the next keys would act on whichever card is selected; before each key that acts on the task, it checks the task is selected.
+- [x] No GID, token or name is written into the script.
 
 **Verification:**
-- [ ] A manual run on the throwaway board.
-- [ ] `shellcheck scripts/tui-latency.sh`, if it's installed.
+- [x] A manual run on the throwaway board.
+- [x] `shellcheck scripts/tui-latency.sh`, if it's installed. It isn't; `bash -n` passes. The field step is untested: the throwaway board has no single-select field.
 
 **Dependencies:** T42
 

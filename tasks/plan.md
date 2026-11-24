@@ -146,7 +146,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 #### 8a: Measure first (F28)
 - [x] T42: Spec F28–F30 and this plan
 - [x] T43: API latency probe (`examples/latency.rs`)
-- [ ] T44: Rex end-to-end harness (`scripts/tui-latency.sh`)
+- [x] T44: Rex end-to-end harness (`scripts/tui-latency.sh`)
 
 #### Checkpoint F1: baseline and decision
 - [ ] Both tools run on the throwaway board against today's code, and the baseline table is in the spec's Findings from Use
