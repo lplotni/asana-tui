@@ -196,7 +196,7 @@ pub fn file_text(answers: &Answers) -> String {
          # theme = \"terminal\"      # \"dark\", \"light\", or a theme file path\n\
          # animations = true       # false: completed cards leave the board at once\n\
          # refresh = 5             # seconds between refreshes while asn is in front (5-60);\n\
-         #                         # each costs about 7 + tasks/100 requests (README)\n",
+         #                         # each costs about 7 + tasks/100 requests (docs/configuration.md)\n",
         quoted(&answers.workspace),
     )
 }

@@ -2,7 +2,7 @@
 
 Rust, one crate (library plus the `asn` binary). The TUI (ratatui) and a scriptable CLI share one core. Public repo: `lplotni/asana-tui`, MIT.
 
-Read first: [README](README.md) (usage), [docs/SPEC.md](docs/SPEC.md) (v0.1, F1–F8), [docs/SPEC-board.md](docs/SPEC-board.md) (v0.2–v0.4, F9–F17, F22–F31), [docs/SPEC-skill.md](docs/SPEC-skill.md) (Claude Code skill, F18–F21), and [docs/decisions/](docs/decisions/README.md) (ADRs: why it's built this way). Finished plans are archived in `tasks/v0.1/` and `tasks/v0.2-v0.4/`; the next feature starts a fresh `tasks/plan.md` and `tasks/todo.md`.
+Read first: [README](README.md) (overview; usage is in [docs/tui.md](docs/tui.md), [docs/cli.md](docs/cli.md) and [docs/configuration.md](docs/configuration.md)), [docs/SPEC.md](docs/SPEC.md) (v0.1, F1–F8), [docs/SPEC-board.md](docs/SPEC-board.md) (v0.2–v0.4, F9–F17, F22–F31), [docs/SPEC-skill.md](docs/SPEC-skill.md) (Claude Code skill, F18–F21), and [docs/decisions/](docs/decisions/README.md) (ADRs: why it's built this way). Finished plans are archived in `tasks/v0.1/` and `tasks/v0.2-v0.4/`; the next feature starts a fresh `tasks/plan.md` and `tasks/todo.md`.
 
 ## Commands
 
@@ -11,7 +11,7 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test                       # unit, wiremock API tests, TestBackend snapshots, CLI tests
 cargo run -- --project <gid>     # the TUI on a board (needs ASANA_TOKEN and ASANA_WORKSPACE)
-cargo run --example screenshot > docs/screenshot.svg            # README images (made-up data)
+cargo run --example screenshot > docs/screenshot.svg            # README and docs images (made-up data)
 cargo run --example screenshot -- board > docs/board.svg
 cargo run --example screenshot -- lanes > docs/lanes.svg
 ```

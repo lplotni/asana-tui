@@ -355,7 +355,7 @@ Found by F28 (2026-11-24). Saving a description used to compare the task's `modi
   | `refresh` | `ASN_REFRESH` | whole seconds, 5–60 | `5` |
 
   A value out of range, or not a number, is an error naming the key and where it came from, like the other keys. `asn init` writes it as a commented-out default.
-- **Cost, stated plainly in the README, in `asn init`'s comment for the key, and here:**
+- **Cost, stated plainly in the user docs ([configuration](configuration.md#refresh-and-rate-limits)), in `asn init`'s comment for the key, and here:**
   - One refresh is 1 (Inbox) + 3 + ⌈tasks / 100⌉ (board) + 3 (detail: task, stories, attachments) requests.
   - Asana limits each token per minute: **150 requests on the free plan, 1,500 on paid plans, Enterprise included.** The `asn` CLI and the Claude skill share the limit when they use the same token.
 

@@ -24,7 +24,7 @@ So the TUI already showed its own writes about 0.5 s after Asana confirmed them.
 ## Alternatives Considered
 - **Events API (`GET /projects/{gid}/events`) as the change detector.** It needs one request per poll, plus a reload only when something changed, so it's cheaper than reloading the board. But a token expires (412), which means a full reload. Delivery is at most once, so the poll is still needed as a fallback. And it doesn't cover the Inbox. A 5 s poll meets the target within the free plan for boards up to about 300 tasks. Revisit if the request cost bites.
 - **A pending-changes overlay: each own write applied on top of every load until a load confirms it.** F28 showed Asana's reads are fresh, so only loads that started before a write can miss it. Not showing those loads (above) is simpler than overlaying each change on every load.
-- **A request budget instead of an interval.** People think in seconds, so the cost of each interval is documented instead (README, F30).
+- **A request budget instead of an interval.** People think in seconds, so the cost of each interval is documented instead ([configuration](../configuration.md#refresh-and-rate-limits), F30).
 - **A faster fixed poll without focus reports.** Simpler, but it costs requests all day while nobody looks, and they come out of the same per-token limit the CLI and the Claude Code skill use.
 
 ## Consequences

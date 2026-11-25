@@ -4,242 +4,48 @@ Your Asana Inbox and project boards in the terminal, with vim keys and a scripta
 
 ![asn showing an Inbox with read and unread notifications next to the selected task](docs/screenshot.svg)
 
-## Why asn?
-
 I built `asn` to get a simple terminal UI for the way I work with Asana:
 
 - **The Inbox:** go through notifications, read the task, comment, and mark them read.
 - **Projects as boards:** see where every task of a project stands, section by section, and act on any card.
 
-The CLI is deliberately small as well. It covers the same use cases (`init`, `inbox`, `read`, `task`, `comment`, `desc`, `project add`, `project new`, `board`) and nothing more. For full access to the Asana API from the command line, use [Asana's own CLI](https://developers.asana.com/docs/asana-cli) (`npm install --global @asana-api/cli`).
-
-> v0.3 adds swimlanes and single-select fields on boards, a config file set up with `asn init`, names instead of GIDs in the CLI, and the asn skill for Claude Code. v0.2 added project boards, creating, completing and assigning tasks, and @-mentions ([spec](docs/SPEC-board.md), [plan](tasks/plan.md)). v0.1 brought the Inbox, read state, task details, comments, description editing and adding to projects ([spec](docs/SPEC.md), [plan](tasks/v0.1/plan.md)).
+Every action is also a small CLI command for scripts, and an `asn` skill lets Claude Code read and update your tasks while you code.
 
 ## Install
-
-With Homebrew (macOS or Linux):
 
 ```sh
 brew tap lplotni/asn https://github.com/lplotni/asana-tui
 brew install lplotni/asn/asn
 ```
 
-Or download a binary for macOS (Apple Silicon, Intel) or Linux (x86_64, ARM) from [Releases](https://github.com/lplotni/asana-tui/releases), or build it with Rust:
+Or download a binary for macOS (Apple Silicon, Intel) or Linux (x86_64, ARM) from [Releases](https://github.com/lplotni/asana-tui/releases), or build it with `cargo install --git https://github.com/lplotni/asana-tui`. The release binaries aren't code-signed, so macOS blocks one downloaded in a browser: allow it with `xattr -d com.apple.quarantine ./asn`.
+
+## Get started
 
 ```sh
-cargo install --git https://github.com/lplotni/asana-tui
+asn                           # the first run asks for a command that prints your token, and your workspace
+asn --project <project-gid>   # open a project's board
 ```
 
-The release binaries aren't code-signed, so macOS blocks one downloaded in a browser. Allow it with `xattr -d com.apple.quarantine ./asn` (Homebrew and `cargo install` don't need this).
+The bottom line shows the keys that work where you are, and `?` lists them all. `P` opens a project's board, and `Tab i` goes back to the Inbox.
 
-## Configure
+## Documentation
 
-Run `asn` (or `asn init`) and answer two questions: a command that prints your [personal access token](https://app.asana.com/0/my-apps), and your workspace, which `asn` lists for you. The answers go to `~/.config/asn/config.toml` (or `$XDG_CONFIG_HOME/asn/config.toml`), readable only by you. `asn init` again changes them.
-
-The token itself is never stored: keep it in a password manager or the keychain and give `asn` the command that reads it, e.g. `op read op://Private/Asana/token`, `pass show asana/pat`, or on macOS `security find-generic-password -s asn -w` (after `security add-generic-password -s asn -a asana -w`).
-
-Every setting can also come from an environment variable, which wins over the file:
-
-| File key | Variable | |
-|---|---|---|
-| | `ASANA_TOKEN` | The token itself (wins over any token command) |
-| `token_cmd` | `ASANA_TOKEN_CMD` | A command that prints the token |
-| `workspace` | `ASANA_WORKSPACE` | Workspace GID (digits only) |
-| `search` | `ASN_SEARCH` | How `S` and `asn search` find tasks: `tasks` (default) uses Asana's full-text [task search](https://developers.asana.com/reference/searchtasksforworkspace) (names and descriptions; paid plans only); `typeahead` matches task names like the web search box and works on every plan |
-| `theme` | `ASN_THEME` | `terminal` (default, follows your terminal's colors), `dark`, `light`, or a path to a theme file ([example](themes/terminal.toml)) |
-| `animations` | `ASN_ANIMATIONS` | A completed board card is struck through before it leaves: `true` (default) or `false` in the file, `on` or `off` in the variable |
-| `refresh` | `ASN_REFRESH` | Seconds between refreshes while the terminal is in front: 5 to 60, default 5. In the background, `asn` refreshes once a minute. See [Refresh and rate limits](#refresh-and-rate-limits) |
-| | `NO_COLOR` | Disables colors |
-
-```toml
-# ~/.config/asn/config.toml
-workspace = "1200000000000001"
-token_cmd = "op read op://Private/Asana/token"
-search = "typeahead"
-animations = false
-```
-
-CLI subcommands read the same file but never ask questions, so scripts behave the same with or without it.
-
-### Refresh and rate limits
-
-The TUI shows your own changes as soon as Asana confirms them (usually 2–5 s). Everything else (other people's changes, the `asn` CLI, the Claude Code skill, the web app) arrives with the next refresh. While the terminal is in front, that is every `refresh` seconds, **5 by default**. When your terminal reports focus, `asn` refreshes only once a minute while it's in the background, and catches up at once when you come back.
-
-Each refresh costs requests, and Asana limits them per token: **150 a minute on the free plan, 1,500 on paid plans (Enterprise included).** The `asn` CLI and the Claude Code skill count against the same limit when they use the same token. One refresh is 1 (Inbox) + 3 + ⌈tasks / 100⌉ (the board on screen) + 3 (the task shown) requests:
-
-| Board | Requests per refresh | Per minute at 5 s (default) | at 10 s | at 30 s |
-|---|---|---|---|---|
-| 100 tasks | 8 | 96 | 48 | 16 |
-| 300 tasks | 10 | 120 | 60 | 20 |
-| 500 tasks | 12 | 144 | 72 | 24 |
-| 1,000 tasks | 17 | 204 | 102 | 34 |
-
-- **Free plan:** 5 s fits boards up to about 300 tasks, with a little room for the CLI. For larger boards, or heavy CLI use alongside, set `refresh = 10` or more.
-- **Paid plans:** 5 s fits any board.
-- **Over the limit:** Asana answers 429. `asn` waits as Asana asks and tries once more. If that fails too, that refresh fails with a `Refresh failed: …` message, the board keeps what it shows, and the next refresh tries again. A CLI command run at the same moment can fail the same way.
-
-## Use
-
-`asn` opens the Inbox. It shows the same notifications as the web Inbox, newest first, and the selected task's details: status, assignee, dates, projects, tags, custom fields, description, attachments and every comment with its emoji reactions; @-mentions show as names (`@Ada Lovelace`), not as Asana links. Image attachments are drawn inline with your terminal's graphics protocol (Kitty, iTerm2 or Sixel; colored half-blocks elsewhere). Below 100 columns it shows one pane at a time (`l`/`Enter` and `h`/`Esc` switch).
-
-The bottom line always shows the keys that work in the current context, and `?` lists them all.
-
-| Keys | |
+| | |
 |---|---|
-| `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move (with counts: `5j`, `12G`) |
-| `l` / `Enter`, `h` / `Esc` | Focus the task (then the same keys scroll it) / back to the Inbox |
-| `o` | Open the task in the browser |
-| `d` | Mark the task complete (or incomplete again); `d` as the very next key undoes it |
-| `Tab a` | Assign the task: `Me` and `Unassigned` come first, typing searches people |
-| `c` (or `Tab c`) | Comment on the task in an editor overlay: `Ctrl-s` posts, `Esc` cancels (the text is kept for the next `c`), `Ctrl-o` continues in your `$EDITOR`; posting marks the task's notifications read. Typing `@` mentions someone: type part of a name, `Enter` inserts it (people, projects and tasks; `Esc` types a plain `@`) |
-| `Tab e` | Edit the description as plain text in the same overlay (`Ctrl-s` saves), with `@` mentions as in comments; mentions already in it show as names and are kept. Asks first if it has other formatting (links, lists, bold), which plain text removes |
-| `p` (or `Tab p`) | Add the task to a project: type to search, `Ctrl-n`/`Ctrl-p` to move, `Enter` to choose, then pick a section |
-| `m` | Move the task to another section: pick the project if it's in several, then the section (its current one is marked ✓; `j`/`k` or `Ctrl-n`/`Ctrl-p` move) |
-| `e` / `u` / `x` | Mark read / unread / toggle (Asana's `E` and `U`) |
-| `V` | Select a range, then `e` `u` `x` |
-| `f` | Unread only / all |
-| `R` | Refresh now (it also happens every `refresh` seconds, 5 by default) |
-| `/` then `n` / `N` | Filter the loaded Inbox by actor, action or task name; `Enter` keeps it, `n`/`N` move through matches, `Esc` clears |
-| `P` | Open a project's board: type to search projects (boards opened this session are listed first) |
-| `b` | Open the board of the task's project, on that task (asks which project if it's in several) |
-| `S` | Search tasks across the workspace (see `ASN_SEARCH`): type, `Ctrl-n`/`Ctrl-p` to move, `Enter` shows the task in the task pane, where `c`, `Tab e`, `p` and `o` work on it; `h`/`Esc` returns to the Inbox |
-| `:` | Commands: `:q`, `:refresh`, `:unread`, `:read-all` (marks everything loaded read) |
-| `?` | All keys (generated from the keymap) |
-| `q` / `Ctrl-c` | Back (from the task pane or visual mode), else quit / quit from anywhere |
+| [Using the TUI](docs/tui.md) | The Inbox, task details, boards and swimlanes, and every key |
+| [CLI](docs/cli.md) | The commands for scripts: `asn inbox`, `asn task`, `asn board` and the rest |
+| [Configuration](docs/configuration.md) | The token, settings and environment variables, refresh and Asana's rate limits |
+| [Claude Code](docs/claude-code.md) | The `asn` skill: how to install it, and the rules it follows |
+| [How asn talks to Asana](docs/asana-api.md) | The endpoints it calls, and what Asana's public API can't do |
+| [Development](docs/development.md) | Tests, screenshots, latency tools, releases, specs and design decisions |
 
-### Boards
+## Versions
 
-`P` (or `asn --project <project-gid>`) opens a project as a board: one column per section, one card per open task with its assignee's initials and due date (`!` when overdue). When not every column fits, `h`/`l` page across them and the top line counts the hidden ones (`‹ 2  1 ›`). The board refreshes with the rest of `asn`: every 5 s while the terminal is in front (see [Refresh and rate limits](#refresh-and-rate-limits)).
-
-![asn showing a project board with four sections, one of them paged off to the right](docs/board.svg)
-
-**Swimlanes.** `v` splits the board into lanes by a single-select field such as Initiative: one lane per option (in the field's order, then the cards without one), each with the board's sections as columns, lined up across lanes. `v` again goes to the board's next single-select field (Initiative first), then back to columns; each board remembers its layout for the session. In lanes, `j`/`k` continue into the next or previous lane, and `Tab q` creates the task in that lane.
-
-![asn showing the board in lanes by Initiative: Performance, Brand and cards without an initiative](docs/lanes.svg)
-
-`F` sets a single-select field of the selected task, on a board or in the Inbox: choose the field (in lanes it starts with the lane field), then an option or `(none)`. On a board the card moves to its new lane.
-
-| Keys | |
-|---|---|
-| `j` `k` `gg` `G` `Ctrl-d` `Ctrl-u` | Move within the column (with counts) |
-| `h` / `l` | Previous / next column |
-| `Enter` | Open the card's task full-width (`h`/`Esc`/`q` back) |
-| `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
-| `d` | Complete the card: it's struck through and leaves the column (at once with `animations = false`); `d` as the very next key reopens it |
-| `Tab a` | Assign the card (its initials change once the board reloads) |
-| `Tab q` | New task in this column (and lane): type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
-| `v` | Columns, then lanes by each single-select field, then columns again |
-| `F` | Set a single-select field (e.g. Initiative) of the card |
-| `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |
-| `P` | Open another board; with nothing typed, `Enter` goes back to the last one |
-| `Tab i` | Back to the Inbox, where you left it (boards keep their place too) |
-| `R` | Refresh the board |
-
-Every action is also a command for scripts:
-
-```sh
-asn inbox --unread                      # gid, unread marker, time, actor, action, task (tab-separated)
-asn inbox --json | jq '.[0]'            # Asana's own JSON
-asn inbox --unread | cut -f1 | xargs asn read      # mark everything read
-asn search checkout redirect           # find tasks: gid, ✓ if completed, name (tab-separated; --json too)
-asn task <task-gid>                     # a task with its description, attachments and comments (--json too)
-asn task <task-gid> --brief             # a short receipt: where it is, who has it, due, counts (no description or comment text)
-asn task done <task-gid> [--undo]       # mark it complete (or incomplete again)
-asn task assign <task-gid> "Ada Lovelace"   # a name, a user gid or email, `me`, or `none`; prints the new assignee
-asn task field <task-gid> Initiative Checkout   # set a single-select field (or `none` to clear it); prints "Initiative: Checkout"
-asn comment <task-gid> -m 'Ship it'      # or `-` for stdin, or no text to open $EDITOR; prints the comment's gid
-asn comment <task-gid> -m 'Thanks @1200000000000011'   # @<gid> mentions that person, task or project
-asn users ada                           # people in the workspace: gid and name (tab-separated)
-asn projects web                        # projects in the workspace: gid and name (tab-separated)
-asn project add <task-gid> Ops [--section "In Review"]       # keeps the task's other projects; prints where it landed
-asn project sections <project-gid>      # a project's sections: gid and name (tab-separated)
-asn project fields "Web Platform"       # a project's single-select fields, each followed by its options
-asn project move <task-gid> "In Review"      # to another section of a project it's in; prints where it went
-asn project new "Web Platform" [--section Backlog] Write the launch post   # create an unassigned task; prints its gid
-asn board <project-gid>                 # open tasks by section: section lines, then indented gid, name, assignee, due (--json too)
-asn board <project-gid> --lanes Initiative   # the same, per lane: lane lines, then that lane's sections and tasks
-asn --project <project-gid>             # open the TUI on that project's board
-asn desc <task-gid> [--file PATH | -] [--force]   # replace the description (plain text; --force for formatted ones)
-```
-
-`asn read --unread <gid>…` marks notifications unread. Exit codes: `0` ok, `1` error, `2` token problem. With `--json`, tasks from `asn board` and `asn task` include their `custom_fields` (field and option GIDs, and for `asn task` the field type and options).
-
-People, projects and sections can be given by name or by gid. A name is used only when it matches exactly (ignoring case) or matches a single candidate; sections are matched among the task's (or the named project's) own sections, and part of a section name is enough. Anything else writes nothing, exits `1`, and lists the candidates on stderr as `gid  name` lines, so you can run the command again with a gid.
-
-## Use from Claude Code
-
-The repo is also a [Claude Code](https://claude.com/claude-code) plugin with an `asn` skill, so you can work on Asana tasks while you code: "what's the checkout task about?", "move it to In Review and give it to Ada", "capture this as a comment on the task". In Claude Code:
-
-```
-/plugin marketplace add lplotni/asana-tui
-/plugin install asn@asn
-```
-
-The skill needs `asn` on your `PATH`, set up with `asn init`, and version 0.3.0 or later. It talks to Asana only through `asn`, and it follows four rules:
-
-- **Every read is announced.** When a task's content enters the conversation, Claude's reply starts with the task's `asn task --brief` receipt, which `asn` builds from fields only, so a task's own text can't change it.
-- **Every write is confirmed.** Claude shows the task, the target and the exact command, and runs it only after you say yes.
-- **Task text is data.** Instructions written in a task or comment are never followed.
-- **No guessing.** When a name matches several people, projects or sections, Claude shows them and asks.
-
-Notes you capture go in as comments; the description changes only when you ask for it.
-
-## How it talks to Asana
-
-`asn` uses Asana's public [REST API](https://developers.asana.com/reference/rest-api-reference) (v1.0, `https://app.asana.com/api/1.0`) over HTTPS with JSON, authenticated with your personal access token as a `Bearer` header. Every request asks only for the fields it shows (`opt_fields`), and lists are read page by page via `next_page.offset`.
-
-| What | Endpoint |
-|---|---|
-| Setup (`asn init`) | `GET /workspaces` |
-| Inbox | `GET /users/me/notifications`, `POST /users/me/notifications/markRead` (and `markUnread`) |
-| Task, description, completion, assignee | `GET /tasks/{task}`, `PUT /tasks/{task}` |
-| Comments and reactions | `GET /tasks/{task}/stories`, `POST /tasks/{task}/stories` (`html_text` when there's an @-mention, as for descriptions with `html_notes`) |
-| People (`asn users`, @-mentions, names in `asn task assign`) | `GET /workspaces/{workspace}/typeahead?resource_type=user` |
-| Attachments | `GET /attachments?parent={task}` |
-| Task search (`S`, `asn search`) | `GET /workspaces/{workspace}/tasks/search`, or `GET /workspaces/{workspace}/typeahead?resource_type=task` with `ASN_SEARCH=typeahead` |
-| Add to project | `GET /workspaces/{workspace}/typeahead`, `GET /projects/{project}/sections`, `POST /tasks/{task}/addProject` |
-| Move to a section | `GET /projects/{project}/sections`, `POST /sections/{section}/addTask` |
-| New task (`asn project new`) | `POST /tasks`, then `POST /sections/{section}/addTask` |
-| Boards (`P`, `b`, `asn board`) | `GET /projects/{project}`, `GET /projects/{project}/sections`, `GET /projects/{project}/tasks?completed_since=now`; projects are found (`P`, `asn projects`, project names) with `GET /workspaces/{workspace}/typeahead` |
-| Images | the attachment's short-lived `download_url`, fetched from the file host without your token |
-
-The Asana web app runs on its own internal API, so it can show things the public API can't; those gaps are listed below.
-
-## Known limitations
-
-These come from Asana's public API (most from the [Notifications API](https://forum.asana.com/t/new-notifications-api/1159934)), not from `asn`:
-
-- **No archive.** The API can only mark notifications read or unread. `e` marks an item read, and it stays in the list, unlike `E` in the web Inbox, which removes it. Archive in the web app if you want an item gone: archived items disappear from `asn` at its next refresh.
-- **No grouping.** The web Inbox can bundle several notifications about one task into one card; `asn` lists them one by one.
-- **Polling, not push.** There are no webhooks for notifications, so new items appear on refresh (`R`, or every 5 s while the terminal is in front).
-- **Descriptions are edited as plain text.** Saving keeps @-mentions but replaces other formatting (links, lists, bold); `asn` asks first when a description has any. Edit formatted descriptions on the web.
-- **Mentions look like comments.** The API doesn't mark @mentions separately.
-- **Some tasks' comments can't be loaded.** For some tasks (likely those with replies to comments), Asana refuses the comment list with "unsupported parent in the public API: CommentStory". `asn` still shows the rest of the task and says why the comments are missing; read them on the web.
-- **Task search needs a paid plan.** On other plans Asana answers 402; set `ASN_SEARCH=typeahead` to search task names instead. Results are the 50 most relevant, and new or renamed tasks can take up to a minute to become searchable.
-- **Boards show open, top-level tasks only.** Completed tasks and subtasks aren't on the board, and cards can't be reordered within a column; `m` moves them between sections.
-- **Image links expire.** An attachment's `download_url` works for a short time only; if an image fails after the task was open a while, refresh (`R`).
-
-## Develop
-
-```sh
-cargo test
-cargo run --example screenshot > docs/screenshot.svg            # regenerate the screenshots (made-up data)
-cargo run --example screenshot -- board > docs/board.svg
-cargo run --example screenshot -- lanes > docs/lanes.svg
-```
-
-How quickly changes show up, measured on a throwaway board of your own (pass its GID, never commit it):
-
-```sh
-cargo run --release --example latency -- <project-gid>   # Asana: confirm time, and when each read shows a write
-cargo build --release && scripts/tui-latency.sh <project-gid>   # the TUI, driven in a Rex pane
-```
-
-The probe creates, moves, assigns, sets a field on and completes tasks named `asn latency probe …`, and completes them afterwards. The harness runs inside a Rex terminal (it needs `REX_SESSION`) and does the same through the TUI's keys, watching each change for two minutes in case it flicks back.
-
-Why it's built this way: [architecture decisions](docs/decisions/README.md). Specs: [v0.1](docs/SPEC.md), [v0.2 and boards](docs/SPEC-board.md), [Claude Code](docs/SPEC-skill.md).
-
-Releases: push a `v*` tag. CI builds the four binaries, attaches them to a GitHub release, and commits the updated `Formula/asn.rb`.
+- **v0.4:** boards and the Inbox refresh every 5 s while the terminal is in front (once a minute behind it; see `refresh`), and saving a description no longer fails after another change to the task.
+- **v0.3:** swimlanes and single-select fields on boards, a config file set up with `asn init`, names instead of GIDs in the CLI, and the `asn` skill for Claude Code.
+- **v0.2:** project boards, creating, completing and assigning tasks, and @-mentions.
+- **v0.1:** the Inbox, read state, task details, comments, description editing and adding to projects.
 
 ## License
 
