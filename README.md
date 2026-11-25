@@ -42,6 +42,7 @@ The bottom line shows the keys that work where you are, and `?` lists them all. 
 
 ## Versions
 
+- **v0.4.1:** a new task's card shows on the board as soon as you press Enter, and a task made in a swimlane takes one request fewer.
 - **v0.4:** boards and the Inbox refresh every 5 s while the terminal is in front (once a minute behind it; see `refresh`), and saving a description no longer fails after another change to the task.
 - **v0.3:** swimlanes and single-select fields on boards, a config file set up with `asn init`, names instead of GIDs in the CLI, and the `asn` skill for Claude Code.
 - **v0.2:** project boards, creating, completing and assigning tasks, and @-mentions.
