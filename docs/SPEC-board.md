@@ -417,6 +417,40 @@ Asked for by the user on 2026-11-25, before v0.4.0.
 
 **Tests (F31):** the key starts a dance on a board, not on the Inbox; frames end it after 3 s; two dances in a row are different animals; the help overlay doesn't list it; every animal's poses fit the box; a drawn frame shows the name and the art.
 
+## Feature Spec — Instant new cards (F32)
+
+Asked for by the user on 2026-11-25: after `Tab q` and Enter in lanes, the card took about 5 s to appear. The TUI showed nothing until three writes had finished one after another, then reloaded the board:
+1. `POST /tasks` (about 2 s);
+2. `POST /sections/{gid}/addTask`, for the top of the column (about 2 s; F28 measured both together at 4.2 s);
+3. in lanes only, `PUT /tasks/{gid}` with the lane's option (about 2 s, like F28's other single writes).
+
+### F32a. The lane's option is set when the task is created
+
+- In lanes, `POST /tasks` carries the lane's option in `custom_fields` (Asana accepts a project's custom fields on create). The separate `PUT` is gone, so a task created in a lane takes two writes, as in columns. `addTask` still puts it at the top.
+- The create is one request now, so a refused field means no task: the toast is `Task not created: …`, and the name is offered again by the next `Tab q`. (Before, the task was made, and the toast said `Created, but not in <option>`.)
+- `asn project new` is unchanged.
+
+### F32b. The card shows at once
+
+- Enter puts the card on the board straight away: at the top of its column, in its lane, selected. Its second line reads `creating…` (role `text_muted`) instead of initials and a due date. It's a local card with a local GID (`local-N`, like a comment being posted).
+- While it's selected, keys that act on a task (`Enter`, `c`, `Tab e`, `p`, `m`, `o`, `d`, `Tab a`, `F`) say `Wait for the task to be created` and do nothing else. Moving, `Tab q`, `/`, `v` and `R` work. No detail is loaded for it.
+- **Asana confirms:** the card takes the task's GID at once and becomes a normal card, and its detail loads. The reload that follows (F14) shows it as Asana has it, still selected.
+- **Asana refuses:** the card leaves, the error toast shows, and the name is offered again by the next `Tab q`, as before.
+- **Refreshes during the create** don't remove the card: a load that may predate an own write isn't shown (F30). A create left unanswered for two minutes stops holding loads back, so a load can drop its card. Once Asana answers, the reload shows the task.
+
+**Tests (F32):**
+- wiremock: in a lane, `POST /tasks` carries `custom_fields` and no `PUT` follows; without a lane, the body is as before.
+- App:
+  - Enter shows the card in its column and lane, selected and pending, with no detail load;
+  - task keys on it only toast;
+  - a confirm gives it the task's GID, selected, and loads the detail;
+  - a refusal removes it and keeps the name;
+  - a stale refresh during the create doesn't remove it;
+  - two creates in a row both show.
+- UI: a pending card reads `creating…`.
+
+**Done when:** in Rex on the throwaway board, the card is on screen within 0.3 s of Enter, and `creating…` is gone within Asana's confirmation time plus a reload.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**
