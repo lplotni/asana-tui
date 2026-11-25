@@ -451,6 +451,8 @@ Asked for by the user on 2026-11-25: after `Tab q` and Enter in lanes, the card 
 
 **Done when:** in Rex on the throwaway board, the card is on screen within 0.3 s of Enter, and `creating…` is gone within Asana's confirmation time plus a reload.
 
+**Measured (2026-11-25, throwaway board, columns, 3 runs):** the card was on screen 97–108 ms after Enter (mostly the capture's own time), and `creating…` was gone after 4.0–5.2 s (Asana's two writes). The throwaway board has no single-select field, so F32a is covered by the wiremock test only. Its first real run is the user's lanes board.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**

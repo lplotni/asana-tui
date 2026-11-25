@@ -410,6 +410,40 @@ impl BoardView {
         true
     }
 
+    /// Puts `card`, a task being created (F32b), at the top of the column of
+    /// section `section` (`None`: the column without one), and selects it.
+    /// Returns whether the board has that column.
+    pub fn insert_pending(&mut self, card: BoardTask, section: Option<&str>) -> bool {
+        let Some(column) = self
+            .board
+            .columns
+            .iter_mut()
+            .find(|c| c.section.as_ref().map(|s| s.gid.as_str()) == section)
+        else {
+            return false;
+        };
+        let gid = card.gid.clone();
+        column.tasks.insert(0, card);
+        self.rebuild();
+        self.select(&gid)
+    }
+
+    /// The task shown as card `local` while it was being created is now
+    /// task `gid` in Asana (F32b). The card stays where it is, selected or
+    /// not as it was.
+    pub fn confirm_pending(&mut self, local: &str, gid: &str) {
+        let card = self
+            .board
+            .columns
+            .iter_mut()
+            .flat_map(|c| c.tasks.iter_mut())
+            .find(|t| t.gid == local);
+        if let Some(card) = card {
+            gid.clone_into(&mut card.gid);
+            self.rebuild();
+        }
+    }
+
     /// Takes card `gid` off the board (e.g. once completed). Another selected
     /// card stays selected; if `gid` was the selected one, the selection
     /// keeps its place, clamped. Returns whether the card was there.

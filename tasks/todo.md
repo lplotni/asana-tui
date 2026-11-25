@@ -19,15 +19,15 @@ Plan: [`plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-board.md) 
 
 ---
 
-### - [ ] T54: Show the new card at once, as `creating…` (F32b)
+### - [x] T54: Show the new card at once, as `creating…` (F32b)
 
 **Description:** On Enter, `App` adds a local card (`local-N`) to the board at the top of the column, with the lane's option, and selects it. `CreateTask` and `TaskCreated` carry the local GID. On success the card takes the real GID; on failure it's removed. `BoardView` gets `insert_pending` and `confirm`. Task keys on a pending card only toast. The card draws `creating…` as its second line.
 
 **Acceptance criteria:**
-- [ ] Enter shows the card in its column and lane, selected, with no detail load.
-- [ ] Task keys on it toast `Wait for the task to be created`; navigation works.
-- [ ] Confirm: real GID, still selected, detail loads, reload follows. Refusal: card gone, name kept.
-- [ ] A stale refresh during the create doesn't remove it; two creates in a row both show.
+- [x] Enter shows the card in its column and lane, selected, with no detail load.
+- [x] Task keys on it toast `Wait for the task to be created`; navigation works.
+- [x] Confirm: real GID, still selected, detail loads, reload follows. Refusal: card gone, name kept.
+- [x] A stale refresh during the create doesn't remove it; two creates in a row both show.
 
 **Verification:** `cargo test` (app and UI tests), clippy, fmt; Rex on the throwaway board.
 

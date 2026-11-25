@@ -51,7 +51,7 @@ The bottom line always shows the keys that work in the current context, and `?` 
 | `c`, `Tab e`, `p`, `m`, `o` | Comment, edit description, add to project, move to another section, open in browser, as in the Inbox; a moved card shows in its new column |
 | `d` | Complete the card: it's struck through and leaves the column (at once with `animations = false`); `d` as the very next key reopens it |
 | `Tab a` | Assign the card (its initials change once the board reloads) |
-| `Tab q` | New task in this column (and lane): type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels |
+| `Tab q` | New task in this column (and lane): type its name, `Enter` creates it (unassigned, at the top of the column) and selects it, `Esc` cancels. The card shows at once and reads `creating…` until Asana confirms it (a few seconds) |
 | `v` | Columns, then lanes by each single-select field, then columns again |
 | `F` | Set a single-select field (e.g. Initiative) of the card |
 | `/` then `n` / `N` | Find cards by name across columns; `Esc` ends the search |

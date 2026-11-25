@@ -27,6 +27,31 @@ pub const INITIAL_LOAD: usize = 30;
 pub const REFRESH_WINDOW: usize = 30;
 /// Load the next page when the cursor is this close to the end.
 const LOAD_MORE_MARGIN: usize = 10;
+/// Whether `cmd` acts on the selected task (and needs it to exist in Asana).
+fn acts_on_task(cmd: Cmd) -> bool {
+    matches!(
+        cmd,
+        Cmd::Open
+            | Cmd::Comment
+            | Cmd::EditDescription
+            | Cmd::AddToProject
+            | Cmd::MoveToSection
+            | Cmd::OpenInBrowser
+            | Cmd::ToggleComplete
+            | Cmd::Assign
+            | Cmd::SetField
+    )
+}
+
+/// Starts the GIDs of things shown before Asana confirms them: a comment
+/// being posted, a task being created (F32b). Asana's GIDs are digits only.
+const LOCAL_PREFIX: &str = "local-";
+
+/// Whether `gid` is a local stand-in, not yet known to Asana.
+pub fn is_local(gid: &str) -> bool {
+    gid.starts_with(LOCAL_PREFIX)
+}
+
 /// Why `b` couldn't select its task on the board.
 const NOT_ON_BOARD: &str = "The task isn't on this board (completed tasks aren't shown)";
 /// Rows of the task pane given to each image attachment.
@@ -71,6 +96,8 @@ pub enum Msg {
         project_gid: String,
         section: Option<Named>,
         name: String,
+        /// The card shown while it was being created (F32b).
+        local_gid: String,
         result: Result<Created, String>,
     },
     /// Result of setting a single-select field of `task_gid` (F27).
@@ -194,6 +221,8 @@ pub enum Effect {
         /// In the lanes layout, the lane's option to set as well (F26).
         lane: Option<LaneValue>,
         name: String,
+        /// The card shown on the board meanwhile (F32b).
+        local_gid: String,
     },
     /// Set (or, `None`, clear) single-select `field` of `task_gid` (F27).
     SetField {
@@ -816,8 +845,9 @@ impl App {
                 project_gid,
                 section,
                 name,
+                local_gid,
                 result,
-            } => self.task_created(&project_gid, section, name, result),
+            } => self.task_created(&project_gid, section, name, &local_gid, result),
             Msg::FieldSet { task_gid, result } => self.field_set(&task_gid, result),
             Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
@@ -1306,6 +1336,14 @@ impl App {
     /// scroll the open card; task actions work on the selected card; Inbox
     /// commands do nothing here.
     fn run_board(&mut self, Action { cmd, count }: Action) -> Vec<Effect> {
+        let pending = self
+            .board_view()
+            .and_then(BoardView::selected_task)
+            .is_some_and(|card| is_local(&card.gid));
+        if pending && acts_on_task(cmd) {
+            self.toast = Some(Toast::info("Wait for the task to be created"));
+            return Vec::new();
+        }
         let n = count.unwrap_or(1);
         let half_page = (self.sizes.board_card_rows / 2).max(1);
         if self.focus == Focus::Detail {
@@ -1548,8 +1586,11 @@ impl App {
     }
 
     /// The selected card of the loaded board, if any.
+    /// The selected card, unless it's a task still being created (F32b).
     fn selected_card(&self) -> Option<&crate::api::projects::BoardTask> {
-        self.board_view()?.selected_task()
+        self.board_view()?
+            .selected_task()
+            .filter(|card| !is_local(&card.gid))
     }
 
     /// The loaded board on screen, if any.
@@ -1836,17 +1877,60 @@ impl App {
                 let task = self.new_task.take().expect("checked above");
                 let name = task.name.trim().to_owned();
                 if !name.is_empty() {
+                    let local_gid = self.next_local_gid();
+                    self.show_pending(&task, &name, &local_gid);
                     return vec![Effect::CreateTask {
                         project_gid: task.project_gid,
                         section: task.section,
                         lane: task.lane,
                         name,
+                        local_gid,
                     }];
                 }
             }
             _ => {}
         }
         Vec::new()
+    }
+
+    /// Puts the task being created on its board at once, as card
+    /// `local_gid` (F32b): at the top of its column, with its lane's option,
+    /// selected.
+    fn show_pending(&mut self, task: &NewTask, name: &str, local_gid: &str) {
+        let custom_fields = task
+            .lane
+            .iter()
+            .map(|lane| crate::api::projects::FieldValue {
+                gid: lane.field.gid.clone(),
+                enum_value: Some(crate::api::projects::OptionRef {
+                    gid: lane.option.gid.clone(),
+                }),
+            })
+            .collect();
+        let card = crate::api::projects::BoardTask {
+            gid: local_gid.to_owned(),
+            name: name.to_owned(),
+            assignee: None,
+            due_on: None,
+            due_at: None,
+            memberships: Vec::new(),
+            custom_fields,
+        };
+        let section = task.section.as_ref().map(|s| s.gid.as_str());
+        if let Some(view) = self.board_view_mut()
+            && view.project().gid == task.project_gid
+        {
+            view.insert_pending(card, section);
+        }
+    }
+
+    /// The loaded board of `project_gid`, wherever it is in the stack.
+    fn view_of(&mut self, project_gid: &str) -> Option<&mut BoardView> {
+        self.boards
+            .iter_mut()
+            .find(|b| b.project.gid == project_gid)?
+            .state
+            .view_mut()
     }
 
     /// A task was created (maybe outside its section) or not: says so, and
@@ -1856,11 +1940,20 @@ impl App {
         project_gid: &str,
         section: Option<Named>,
         name: String,
+        local_gid: &str,
         result: Result<Created, String>,
     ) -> Vec<Effect> {
         let Created { gid, section_error } = match result {
-            Ok(created) => created,
+            Ok(created) => {
+                if let Some(view) = self.view_of(project_gid) {
+                    view.confirm_pending(local_gid, &created.gid);
+                }
+                created
+            }
             Err(message) => {
+                if let Some(view) = self.view_of(project_gid) {
+                    view.remove(local_gid);
+                }
                 self.toast = Some(Toast::error(format!("Task not created: {message}")));
                 self.new_task_draft = Some(name);
                 return Vec::new();
@@ -2613,6 +2706,12 @@ impl App {
         }
     }
 
+    /// A new local GID (see [`is_local`]).
+    fn next_local_gid(&mut self) -> String {
+        self.next_local_id += 1;
+        format!("{LOCAL_PREFIX}{}", self.next_local_id)
+    }
+
     /// Shows the comment right away (if the task is on screen) and posts it.
     fn show_and_post_comment(
         &mut self,
@@ -2620,8 +2719,7 @@ impl App {
         text: String,
         mentions: Vec<Mention>,
     ) -> Vec<Effect> {
-        self.next_local_id += 1;
-        let local_gid = format!("local-{}", self.next_local_id);
+        let local_gid = self.next_local_gid();
         if let Some(Detail::Loaded(detail)) = self.details.get_mut(&task_gid) {
             detail.comments.push(TaskStory {
                 gid: local_gid.clone(),

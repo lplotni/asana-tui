@@ -3086,6 +3086,7 @@ fn created(name: &str, gid: &str, section_error: Option<&str>) -> Msg {
         project_gid: "42".into(),
         section: Some(named("s1", "Section 1")),
         name: name.into(),
+        local_gid: "local-1".into(),
         result: Ok(crate::tui::app::Created {
             gid: gid.into(),
             section_error: section_error.map(Into::into),
@@ -3118,6 +3119,7 @@ fn tab_q_names_a_new_task_for_the_selected_column() {
             section: Some(named("s1", "Section 1")),
             lane: None,
             name: "Ship it".into(),
+            local_gid: "local-1".into(),
         }]
     );
     assert!(app.new_task.is_none());
@@ -3248,6 +3250,7 @@ fn a_failed_create_keeps_the_name_for_the_next_try() {
         project_gid: "42".into(),
         section: None,
         name: "Ship it".into(),
+        local_gid: "local-1".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
     tab_q(&mut app);
@@ -3267,6 +3270,7 @@ fn a_failed_create_says_so() {
         project_gid: "42".into(),
         section: None,
         name: "Ship it".into(),
+        local_gid: "local-1".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
 
@@ -4281,6 +4285,7 @@ fn tab_q_in_a_lane_gives_the_new_task_the_lanes_option() {
                 option: named("o1", "Checkout"),
             }),
             name: "Ship it".into(),
+            local_gid: "local-1".into(),
         }]
     );
 }
@@ -4294,6 +4299,7 @@ fn a_new_task_whose_lane_option_is_refused_is_not_created_and_keeps_its_name() {
         project_gid: "42".into(),
         section: Some(named("s0", "Section 0")),
         name: "Ship it".into(),
+        local_gid: "local-1".into(),
         result: Err("Bad request: enum option not found".into()),
     });
 
@@ -4621,4 +4627,211 @@ fn g_d_on_the_inbox_does_nothing() {
 
     assert_eq!(dancer(&app), None);
     assert!(!app.animating());
+}
+
+// --- F32b: a new card shows at once -------------------------------------------
+
+/// Names a new task in the selected cell and presses Enter.
+fn create(app: &mut App, name: &str) -> Vec<Effect> {
+    tab_q(app);
+    keys(app, name);
+    enter(app)
+}
+
+/// The local GID the create was sent with.
+fn local_of(effects: &[Effect]) -> String {
+    effects
+        .iter()
+        .find_map(|e| match e {
+            Effect::CreateTask { local_gid, .. } => Some(local_gid.clone()),
+            _ => None,
+        })
+        .expect("a create was sent")
+}
+
+fn confirmed(local_gid: &str, gid: &str) -> Msg {
+    Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: Some(named("s0", "Section 0")),
+        name: "Ship it".into(),
+        local_gid: local_gid.into(),
+        result: Ok(crate::tui::app::Created {
+            gid: gid.into(),
+            section_error: None,
+        }),
+    }
+}
+
+fn column_names(app: &App, column: usize) -> Vec<&str> {
+    app.board_view().unwrap().columns()[column]
+        .tasks
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect()
+}
+
+#[test]
+fn enter_shows_the_new_card_at_once_at_the_top_of_its_column_selected() {
+    let mut app = on_board(&[1, 1]);
+    keys(&mut app, "l");
+
+    let effects = create(&mut app, "Ship it");
+
+    let view = app.board_view().unwrap();
+    let card = view.selected_task().expect("the new card is selected");
+    assert_eq!(card.name, "Ship it");
+    assert!(is_local(&card.gid), "{}", card.gid);
+    assert_eq!((view.column(), view.row()), (1, 0));
+    assert_eq!(local_of(&effects), card.gid);
+    assert_eq!(
+        app.selected_task_gid(),
+        None,
+        "not a task until Asana says so"
+    );
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::ScheduleDetail { .. } | Effect::LoadDetail { .. })),
+        "{effects:?}"
+    );
+}
+
+#[test]
+fn in_lanes_the_new_card_shows_in_its_lane() {
+    let mut app = on_board(&[2, 2]);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(board_with_initiative()),
+    });
+    keys(&mut app, "v");
+
+    create(&mut app, "Ship it");
+
+    let view = app.board_view().unwrap();
+    assert_eq!(view.selected_task().unwrap().name, "Ship it");
+    assert_eq!(
+        view.selected_lane()
+            .and_then(|l| l.option.as_ref())
+            .map(|o| o.name.as_str()),
+        Some("Checkout")
+    );
+}
+
+#[test]
+fn task_keys_on_a_card_being_created_only_say_to_wait() {
+    let mut app = on_board(&[1]);
+    create(&mut app, "Ship it");
+
+    let presses: [(&str, &[KeyCode]); 9] = [
+        ("Enter", &[KeyCode::Enter]),
+        ("c", &[KeyCode::Char('c')]),
+        ("Tab e", &[KeyCode::Tab, KeyCode::Char('e')]),
+        ("p", &[KeyCode::Char('p')]),
+        ("m", &[KeyCode::Char('m')]),
+        ("o", &[KeyCode::Char('o')]),
+        ("d", &[KeyCode::Char('d')]),
+        ("Tab a", &[KeyCode::Tab, KeyCode::Char('a')]),
+        ("F", &[KeyCode::Char('F')]),
+    ];
+    for (name, codes) in presses {
+        let effects: Vec<Effect> = codes
+            .iter()
+            .flat_map(|&code| key(&mut app, code, KeyModifiers::NONE))
+            .collect();
+
+        assert!(effects.is_empty(), "{name}: {effects:?}");
+        assert_eq!(
+            app.toast.as_ref().map(|t| t.text.as_str()),
+            Some("Wait for the task to be created"),
+            "{name}"
+        );
+        assert!(app.picker.is_none() && app.editor.is_none(), "{name}");
+        assert_eq!(app.focus, Focus::List, "{name}");
+        assert_eq!(column_names(&app, 0)[0], "Ship it", "{name}");
+    }
+}
+
+#[test]
+fn moving_off_a_card_being_created_works() {
+    let mut app = on_board(&[1]);
+    create(&mut app, "Ship it");
+
+    keys(&mut app, "j");
+
+    assert_eq!(selected_card(&app), Some("c0-0"));
+}
+
+#[test]
+fn once_asana_confirms_the_card_is_the_task_and_its_detail_loads() {
+    let mut app = on_board(&[1]);
+    let local = local_of(&create(&mut app, "Ship it"));
+
+    let effects = app.update(confirmed(&local, "900"));
+
+    assert_eq!(selected_card(&app), Some("900"));
+    assert_eq!(app.selected_task_gid(), Some("900"));
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::ScheduleDetail { gid } if gid == "900")),
+        "{effects:?}"
+    );
+    assert_eq!(board_loads(&effects), 1);
+}
+
+#[test]
+fn a_refused_create_takes_the_card_away_and_keeps_the_name() {
+    let mut app = on_board(&[1]);
+    let local = local_of(&create(&mut app, "Ship it"));
+
+    app.update(Msg::TaskCreated {
+        project_gid: "42".into(),
+        section: Some(named("s0", "Section 0")),
+        name: "Ship it".into(),
+        local_gid: local,
+        result: Err("Could not reach Asana: timed out".into()),
+    });
+
+    assert_eq!(column_names(&app, 0), ["Card 0-0"]);
+    assert_eq!(selected_card(&app), Some("c0-0"));
+    tab_q(&mut app);
+    assert_eq!(
+        app.new_task.as_ref().map(|t| t.name.as_str()),
+        Some("Ship it")
+    );
+}
+
+#[test]
+fn a_refresh_during_the_create_does_not_take_the_card_away() {
+    let mut app = on_board(&[1]);
+    create(&mut app, "Ship it");
+
+    let effects = app.update(Msg::Tick);
+    assert_eq!(board_loads(&effects), 1);
+    app.update(Msg::BoardLoaded {
+        project_gid: "42".into(),
+        result: Ok(project_board(&[1])),
+    });
+
+    assert_eq!(column_names(&app, 0)[0], "Ship it");
+    assert_eq!(
+        app.board_view().unwrap().selected_task().unwrap().name,
+        "Ship it"
+    );
+}
+
+#[test]
+fn two_creates_in_a_row_both_show_and_are_confirmed_apart() {
+    let mut app = on_board(&[1]);
+    let first = local_of(&create(&mut app, "One"));
+    let second = local_of(&create(&mut app, "Two"));
+    assert_ne!(first, second);
+    assert_eq!(column_names(&app, 0), ["Two", "One", "Card 0-0"]);
+
+    app.update(confirmed(&first, "901"));
+
+    let tasks = &app.board_view().unwrap().columns()[0].tasks;
+    assert_eq!(tasks[0].gid, second, "still being created");
+    assert_eq!(tasks[1].gid, "901");
+    assert_eq!(selected_card(&app), Some(second.as_str()));
 }

@@ -285,6 +285,7 @@ fn run_effects(
                     section,
                     lane,
                     name,
+                    local_gid,
                 } => {
                     let section_gid = section.as_ref().map(|s| s.gid.as_str());
                     // In a lane, the new task gets the lane's option as it's
@@ -304,6 +305,7 @@ fn run_effects(
                         project_gid,
                         section,
                         name,
+                        local_gid,
                         result,
                     }
                 }

@@ -15,11 +15,11 @@ After `Tab q` and Enter in lanes, the card took about 5 s to appear: three write
 ## Task List
 
 - [x] T53: Send the lane's option with `POST /tasks` (F32a)
-- [ ] T54: Show the new card at once, as `creating…` (F32b)
+- [x] T54: Show the new card at once, as `creating…` (F32b)
 
 ### Checkpoint: instant
-- [ ] fmt, clippy and tests pass
-- [ ] Rex on the throwaway board: the card shows within 0.3 s of Enter, and `creating…` is gone within the confirm time plus a reload
+- [x] fmt, clippy and tests pass
+- [x] Rex on the throwaway board: the card shows within 0.3 s of Enter, and `creating…` is gone within the confirm time plus a reload (97–108 ms; 4.0–5.2 s)
 
 ## Risks and Mitigations
 

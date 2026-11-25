@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, HighlightSpacing, List, ListItem, ListState, Paddi
 use super::pane;
 use crate::api::projects::BoardTask;
 use crate::present::card;
-use crate::tui::app::{App, BoardState};
+use crate::tui::app::{App, BoardState, is_local};
 use crate::tui::board::{BoardView, CARD_LINES, STRIKE_FRAMES};
 use crate::tui::theme::{Role, Theme};
 
@@ -192,8 +192,8 @@ fn render_lanes(
     }
 }
 
-/// Card `task`: its completion animation's frame while that plays, else the
-/// card.
+/// Card `task`: its completion animation's frame while that plays, `creating…`
+/// while Asana creates it (F32b), else the card.
 fn card_or_frame<'a>(
     view: &BoardView,
     task: &BoardTask,
@@ -201,6 +201,13 @@ fn card_or_frame<'a>(
     theme: &Theme,
     now: i64,
 ) -> Vec<Line<'a>> {
+    if is_local(&task.gid) {
+        let name = Line::styled(card::truncate(&task.name, width), theme.style(Role::Text));
+        return vec![
+            name,
+            Line::styled("creating…", theme.style(Role::TextMuted)),
+        ];
+    }
     match view.completing() {
         Some((gid, frame)) if gid == task.gid => completing_card_lines(task, width, theme, frame),
         _ => card_lines(task, width, theme, now),

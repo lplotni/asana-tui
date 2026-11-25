@@ -1154,6 +1154,37 @@ mod tests {
     }
 
     #[test]
+    fn a_card_being_created_reads_creating() {
+        use ratatui::crossterm::event::KeyCode;
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(sample_board()),
+        });
+        app.update(key_event(KeyCode::Tab));
+        for c in "qShip the beta".chars() {
+            app.update(key_event(KeyCode::Char(c)));
+        }
+        app.update(key_event(KeyCode::Enter));
+
+        let terminal = draw_at(&mut app, 120);
+
+        let buffer = terminal.backend().buffer();
+        let rows: Vec<String> = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect()
+            })
+            .collect();
+        let row = rows
+            .iter()
+            .position(|r| r.contains("Ship the beta"))
+            .unwrap_or_else(|| panic!("no new card:\n{}", rows.join("\n")));
+        assert!(rows[row + 1].contains("creating…"), "{}", rows.join("\n"));
+    }
+
+    #[test]
     fn a_dancing_animal_is_drawn_over_the_board_with_its_name() {
         let (mut app, _) = App::new_on_board("42".into());
         app.update(Msg::BoardLoaded {
