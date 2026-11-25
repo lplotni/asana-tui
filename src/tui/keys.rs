@@ -76,6 +76,8 @@ pub enum Cmd {
     Quit,
     ForceQuit,
     Help,
+    /// A random animal dances on the board (F31; hidden).
+    Dance,
     // Input context.
     Submit,
     Cancel,
@@ -99,6 +101,8 @@ pub struct Binding {
     pub cmd: Cmd,
     pub origin: Origin,
     pub help: &'static str,
+    /// Left out of the help overlay: an easter egg (F31).
+    pub hidden: bool,
 }
 
 const fn bind(
@@ -114,6 +118,19 @@ const fn bind(
         cmd,
         origin,
         help,
+        hidden: false,
+    }
+}
+
+/// A binding the help overlay and the key hints leave out.
+const fn hidden(context: Context, keys: &'static [Key], cmd: Cmd) -> Binding {
+    Binding {
+        context,
+        keys,
+        cmd,
+        origin: Origin::Asn,
+        help: "",
+        hidden: true,
     }
 }
 
@@ -289,6 +306,7 @@ pub const BINDINGS: &[Binding] = &[
         "quit from anywhere",
     ),
     bind(Normal, &[Char('?')], Cmd::Help, Asn, "help"),
+    hidden(Normal, &[Char('g'), Char('d')], Cmd::Dance),
     bind(Input, &[Enter], Cmd::Submit, Asn, "confirm"),
     bind(Input, &[Esc], Cmd::Cancel, Asn, "cancel"),
     bind(Input, &[Ctrl('c')], Cmd::Cancel, Asn, "cancel"),
@@ -529,6 +547,16 @@ mod tests {
         let outcomes = feed_all(&mut p, Normal, &[ch('g'), ch('g')]);
 
         assert_eq!(outcomes, [Outcome::Pending, action(Cmd::Top, None)]);
+    }
+
+    #[test]
+    fn g_then_d_is_the_hidden_dance() {
+        let mut p = KeyParser::default();
+
+        let outcomes = feed_all(&mut p, Normal, &[ch('g'), ch('d')]);
+
+        assert_eq!(outcomes, [Outcome::Pending, action(Cmd::Dance, None)]);
+        assert!(BINDINGS.iter().any(|b| b.cmd == Cmd::Dance && b.hidden));
     }
 
     #[test]

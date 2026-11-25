@@ -9,6 +9,7 @@ use ratatui::widgets::{
 
 use super::app::{App, BoardState, Detail, Editor, Focus, IMAGE_ROWS, ImageState, Screen, Sizes};
 use super::board::CARD_LINES;
+use super::dance::Dance;
 use super::keys::{BINDINGS, Cmd, Context, Origin, sequence_label};
 use super::picker::{Picker, Stage};
 use super::theme::{Role, Theme};
@@ -41,7 +42,10 @@ pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
         lines.push(Line::styled(heading, theme.style(Role::Title)));
         // One entry per command, listing all of its key sequences.
         let mut seen: Vec<Cmd> = Vec::new();
-        for binding in BINDINGS.iter().filter(|b| b.context == context) {
+        for binding in BINDINGS
+            .iter()
+            .filter(|b| b.context == context && !b.hidden)
+        {
             if seen.contains(&binding.cmd) {
                 continue;
             }
@@ -57,7 +61,7 @@ pub fn help_lines(theme: &Theme) -> Vec<Line<'static>> {
             for cmd in &cmds {
                 let same: Vec<_> = BINDINGS
                     .iter()
-                    .filter(|b| b.context == context && b.cmd == *cmd)
+                    .filter(|b| b.context == context && b.cmd == *cmd && !b.hidden)
                     .collect();
                 let labels: Vec<String> = same.iter().map(|b| sequence_label(b.keys)).collect();
                 keys.push(labels.join(", "));
@@ -486,6 +490,13 @@ fn draw(frame: &mut Frame, app: &App, theme: &Theme, now: i64) -> Vec<ShownImage
 /// Help, picker and editor, drawn over whatever screen is shown.
 fn render_overlays(frame: &mut Frame, app: &App, theme: &Theme) {
     let screen = frame.area();
+    // Over the card grid only, and under everything else.
+    if let Some(dance) = &app.dance
+        && app.screen == Screen::Board
+        && app.focus == Focus::List
+    {
+        render_dance(frame, screen, dance, theme);
+    }
     if app.help {
         render_help(frame, screen, theme);
     }
@@ -496,6 +507,24 @@ fn render_overlays(frame: &mut Frame, app: &App, theme: &Theme) {
     if let Some(picker) = &app.picker {
         render_picker(frame, screen, picker, theme);
     }
+}
+
+/// The dancing animal (F31), in a box titled with its name, centered. Each
+/// pose has the next of the completion animation's colours.
+fn render_dance(frame: &mut Frame, over: Rect, dance: &Dance, theme: &Theme) {
+    let animal = dance.animal();
+    let (step, pose) = dance.pose();
+    let title = format!(" ♪ {} ♪ ", animal.name);
+    let (art_width, height) = animal.size();
+    // Borders and padding take 4 columns, borders 2 rows.
+    let width = art_width.max(title.chars().count()) + 4;
+    let area = centered(over, width as u16, height as u16 + 2);
+    let inner = draw_overlay(frame, area, &title, None, theme);
+    // The art as a block in the middle of a box its title made wider.
+    let art = centered(inner, art_width as u16, inner.height);
+    let style = theme.style(board::celebrate(step));
+    let lines: Vec<Line> = pose.iter().map(|line| Line::styled(*line, style)).collect();
+    frame.render_widget(Paragraph::new(lines), art);
 }
 
 /// The comment or description editor, centered.
@@ -1122,6 +1151,30 @@ mod tests {
             "the strike cycles four colours: {colours:?}"
         );
         insta::assert_snapshot!(terminal.backend());
+    }
+
+    #[test]
+    fn a_dancing_animal_is_drawn_over_the_board_with_its_name() {
+        let (mut app, _) = App::new_on_board("42".into());
+        app.update(Msg::BoardLoaded {
+            project_gid: "42".into(),
+            result: Ok(sample_board()),
+        });
+        for c in ['g', 'd'] {
+            app.update(key_event(ratatui::crossterm::event::KeyCode::Char(c)));
+        }
+        let dance = app.dance.clone().expect("dancing");
+
+        let screen = screen_text(&draw_at(&mut app, 120));
+
+        assert!(
+            screen.contains(&format!("♪ {} ♪", dance.animal().name)),
+            "{screen}"
+        );
+        let (_, pose) = dance.pose();
+        for line in pose.iter().map(|l| l.trim()).filter(|l| !l.is_empty()) {
+            assert!(screen.contains(line), "{line:?} missing:\n{screen}");
+        }
     }
 
     #[test]
@@ -1946,14 +1999,22 @@ mod tests {
         let lines = help_lines(&terminal_theme());
         let text: String = lines.iter().map(|l| line_text(l) + "\n").collect();
 
-        for binding in BINDINGS {
+        let shown = || BINDINGS.iter().filter(|b| !b.hidden);
+        for binding in shown() {
             assert!(
                 text.contains(&sequence_label(binding.keys)),
                 "{:?} missing",
                 binding.keys
             );
         }
-        let mut commands: Vec<_> = BINDINGS.iter().map(|b| (b.context, b.cmd)).collect();
+        for binding in BINDINGS.iter().filter(|b| b.hidden) {
+            let label = sequence_label(binding.keys);
+            assert!(
+                !text.lines().any(|l| l.trim_start().starts_with(&label)),
+                "{label} is hidden but listed"
+            );
+        }
+        let mut commands: Vec<_> = shown().map(|b| (b.context, b.cmd)).collect();
         commands.dedup();
         commands.sort_by_key(|(context, cmd)| format!("{context:?}{cmd:?}"));
         commands.dedup();

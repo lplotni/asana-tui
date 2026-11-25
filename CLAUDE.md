@@ -43,6 +43,7 @@ cargo run --example screenshot -- lanes > docs/lanes.svg
   - Add the binding to `BINDINGS`. The collision test and the help overlay pick it up automatically.
   - Add it to the right lists in `ui::key_hints`, most useful first: the line drops from the end, and `? help` always stays.
   - Hint labels are short (`edit`, `browser`, `done`).
+  - A `hidden(…)` binding (the F31 easter egg) stays out of the help overlay and the hints.
 - **Help overlay is full.** At 100×24 it uses all 24 rows. `the_help_overlay_shows_every_binding_on_a_100_by_24_terminal` fails if a key's description gets cut off. Keep descriptions short, and change the help layout before adding keys.
 - **Snapshots:** `cargo-insta` isn't installed. Review each `src/tui/snapshots/*.snap.new` (`diff` it against the `.snap`), then accept it by removing the `assertion_line:` line and renaming it to `.snap`.
 - **Text from Asana is untrusted.** The CLI passes it through `cli::terminal_safe` / `tsv_line`, which removes control characters and bidi overrides. In the TUI, ratatui drops control characters, and `ui::render` strips bidi overrides from every drawn cell at the end (`strip_bidi_controls`), whatever widget drew it. Both use `present::format::is_bidi_control`. Keep new drawing inside `ui::render`, so it passes that pass.

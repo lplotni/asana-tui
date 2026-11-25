@@ -173,6 +173,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### 8d: Ship
 - [x] T50: README, ADR-011 and spec updates
+- [x] T52: Easter egg: a random animal dances on the board (`g d`, F31; asked for before the release)
 - [ ] T51: Release v0.4.0 (ask first)
 
 ## Phase 6: asn in Claude Code

@@ -402,6 +402,21 @@ Found by F28 (2026-11-24). Saving a description used to compare the task's `modi
 5. In the background, the board loads at most once a minute (app test).
 6. CI is green.
 
+## Feature Spec — Easter egg (F31)
+
+Asked for by the user on 2026-11-25, before v0.4.0.
+
+### F31. A dancing animal (`g d`)
+
+- `g d` on a board's card grid makes a random animal dance in the middle of the screen for about 3 s: a small box titled with the animal's name (`♪ cat ♪`), holding ASCII art that changes pose every 200 ms. Each pose has the next colour of F23's `celebrate_1`–`celebrate_4` roles. No new roles.
+- The animal is drawn at random from a handful (cat, frog, penguin, chick, crab, owl, bunny), never the same one twice in a row. `g d` during a dance starts a new one.
+- Other keys keep working while it dances, as during F23's animation. The help overlay, the picker and the editor cover it. It isn't drawn over the task detail or the Inbox; it just runs out.
+- The binding is hidden: it's in `BINDINGS` (so the collision test covers it), but the help overlay and the key hints leave it out. On the Inbox, `g d` does nothing.
+- It plays even with `animations = false`, which is about completed cards (F23), and nobody presses `g d` by accident.
+- `App` stays pure (ADR-002): frames come every 40 ms from the event loop, as for F23, and the event loop seeds the random choice once at start.
+
+**Tests (F31):** the key starts a dance on a board, not on the Inbox; frames end it after 3 s; two dances in a row are different animals; the help overlay doesn't list it; every animal's poses fit the box; a drawn frame shows the name and the art.
+
 ## Tech Stack, Commands, Structure
 
 - **Stack:** unchanged (`ratatui`, `crossterm`, `tokio`, `reqwest`, `serde`, `clap`). **No new dependencies.**

@@ -5,6 +5,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui_textarea::{CursorMove, TextArea};
 
 use super::board::BoardView;
+use super::dance::{Dance, Dancers};
 use super::keys::{Action, Cmd, Context, KeyParser, Outcome};
 use super::picker::{self, Picker};
 use super::writes::{Load, Writes};
@@ -597,6 +598,10 @@ pub struct App {
     undo_complete: Option<(String, String)>,
     /// Completed board cards animate before they leave (spec F23).
     pub animations: bool,
+    /// The animal dancing on the board, if any (F31).
+    pub dance: Option<Dance>,
+    /// Picks the next animal to dance.
+    dancers: Dancers,
     /// The terminal reported it lost focus: refresh about once a minute (F30).
     in_background: bool,
     /// Ticks since the last refresh, while in the background.
@@ -781,6 +786,9 @@ impl App {
                     if let Some(view) = slot.state.view_mut() {
                         view.advance();
                     }
+                }
+                if self.dance.as_mut().is_some_and(|dance| !dance.advance()) {
+                    self.dance = None;
                 }
                 Vec::new()
             }
@@ -1361,6 +1369,7 @@ impl App {
                 self.set_focus(Focus::List);
             }
             Cmd::Help => self.help = true,
+            Cmd::Dance => self.dance = Some(self.dancers.pick()),
             Cmd::Refresh => return self.reload_board(),
             Cmd::CycleLayout => {
                 if self
@@ -1682,10 +1691,18 @@ impl App {
 
     /// Whether an animation is playing, so the event loop sends frames.
     pub fn animating(&self) -> bool {
-        self.boards
-            .iter()
-            .filter_map(|slot| slot.state.view())
-            .any(|view| view.completing().is_some())
+        self.dance.is_some()
+            || self
+                .boards
+                .iter()
+                .filter_map(|slot| slot.state.view())
+                .any(|view| view.completing().is_some())
+    }
+
+    /// Seeds the choice of dancing animals (F31); the event loop passes a
+    /// random number, so `App` stays free of I/O.
+    pub fn seed_dances(&mut self, seed: u64) {
+        self.dancers = Dancers::seeded(seed);
     }
 
     /// `d` right after completing: reopens that task.

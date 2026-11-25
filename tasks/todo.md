@@ -1194,6 +1194,28 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
+### - [x] T52: Easter egg: a random animal dances on the board (F31)
+
+**Description:** The user asked for it on 2026-11-25, before the release. `g d` on a board's card grid shows a random animal dancing for about 3 s (F31). The binding is hidden from the help and the hints. The art and the choice of animal live in a pure module, `tui/dance.rs`, and the event loop seeds the choice once.
+
+**Acceptance criteria:**
+- [x] `g d` on a board starts a dance that frames end after 3 s; on the Inbox it does nothing; other keys keep working meanwhile.
+- [x] Two dances in a row are different animals, and every animal comes up.
+- [x] The help overlay doesn't list it; the collision test still covers it.
+- [x] A drawn frame shows the box, titled with the animal's name, and the pose.
+
+**Verification:**
+- [x] `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`.
+- [x] In Rex on the throwaway board: eight `g d`s showed six animals, never one twice in a row, centred, gone after 3 s.
+
+**Dependencies:** T50
+
+**Files likely touched:** `src/tui/dance.rs`, `src/tui/keys.rs`, `src/tui/app.rs`, `src/tui/ui.rs`, `src/tui/mod.rs`, `docs/SPEC-board.md`
+
+**Estimated scope:** S
+
+---
+
 ### - [ ] T51: Release v0.4.0 (ask first)
 
 **Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.4.0`, push `main`, push the annotated tag, and pull the formula commit.

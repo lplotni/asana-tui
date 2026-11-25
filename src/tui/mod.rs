@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod board;
+pub mod dance;
 pub mod images;
 pub mod keys;
 pub mod picker;
@@ -81,6 +82,10 @@ pub async fn run(
     };
     app.animations = config.animations;
     app.set_refresh(config.refresh);
+    app.seed_dances(std::hash::BuildHasher::hash_one(
+        &std::collections::hash_map::RandomState::new(),
+        (),
+    ));
     app.update(Msg::Resize(ui::sizes(terminal.size()?.into())));
     let mut next_frame: Option<Instant> = None;
     run_effects(effects, &client, &workspace, search, &tx, &mut writes);

@@ -4566,3 +4566,61 @@ fn a_write_whose_result_never_comes_holds_loads_back_two_minutes_at_most() {
     // Asana's data is shown again: the completion was never confirmed.
     assert!(card_gids(&app).contains(&"c0-0".to_owned()));
 }
+
+// F31: the dancing animal.
+
+fn dancer(app: &App) -> Option<&'static str> {
+    app.dance.as_ref().map(|dance| dance.animal().name)
+}
+
+#[test]
+fn g_d_on_a_board_makes_an_animal_dance_for_three_seconds() {
+    let mut app = on_board(&[2]);
+
+    let effects = keys(&mut app, "gd");
+
+    assert!(effects.is_empty(), "{effects:?}");
+    assert!(dancer(&app).is_some());
+    assert!(app.animating(), "frames are needed");
+    for _ in 1..crate::tui::dance::DANCE_FRAMES {
+        app.update(Msg::Frame);
+    }
+    assert!(dancer(&app).is_some(), "still dancing at the last frame");
+    app.update(Msg::Frame);
+    assert_eq!(dancer(&app), None);
+    assert!(!app.animating());
+}
+
+#[test]
+fn g_d_again_starts_another_animal() {
+    let mut app = on_board(&[2]);
+    keys(&mut app, "gd");
+    let first = dancer(&app);
+
+    keys(&mut app, "gd");
+
+    assert!(dancer(&app).is_some());
+    assert_ne!(dancer(&app), first);
+}
+
+#[test]
+fn keys_keep_working_while_an_animal_dances() {
+    let mut app = on_board(&[3]);
+    keys(&mut app, "gd");
+    let before = app.selected_card().map(|card| card.gid.clone());
+
+    keys(&mut app, "j");
+
+    assert_ne!(app.selected_card().map(|card| card.gid.clone()), before);
+    assert!(dancer(&app).is_some());
+}
+
+#[test]
+fn g_d_on_the_inbox_does_nothing() {
+    let mut app = loaded(3, 10);
+
+    keys(&mut app, "gd");
+
+    assert_eq!(dancer(&app), None);
+    assert!(!app.animating());
+}

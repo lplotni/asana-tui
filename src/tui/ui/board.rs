@@ -295,7 +295,7 @@ fn characters(text: &str) -> Vec<&str> {
 }
 
 /// The `n`th colour of the completion animation, cycling.
-fn celebrate(n: usize) -> Role {
+pub(super) fn celebrate(n: usize) -> Role {
     [
         Role::Celebrate1,
         Role::Celebrate2,
