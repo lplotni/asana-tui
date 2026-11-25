@@ -1216,7 +1216,7 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 
 ---
 
-### - [ ] T51: Release v0.4.0 (ask first)
+### - [x] T51: Release v0.4.0 (ask first)
 
 **Description:** As in ADR-009: bump `Cargo.toml` and `Cargo.lock`, commit `chore: release v0.4.0`, push `main`, push the annotated tag, and pull the formula commit.
 
