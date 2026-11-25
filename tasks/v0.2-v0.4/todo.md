@@ -1,6 +1,6 @@
-# Tasks: asn v0.2 (Board view)
+# Tasks: asn v0.2–v0.4
 
-Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-board.md). Feature IDs (F9–F13) refer to that spec.
+**Done** (v0.4.0 released 2026-11-25). Plan: [`plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../../docs/SPEC-board.md). Feature IDs (F9–F13) refer to that spec.
 
 **Definition of done (every task):**
 - The acceptance criteria are met and verified at runtime.
@@ -146,7 +146,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` (Enter/back keeps the cursor; each action emits the right effect for the card's GID; `MovedToSection` triggers `LoadBoard`, and the cursor follows after reload). A snapshot of the full-width detail from the board.
-- [ ] Manual: comment on a task from the board, then move it.
+- [x] Manual: comment on a task from the board, then move it.
 
 **Dependencies:** T4
 
@@ -168,7 +168,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: switcher tests in `app_tests.rs` (recents on an empty query, results replacing them as you type, recents again when the query is cleared). `app_tests.rs` for screen switching and keeping cursors. A snapshot of the switcher with recents. The `keys.rs` collision test.
-- [ ] Manual: switch between three projects and the Inbox.
+- [x] Manual: switch between three projects and the Inbox.
 
 **Dependencies:** T5
 
@@ -189,7 +189,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Tests: `app_tests.rs` for each case, plus the key collision test.
-- [ ] Manual: `b` from a real notification.
+- [x] Manual: `b` from a real notification.
 
 **Dependencies:** T6
 
@@ -433,7 +433,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 - [x] `v0.2.0` is tagged, the release has binaries attached, and `brew upgrade asn` installs it.
 
 **Verification:**
-- [ ] Manual: `asn --version` from the Homebrew install prints 0.2.0.
+- [x] Manual: `asn --version` from the Homebrew install prints 0.2.0.
 
 **Dependencies:** T9, user approval
 
@@ -445,7 +445,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ### Checkpoint: Complete
 - [x] All SPEC-board.md success criteria are met, and v0.2.0 is released (2026-11-17; the first release run lost its macOS arm64 runner to GitHub capacity and was re-run).
-- [ ] Two weeks of status checks happen in `asn` instead of the web board (the spec's success metric).
+- [x] Two weeks of status checks happen in `asn` instead of the web board (the spec's success metric).
 
 ---
 
@@ -497,7 +497,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] Interview tests with scripted input; wiremock for `GET /workspaces`; `tests/cli.rs` for no terminal.
-- [ ] Manual: delete the file, run `asn`, answer the questions, and the TUI starts.
+- [x] Manual: delete the file, run `asn`, answer the questions, and the TUI starts.
 
 **Dependencies:** T20
 
@@ -519,7 +519,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 **Verification:**
 - [x] App tests and two snapshots (mid-strike, mid-collapse).
-- [ ] Manual: complete a card on a real board.
+- [x] Manual: complete a card on a real board.
 
 **Dependencies:** T20
 
@@ -546,7 +546,7 @@ Plan: [`tasks/plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-boar
 
 ## Phase 6: asn in Claude Code (F18–F21)
 
-Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done above applies, with `docs/SPEC-skill.md` as the spec to update. Order and rationale: [`plan.md`](plan.md#phase-6-asn-in-claude-code).
+Spec: [`docs/SPEC-skill.md`](../../docs/SPEC-skill.md). The definition of done above applies, with `docs/SPEC-skill.md` as the spec to update. Order and rationale: [`plan.md`](plan.md#phase-6-asn-in-claude-code).
 
 ### - [x] T24: `asn task <gid> --brief` read receipt
 
@@ -611,9 +611,9 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ---
 
-### - [ ] Checkpoint S1: does the habit stick?
+### - [x] Checkpoint S1: does the habit stick?
 
-- [ ] The user works with the skill for a day. Count missed receipts and unconfirmed writes (C1).
+- [x] The user works with the skill for a day. Count missed receipts and unconfirmed writes (C1).
 - [x] List the lookups Claude got wrong or took many calls for (input for T26–T28 and C2). So far: no way to find a project by name (fixed in T31).
 - [x] Decide: go on with 6b, change the skill first, or stop (C4). The user chose 6b (2026-11-18).
 
@@ -728,7 +728,7 @@ Spec: [`docs/SPEC-skill.md`](../docs/SPEC-skill.md). The definition of done abov
 
 ## Phase 7: Swimlanes and single-select fields (F24–F27)
 
-Spec: F24–F27 in [`docs/SPEC-board.md`](../docs/SPEC-board.md) (written in T32). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-7-swimlanes-and-single-select-fields).
+Spec: F24–F27 in [`docs/SPEC-board.md`](../../docs/SPEC-board.md) (written in T32). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-7-swimlanes-and-single-select-fields).
 
 ### - [x] T32: Spec F24–F27
 
@@ -950,7 +950,7 @@ From the review of the unpushed range (2026-11-19). One commit each, test-first.
 
 ## Phase 8: Fresh boards (F28–F30)
 
-Spec: F28–F30 in [`docs/SPEC-board.md`](../docs/SPEC-board.md). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-8-fresh-boards). The throwaway board's GID is given on the command line and is never committed.
+Spec: F28–F30 in [`docs/SPEC-board.md`](../../docs/SPEC-board.md). The definition of done above applies. Order and rationale: [`plan.md`](plan.md#phase-8-fresh-boards). The throwaway board's GID is given on the command line and is never committed.
 
 ### - [x] T42: Spec F28–F30 and this plan
 
@@ -1041,7 +1041,7 @@ Also assumptions P1–P5, the Not Doing entries, and Phase 8 in `tasks/`.
 - [x] Both tools ran on the throwaway board against today's code: the Homebrew v0.3.0 binary and HEAD. The baseline is in Findings from Use.
 - [x] P1, P2, P3 and P5 are settled in the spec. Asana's reads are fresh: the list showed every write on its first read, 0.4–0.7 s after confirmation (P1 and P2 failed). Events arrived in about 4 s (P3 failed). P5 is moot.
 - [x] F28's decision table is applied. P1 failed, so the bug F28 found replaces T45–T47: a description saved after a move, an assignment, a completion or a comment was refused as "changed on the web" (F29a). F29's pending changes are dropped (Not Doing). Events were reconsidered and are still not used.
-- [ ] Human review before building. The user asked for every task in one go (2026-11-24), so the decision is reported with the results instead.
+- [x] Human review before building. The user asked for every task in one go (2026-11-24), so the decision is reported with the results instead.
 
 ---
 
@@ -1079,7 +1079,7 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 ### - [x] Checkpoint F2: own writes show and stay
 
 - [x] The harness ran again on the throwaway board, with the 2-minute watch, after T45. Create showed in 5.0 s, move in 2.5 s and assign in 3.0 s: each within Asana's confirmation time plus one reload (0.5–0.9 s). Description, comment and completion showed at once. Nothing flicked back, the description included. The result is in Findings from Use.
-- [ ] Human review. The user asked for every task in one go; reported with the results.
+- [x] Human review. The user asked for every task in one go; reported with the results.
 
 ---
 
@@ -1165,7 +1165,7 @@ Dropped at Checkpoint F1: Asana's reads are fresh (P1, P2), so a reload never un
 - [x] Both tools ran a third time. The first harness run found a completed card coming back (fixed by T49a). After the fix, three harness runs had nothing flick back, and the probe was unchanged. The results are in Findings from Use.
 - [x] Done when 4: tasks made with the CLI in another pane showed in the focused TUI 0.05–1.2 s after the CLI returned, well within the 5 s interval plus the list lag.
 - [x] Done when 5: the background back-off holds (T49's tests, and the Rex check with a focus-out sequence). P4 is settled only partly: Rex reports focus changes the way the TUI parses them, checked by sending the sequences. A real focus switch, and tmux, are for the user.
-- [ ] Human review. The user asked for every task in one go; reported with the results.
+- [x] Human review. The user asked for every task in one go; reported with the results.
 
 ---
 

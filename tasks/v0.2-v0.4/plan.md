@@ -1,6 +1,8 @@
-# Implementation Plan: asn v0.2 (Board view)
+# Implementation Plan: asn v0.2–v0.4 (boards, config, Claude Code skill, lanes, fresh boards)
 
-Source of truth for behavior: [`docs/SPEC-board.md`](../docs/SPEC-board.md) (F9–F17, F22–F23) and, for Phase 6, [`docs/SPEC-skill.md`](../docs/SPEC-skill.md) (F18–F21). Tasks with full acceptance criteria are in [`tasks/todo.md`](todo.md). The v0.1 plan is archived in [`tasks/v0.1/`](v0.1/plan.md).
+**Done.** Every phase shipped: v0.2.0 (boards), v0.3.0 (config file, completion animation, the Claude Code skill, lanes and fields) and v0.4.0 (fresh boards, released 2026-11-25). Archived here like [v0.1's](../v0.1/plan.md); a new feature starts a fresh `tasks/plan.md` and `tasks/todo.md`.
+
+Source of truth for behavior: [`docs/SPEC-board.md`](../../docs/SPEC-board.md) (F9–F17, F22–F31) and, for Phase 6, [`docs/SPEC-skill.md`](../../docs/SPEC-skill.md) (F18–F21). Tasks with full acceptance criteria are in [`todo.md`](todo.md).
 
 ## Overview
 
@@ -98,7 +100,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] T31: `asn projects <query>`, pulled forward from T28 (Checkpoint S1 finding: the skill could not find a project by name)
 
 #### Checkpoint S1: does the habit stick?
-- [ ] The user works with the skill for a day: count receipt and confirmation misses (C1), and note which lookups Claude gets wrong (input for C2)
+- [x] The user works with the skill for a day: count receipt and confirmation misses (C1), and note which lookups Claude gets wrong (input for C2)
 - [x] Human review: go on with names (6b) — decided by the user, 2026-11-18. Finding so far: project lookup by name was missing (fixed in T31); the day of use continues alongside 6b
 
 #### 6b: Names where GIDs are taken (F19)
@@ -152,7 +154,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 - [x] Both tools ran on the throwaway board against v0.3.0 and HEAD; the baseline is in the spec's Findings from Use
 - [x] P1, P2, P3 and P5 are settled. Asana's reads are fresh (P1, P2 failed), events take about 4 s (P3 failed), and P5 is moot
 - [x] Decision applied: the bug F28 found (a false "changed on the web" after own writes) becomes F29a and T45. T46 and T47 are dropped. Events were reconsidered and are still not used
-- [ ] Human review before building (the user asked for every task in one go; reported with the results)
+- [x] Human review before building (the user asked for every task in one go; reported with the results)
 
 #### 8b: Own writes (F29a)
 - [x] T45: A description save is checked against the description only (F29a)
@@ -160,7 +162,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### Checkpoint F2: own writes show and stay
 - [x] Second harness run: each write on screen within `confirm-ms` plus one reload, and nothing flicks back (the description included)
-- [ ] Human review
+- [x] Human review
 
 #### 8c: Refresh while you're looking (F30)
 - [x] T48: The `refresh` setting drives the poll (default 5 s)
@@ -169,7 +171,7 @@ T1 and T2 are independent (T2 only needs the `core::Board` type, which is define
 
 #### Checkpoint F3: near-live
 - [x] Third run of both tools; a change made with the CLI in another pane shows within the interval plus Asana's lag (0.05–1.2 s); P4 partly (Rex, by sequence; tmux not checked)
-- [ ] Human review
+- [x] Human review
 
 #### 8d: Ship
 - [x] T50: README, ADR-011 and spec updates
@@ -296,7 +298,7 @@ Requested 2026-11-24. A task created or changed in the TUI can take minutes to s
 - the Rex harness is committed
 - the probe completes its tasks rather than deleting them
 
-Spec: F28–F30 in [`docs/SPEC-board.md`](../docs/SPEC-board.md).
+Spec: F28–F30 in [`docs/SPEC-board.md`](../../docs/SPEC-board.md).
 
 ### Overview
 
