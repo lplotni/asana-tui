@@ -1,28 +1,28 @@
 class Asn < Formula
   desc "Your Asana Inbox in the terminal, with vim keys and a scriptable CLI"
   homepage "https://github.com/lplotni/asana-tui"
-  version "0.3.0"
+  version "0.4.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/lplotni/asana-tui/releases/download/v0.3.0/asn-v0.3.0-aarch64-apple-darwin.tar.gz"
-      sha256 "6b0944169760b5862846674c040fa98f832cee5fcb4fb3d58ce586ee51845662"
+      url "https://github.com/lplotni/asana-tui/releases/download/v0.4.0/asn-v0.4.0-aarch64-apple-darwin.tar.gz"
+      sha256 "18c3a4ee1d470c6c450a4dfb046b53c63cbe1b5ff6638b1d93be60e5c59ff69b"
     end
     on_intel do
-      url "https://github.com/lplotni/asana-tui/releases/download/v0.3.0/asn-v0.3.0-x86_64-apple-darwin.tar.gz"
-      sha256 "8afc5c23b3b00403f8085dd0e36eb85e861af1fcd3bd52ad655c0bff92c9223e"
+      url "https://github.com/lplotni/asana-tui/releases/download/v0.4.0/asn-v0.4.0-x86_64-apple-darwin.tar.gz"
+      sha256 "b6b9acd055d3df2152bf7c6290c54fd42c9535465357b2dd2637f3832b0d968a"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/lplotni/asana-tui/releases/download/v0.3.0/asn-v0.3.0-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "add20672438e24501069cdfd940d5d1890c695bcfc81bb10ab5b91c9f43770e2"
+      url "https://github.com/lplotni/asana-tui/releases/download/v0.4.0/asn-v0.4.0-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "0c28a5c5f548d4a5dfeac302e3f585416ea82fd4e2a9620e8a8463f5cd1fb3a3"
     end
     on_intel do
-      url "https://github.com/lplotni/asana-tui/releases/download/v0.3.0/asn-v0.3.0-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "f4a8f139a58966f9e5c2470e984fd80f839fea48bd1b80a85ca024f51bf460eb"
+      url "https://github.com/lplotni/asana-tui/releases/download/v0.4.0/asn-v0.4.0-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "368f93f0f76e4476302bb197bd969caea72879eed1ec771fba4372a9c68ac73a"
     end
   end
 
