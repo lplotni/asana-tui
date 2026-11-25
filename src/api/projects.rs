@@ -188,13 +188,24 @@ impl Client {
             .await
     }
 
-    /// Creates an unassigned task named `name` in the project.
-    pub async fn create_task(&self, project_gid: &str, name: &str) -> Result<Named, ApiError> {
+    /// Creates an unassigned task named `name` in the project, with
+    /// `select`'s option (field GID, option GID) already chosen, if given.
+    pub async fn create_task(
+        &self,
+        project_gid: &str,
+        name: &str,
+        select: Option<(&str, &str)>,
+    ) -> Result<Named, ApiError> {
         #[derive(Deserialize)]
         struct Data {
             data: Named,
         }
-        let body = serde_json::json!({ "data": { "name": name, "projects": [project_gid] } });
+        let mut body = serde_json::json!({ "data": { "name": name, "projects": [project_gid] } });
+        if let Some((field, option)) = select {
+            let mut fields = serde_json::Map::new();
+            fields.insert(field.to_owned(), option.into());
+            body["data"]["custom_fields"] = fields.into();
+        }
         let created: Data = self.post("/tasks", &[], &body).await?;
         Ok(created.data)
     }

@@ -3085,12 +3085,10 @@ fn created(name: &str, gid: &str, section_error: Option<&str>) -> Msg {
     Msg::TaskCreated {
         project_gid: "42".into(),
         section: Some(named("s1", "Section 1")),
-        lane: None,
         name: name.into(),
         result: Ok(crate::tui::app::Created {
             gid: gid.into(),
             section_error: section_error.map(Into::into),
-            lane_error: None,
         }),
     }
 }
@@ -3249,7 +3247,6 @@ fn a_failed_create_keeps_the_name_for_the_next_try() {
     app.update(Msg::TaskCreated {
         project_gid: "42".into(),
         section: None,
-        lane: None,
         name: "Ship it".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
@@ -3269,7 +3266,6 @@ fn a_failed_create_says_so() {
     app.update(Msg::TaskCreated {
         project_gid: "42".into(),
         section: None,
-        lane: None,
         name: "Ship it".into(),
         result: Err("Could not reach Asana: timed out".into()),
     });
@@ -4290,27 +4286,29 @@ fn tab_q_in_a_lane_gives_the_new_task_the_lanes_option() {
 }
 
 #[test]
-fn a_new_task_that_did_not_get_its_lane_says_so() {
+fn a_new_task_whose_lane_option_is_refused_is_not_created_and_keeps_its_name() {
+    // The option goes with the create (F32a): refused, there's no task.
     let mut app = on_board(&[1]);
 
     app.update(Msg::TaskCreated {
         project_gid: "42".into(),
         section: Some(named("s0", "Section 0")),
-        lane: Some(crate::tui::app::LaneValue {
-            field: named("f1", "Initiative"),
-            option: named("o1", "Checkout"),
-        }),
         name: "Ship it".into(),
-        result: Ok(crate::tui::app::Created {
-            gid: "900".into(),
-            section_error: None,
-            lane_error: Some("Forbidden".into()),
-        }),
+        result: Err("Bad request: enum option not found".into()),
     });
 
     let toast = app.toast.as_ref().unwrap();
-    assert_eq!(toast.text, "Created, but not in Checkout: Forbidden");
+    assert_eq!(
+        toast.text,
+        "Task not created: Bad request: enum option not found"
+    );
     assert!(toast.is_error);
+    key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+    keys(&mut app, "q");
+    assert_eq!(
+        app.new_task.as_ref().map(|t| t.name.as_str()),
+        Some("Ship it")
+    );
 }
 
 // --- F29a: a description save is checked against the description only --------

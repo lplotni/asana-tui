@@ -425,7 +425,7 @@ async fn one_run(
     let project = probe.project.clone();
 
     let started = Instant::now();
-    let created = core::create_task(&probe.client, &project, Some(sections.0), &name)
+    let created = core::create_task(&probe.client, &project, Some(sections.0), &name, None)
         .await
         .map_err(err)?;
     let confirm = started.elapsed();

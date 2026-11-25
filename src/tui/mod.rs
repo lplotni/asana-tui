@@ -287,34 +287,22 @@ fn run_effects(
                     name,
                 } => {
                     let section_gid = section.as_ref().map(|s| s.gid.as_str());
+                    // In a lane, the new task gets the lane's option as it's
+                    // created (F32a).
+                    let select = lane
+                        .as_ref()
+                        .map(|lane| (lane.field.gid.as_str(), lane.option.gid.as_str()));
                     let result =
-                        match core::create_task(&client, &project_gid, section_gid, &name).await {
-                            Ok(created) => {
-                                // In a lane, the new task gets the lane's option too.
-                                let lane_error = match &lane {
-                                    Some(lane) => core::set_select_field(
-                                        &client,
-                                        &created.task.gid,
-                                        &lane.field,
-                                        Some(&lane.option),
-                                    )
-                                    .await
-                                    .err()
-                                    .map(|e| e.to_string()),
-                                    None => None,
-                                };
-                                Ok(app::Created {
-                                    gid: created.task.gid,
-                                    section_error: created.section_error.map(|e| e.to_string()),
-                                    lane_error,
-                                })
-                            }
-                            Err(e) => Err(e.to_string()),
-                        };
+                        core::create_task(&client, &project_gid, section_gid, &name, select)
+                            .await
+                            .map(|created| app::Created {
+                                gid: created.task.gid,
+                                section_error: created.section_error.map(|e| e.to_string()),
+                            })
+                            .map_err(|e| e.to_string());
                     Msg::TaskCreated {
                         project_gid,
                         section,
-                        lane,
                         name,
                         result,
                     }

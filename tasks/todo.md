@@ -2,14 +2,14 @@
 
 Plan: [`plan.md`](plan.md). Spec: [`docs/SPEC-board.md`](../docs/SPEC-board.md) F32.
 
-### - [ ] T53: Send the lane's option with `POST /tasks` (F32a)
+### - [x] T53: Send the lane's option with `POST /tasks` (F32a)
 
 **Description:** `api::projects::create_task` and `core::create_task` take an optional single-select value (field and option GID) and send it as `custom_fields` in the create. The TUI's `CreateTask` effect passes the lane's, and drops the separate field write and its `lane_error`.
 
 **Acceptance criteria:**
-- [ ] In a lane, the create body has `custom_fields: {field: option}`, and no `PUT /tasks/{gid}` follows.
-- [ ] Without a lane (columns, `asn project new`), the body is as before.
-- [ ] A refused create in a lane shows `Task not created: …` and keeps the name.
+- [x] In a lane, the create body has `custom_fields: {field: option}`, and no `PUT /tasks/{gid}` follows.
+- [x] Without a lane (columns, `asn project new`), the body is as before.
+- [x] A refused create in a lane shows `Task not created: …` and keeps the name.
 
 **Verification:** `cargo test` (wiremock in `tests/api_project.rs`, app tests), clippy, fmt.
 

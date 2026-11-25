@@ -360,17 +360,19 @@ pub struct CreatedTask {
     pub section_error: Option<ApiError>,
 }
 
-/// Creates an unassigned task in the project, then puts it in `section_gid`
-/// (at the top) if given. Only a failure to create is an error: a task that
-/// exists but couldn't be put in the section is returned with that error, so
-/// nobody creates it twice.
+/// Creates an unassigned task in the project, with `select`'s option of a
+/// single-select field (field GID, option GID) if given (F32a), then puts it
+/// in `section_gid` (at the top) if given. Only a failure to create is an
+/// error: a task that exists but couldn't be put in the section is returned
+/// with that error, so nobody creates it twice.
 pub async fn create_task(
     client: &Client,
     project_gid: &str,
     section_gid: Option<&str>,
     name: &str,
+    select: Option<(&str, &str)>,
 ) -> Result<CreatedTask, ApiError> {
-    let task = client.create_task(project_gid, name).await?;
+    let task = client.create_task(project_gid, name, select).await?;
     let section_error = match section_gid {
         Some(section) => client.add_task_to_section(section, &task.gid).await.err(),
         None => None,
@@ -465,7 +467,7 @@ pub async fn create_in(
             Ok(found) => found,
             Err(unresolved) => return Ok(Err(unresolved)),
         };
-    create_task(client, &project_gid, section_gid.as_deref(), name)
+    create_task(client, &project_gid, section_gid.as_deref(), name, None)
         .await
         .map(Ok)
 }

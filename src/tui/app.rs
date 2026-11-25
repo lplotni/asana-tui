@@ -70,8 +70,6 @@ pub enum Msg {
     TaskCreated {
         project_gid: String,
         section: Option<Named>,
-        /// The lane's option it was to get (F26).
-        lane: Option<LaneValue>,
         name: String,
         result: Result<Created, String>,
     },
@@ -475,13 +473,12 @@ pub struct LaneValue {
     pub option: Named,
 }
 
-/// A task created on a board: its GID, and why it isn't in its section or
-/// lane, if it isn't. It exists either way.
+/// A task created on a board: its GID, and why it isn't in its section, if
+/// it isn't. It exists either way.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Created {
     pub gid: String,
     pub section_error: Option<String>,
-    pub lane_error: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -818,10 +815,9 @@ impl App {
             Msg::TaskCreated {
                 project_gid,
                 section,
-                lane,
                 name,
                 result,
-            } => self.task_created(&project_gid, section, lane, name, result),
+            } => self.task_created(&project_gid, section, name, result),
             Msg::FieldSet { task_gid, result } => self.field_set(&task_gid, result),
             Msg::InboxLoaded(Ok((fresh, next))) => {
                 self.loading = false;
@@ -1859,15 +1855,10 @@ impl App {
         &mut self,
         project_gid: &str,
         section: Option<Named>,
-        lane: Option<LaneValue>,
         name: String,
         result: Result<Created, String>,
     ) -> Vec<Effect> {
-        let Created {
-            gid,
-            section_error,
-            lane_error,
-        } = match result {
+        let Created { gid, section_error } = match result {
             Ok(created) => created,
             Err(message) => {
                 self.toast = Some(Toast::error(format!("Task not created: {message}")));
@@ -1875,15 +1866,11 @@ impl App {
                 return Vec::new();
             }
         };
-        self.toast = Some(match (section_error, section, lane_error, lane) {
-            (Some(message), Some(section), ..) => {
+        self.toast = Some(match (section_error, section) {
+            (Some(message), Some(section)) => {
                 Toast::error(format!("Created, but not in {}: {message}", section.name))
             }
-            (Some(message), None, ..) => Toast::error(format!("Created, but: {message}")),
-            (None, _, Some(message), Some(lane)) => Toast::error(format!(
-                "Created, but not in {}: {message}",
-                lane.option.name
-            )),
+            (Some(message), None) => Toast::error(format!("Created, but: {message}")),
             _ => Toast::info(format!("Created \"{name}\"")),
         });
         if let Some(slot) = self

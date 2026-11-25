@@ -257,7 +257,7 @@ async fn a_new_task_is_created_unassigned_in_the_project() {
         .mount(&server)
         .await;
 
-    let created = core::create_task(&client(&server), "42", None, "Write the launch post")
+    let created = core::create_task(&client(&server), "42", None, "Write the launch post", None)
         .await
         .unwrap();
 
@@ -285,12 +285,51 @@ async fn a_new_task_is_then_put_in_the_section() {
         .mount(&server)
         .await;
 
-    let created = core::create_task(&client(&server), "42", Some("77"), "Post")
+    let created = core::create_task(&client(&server), "42", Some("77"), "Post", None)
         .await
         .unwrap();
 
     assert_eq!(created.task.gid, "900");
     assert!(created.section_error.is_none());
+}
+
+#[tokio::test]
+async fn a_new_task_in_a_lane_gets_the_lanes_option_as_it_is_created() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/tasks"))
+        .and(body_json(json!({ "data": {
+            "name": "Post",
+            "projects": ["42"],
+            "custom_fields": { "61": "62" }
+        } })))
+        .respond_with(
+            ResponseTemplate::new(201)
+                .set_body_json(json!({ "data": { "gid": "900", "name": "Post" } })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/sections/77/addTask"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "data": {} })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = core::create_task(
+        &client(&server),
+        "42",
+        Some("77"),
+        "Post",
+        Some(("61", "62")),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(created.task.gid, "900");
+    // No third write sets the field.
+    assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -312,7 +351,7 @@ async fn a_task_created_but_refused_by_the_section_is_still_returned() {
         .mount(&server)
         .await;
 
-    let created = core::create_task(&client(&server), "42", Some("77"), "Post")
+    let created = core::create_task(&client(&server), "42", Some("77"), "Post", None)
         .await
         .unwrap();
 
